@@ -1,5 +1,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
+#include <vector>
+#include <thread>
+#include <random>
 #include "VectorMath.h"
 #include "BHTree.h"
 
@@ -58,7 +61,15 @@ class Simulation
 	FILE *DataLog;
 	
 	void InitGL();
+	void CalcAccelRangeOct(int iStart, int iEnd);
 	void CalcDerivatives(double *s, double *s_d);
+	void CalcRK4StateEstimateRange(double *s_est, double *s_curr, double *s_d, double scalar, double dt, int iStart, int iEnd);
+	void CalcRK4StateEstimate(double *s_est, double *s_curr, double *s_d, double scalar, double dt);
+	void CalcLeapFrogPositionsRange(int iStart, int iEnd);
+	void CalcLeapFrogPositions();
+	void CalcLeapFrogVelocitiesRange(int iStart, int iEnd);
+	void CalcLeapFrogVelocities();
+	void CalcOutputsRange(int iStart, int iEnd);
 	void CalcOutputs();
 public:
 	bool DrawOctree;

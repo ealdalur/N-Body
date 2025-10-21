@@ -1,4 +1,3 @@
-#include <random>
 #include "Simulation.h"
 
 Simulation::Simulation()
@@ -141,6 +140,19 @@ void Simulation::LoadDefaultState()
 	Cam.theta = 0;
 }
 
+void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
+
+	double a[3];
+
+	for (int i=iStart; i<=iEnd; i++)
+	{
+		vscaleadd(pos_t[i],FDE,acc_t[i]);
+
+		Octree->CalcAcceleration(pos_t[i],i,G,r_soft,a);
+		vadd(acc_t[i],a,acc_t[i]);
+	}
+}
+
 void Simulation::CalcDerivatives(double *s, double *s_d)
 {
 	double a[3];
@@ -158,13 +170,11 @@ void Simulation::CalcDerivatives(double *s, double *s_d)
 		vset(0.0,0.0,0.0,acc_t[i]);
 	}
 
-	for (int i=0; i<N_BODIES; i++)
-	{
-		
-		vscaleadd(pos_t[i],FDE,acc_t[i]);
-
-		if (GRAVITY_P2P)
+	if (GRAVITY_P2P) {
+		for (int i=0; i<N_BODIES; i++)
 		{
+			vscaleadd(pos_t[i],FDE,acc_t[i]);
+
 			for (int j=0; j<N_BODIES; j++)
 			{
 				if (j > i)
@@ -177,11 +187,23 @@ void Simulation::CalcDerivatives(double *s, double *s_d)
 				}
 			}
 		}
-		else if (GRAVITY_OCT)
-		{
-			Octree->CalcAcceleration(pos_t[i],i,G,r_soft,a);
-			vadd(acc_t[i],a,acc_t[i]);
-		}	
+	}
+
+	if (GRAVITY_OCT) {
+		
+		int numThreads = 4;
+		std::vector<std::thread> threads;
+		int chunk_size = N_BODIES / numThreads;
+
+		for (int i = 0; i < numThreads; ++i) {
+			int iStart = i * chunk_size;
+			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
+			threads.emplace_back(&Simulation::CalcAccelRangeOct, this, iStart, iEnd);
+		}
+
+		for (auto& thread : threads) {
+			thread.join();
+		}
 	}
 }
 
@@ -223,14 +245,111 @@ void Simulation::BuildOctree()
 	Octree->CalcMasses();
 }
 
-void Simulation::CalcOutputs()
-{
-	for (int i=0; i<N_BODIES; i++)
+void Simulation::CalcOutputsRange(int iStart, int iEnd) {
+	
+	for (int i=iStart; i<=iEnd; i++)
 	{
 		pos_sq[i] = vdot(pos[i],pos[i]);
 		vel_sq[i] = vdot(vel[i],vel[i]);
 		acc_sq[i] = vdot(acc[i],acc[i]);
 	}
+}
+
+void Simulation::CalcOutputs()
+{
+	int numThreads = 4;
+	std::vector<std::thread> threads;
+	int chunk_size = N_BODIES / numThreads;
+
+	for (int i = 0; i < numThreads; ++i) {
+		int iStart = i * chunk_size;
+		int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
+		threads.emplace_back(&Simulation::CalcOutputsRange, this, iStart, iEnd);
+	}
+
+	for (auto& thread : threads) {
+		thread.join();
+	}
+}
+
+void Simulation::CalcRK4StateEstimateRange(double *s_est, double *s_curr, double *s_d, double scalar, double dt, int iStart, int iEnd) {
+	
+	for (int i=iStart; i<=iEnd; i++)
+	{
+		s_est[i] = s_curr[i] + dt*scalar*s_d[i];
+	}
+}
+
+void Simulation::CalcRK4StateEstimate(double *s_est, double *s_curr, double *s_d, double scalar, double dt) {
+
+	int numThreads = 4;
+	std::vector<std::thread> threads;
+	int chunk_size = N_BODIES*N_STATES / numThreads;
+
+	for (int i = 0; i < numThreads; ++i) {
+		int iStart = i * chunk_size;
+		int iEnd = (i == numThreads - 1) ? (N_BODIES*N_STATES-1) : (iStart + chunk_size - 1);
+		threads.emplace_back(&Simulation::CalcRK4StateEstimateRange, this, s_est, s_curr, s_d, scalar, dt, iStart, iEnd);
+	}
+
+	for (auto& thread : threads) {
+		thread.join();
+	}
+}
+
+void Simulation::CalcLeapFrogPositionsRange(int iStart, int iEnd) {
+	for (int i=iStart; i<=iEnd; i++)
+	{
+		vcopy(acc[i],acc_prev[i]);
+
+		vscaleadd(vel[i],dt,pos[i]);
+		vscaleadd(acc[i],0.5*dt*dt,pos[i]);
+	}
+}
+
+void Simulation::CalcLeapFrogPositions() {
+
+	int numThreads = 4;
+	std::vector<std::thread> threads;
+	int chunk_size = N_BODIES / numThreads;
+
+	for (int i = 0; i < numThreads; ++i) {
+		int iStart = i * chunk_size;
+		int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
+		threads.emplace_back(&Simulation::CalcLeapFrogPositionsRange, this, iStart, iEnd);
+	}
+
+	for (auto& thread : threads) {
+		thread.join();
+	}
+}
+
+void Simulation::CalcLeapFrogVelocitiesRange(int iStart, int iEnd) {
+	double a[3];
+
+	for (int i=iStart; i<=iEnd; i++)
+	{
+		vadd(acc[i],acc_prev[i],a);
+		vscaleadd(a,0.5*dt,vel[i]);
+	}
+}
+
+void Simulation::CalcLeapFrogVelocities() {
+
+	int numThreads = 4;
+	std::vector<std::thread> threads;
+	int chunk_size = N_BODIES / numThreads;
+
+	for (int i = 0; i < numThreads; ++i) {
+		int iStart = i * chunk_size;
+		int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
+		threads.emplace_back(&Simulation::CalcLeapFrogVelocitiesRange, this, iStart, iEnd);
+	}
+
+	for (auto& thread : threads) {
+		thread.join();
+	}
+	
 }
 
 void Simulation::Step()
@@ -243,38 +362,21 @@ void Simulation::Step()
 		CalcDerivatives(states,states_d[0]);
 		for (int k=1; k<4; k++)
 		{
-			for (int i=0; i<(N_BODIES*N_STATES); i++)
-			{
-				states_e[i] = states[i] + dt*c[k]*states_d[k-1][i];
-			}
+			CalcRK4StateEstimate(states_e,states,states_d[k-1],c[k],dt);
 			CalcDerivatives(states_e,states_d[k]);
 		}
 
 		for (int k=0; k<4; k++)
 		{
-			for (int i=0; i<(N_BODIES*N_STATES); i++)
-			{
-				states[i] = states[i] + dt*b[k]*states_d[k][i];
-			}
+			CalcRK4StateEstimate(states,states,states_d[k],b[k],dt);
 		}
 	}
 
 	if (SOLVER_LEAP_FROG)
 	{
-		double a[3];
-		for (int i=0; i<N_BODIES; i++)
-		{
-			vcopy(acc[i],acc_prev[i]);
-
-			vscaleadd(vel[i],dt,pos[i]);
-			vscaleadd(acc[i],0.5*dt*dt,pos[i]);
-		}
+		CalcLeapFrogPositions();
 		CalcDerivatives(states,states_d[0]);
-		for (int i=0; i<N_BODIES; i++)
-		{
-			vadd(acc[i],acc_prev[i],a);
-			vscaleadd(a,0.5*dt,vel[i]);
-		}
+		CalcLeapFrogVelocities();
 	}
 
 	CalcOutputs();
