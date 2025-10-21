@@ -36,7 +36,7 @@ Simulation::Simulation()
 
 	if (DATA_LOG)
 	{
-		fopen_s(&DataLog, "Simulation.dat", "wb");
+		DataLog = fopen("Simulation.dat", "wb");
 		fwrite(&N_BODIES, sizeof(N_BODIES), 1, DataLog);
 	}
 }
@@ -482,7 +482,7 @@ void Simulation::SaveState()
 {
 	FILE *StateFile;
 
-	fopen_s(&StateFile, "State.dat", "wb");
+	StateFile = fopen("State.dat", "wb");
 	
 	fwrite(&G,			sizeof(double), 1, StateFile);
 	fwrite(&FDE,		sizeof(double), 1, StateFile);
@@ -504,25 +504,26 @@ bool Simulation::ReadState()
 {
 	
 	FILE *StateFile;
+	size_t result;
 
-	fopen_s(&StateFile, "State.dat", "rb");
+	StateFile = fopen("State.dat", "rb");
 	if (StateFile == nullptr) 
 	{
         return false;
     }
 	
-	fread(&G,			sizeof(double), 1, StateFile);
-	fread(&FDE,			sizeof(double), 1, StateFile);
-	fread(&dt,			sizeof(double), 1, StateFile);
-	fread(&r_soft,		sizeof(double), 1, StateFile);
+	result = fread(&G,			sizeof(double), 1, StateFile);
+	result = fread(&FDE,		sizeof(double), 1, StateFile);
+	result = fread(&dt,			sizeof(double), 1, StateFile);
+	result = fread(&r_soft,		sizeof(double), 1, StateFile);
 
-	fread(Cam.pos,		sizeof(double), 3, StateFile);
-	fread(&Cam.phi,		sizeof(double), 1, StateFile);
-	fread(&Cam.theta,	sizeof(double), 1, StateFile);
+	result = fread(Cam.pos,		sizeof(double), 3, StateFile);
+	result = fread(&Cam.phi,	sizeof(double), 1, StateFile);
+	result = fread(&Cam.theta,	sizeof(double), 1, StateFile);
 
-	fread(states,		sizeof(double), N_BODIES*N_STATES,	StateFile);
-	fread(mass,			sizeof(double), N_BODIES,			StateFile);
-	fread(has_gravity,	sizeof(bool),	N_BODIES,			StateFile);
+	result = fread(states,		sizeof(double), N_BODIES*N_STATES,	StateFile);
+	result = fread(mass,		sizeof(double), N_BODIES,			StateFile);
+	result = fread(has_gravity,	sizeof(bool),	N_BODIES,			StateFile);
 	
 	fclose(StateFile);
 
