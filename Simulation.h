@@ -1,6 +1,5 @@
-#include <windows.h>
-#include <stdio.h>
-#include <gl\gl.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_opengl.h>
 #include "VectorMath.h"
 #include "BHTree.h"
 

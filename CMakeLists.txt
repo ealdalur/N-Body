@@ -33,14 +33,9 @@ endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED ON)
 
-find_library(OPENGLl32_LIB_FILE
-  NAMES opengl32
+find_package(SDL3 CONFIG REQUIRED)
+find_package(OpenGL REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE 
+  SDL3::SDL3
+  OpenGL::GL 
 )
-
-if(OPENGLl32_LIB_FILE)
-  target_link_libraries(${PROJECT_NAME} PRIVATE
-    "${OPENGLl32_LIB_FILE}"
-  )
-else()
-  message(FATAL_ERROR "Custom library not found. Please check the path.")
-endif()
