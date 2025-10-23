@@ -2,6 +2,16 @@
 
 Simulation::Simulation()
 {
+	multiThreading = true;
+	int hardwareConcurrency = std::thread::hardware_concurrency();
+	std::cout << "Hardware thread contexts: " << hardwareConcurrency << std::endl;
+	if (hardwareConcurrency > 8) {
+		numThreads = 8;
+	} else {
+		numThreads = 4;
+	}
+	std::cout << "Number of compute threads: " << numThreads << std::endl;
+
 	InitGL();
 
 	int ki;
@@ -48,22 +58,27 @@ Simulation::~Simulation()
 	if (DATA_LOG) fclose(DataLog);
 }
 
-void Simulation::LoadGalaxyDiscState(double M, double Mfrac, double R, double Ri, double Vtol){
+void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double M, double Mfrac, double R, double Ri, double Vtol){
 	
 	double m,r,theta,phi,vm,m_orbit;
 	double p[3],v[3];
 	double y[3] = {0.0, 1.0, 0.0};
 
-	m = Mfrac*M/(N_SYSTEM_BODIES[0]-1);
-	mass[0] = M;
-	has_gravity[0] = true;
-	vset(0.0,0.0,0.0,pos[0]);
-	vset(0.0,0.0,0.0,vel[0]);
+	int sysIdx = 0;
+	for (int i=0; i<system; i++) sysIdx += N_SYSTEM_BODIES[i];
 
-	for (int i=1; i<N_SYSTEM_BODIES[0]; i++)
+	m = Mfrac*M/(N_SYSTEM_BODIES[system]-1);
+	mass[sysIdx] = M;
+	has_gravity[sysIdx] = true;
+	//vset(0.0,0.0,0.0,pos[sysIdx]);
+	//vset(0.0,0.0,0.0,vel[sysIdx]);
+	vcopy(sysPos, pos[sysIdx]);
+	vcopy(sysVel, vel[sysIdx]);
+
+	for (int i=1; i<N_SYSTEM_BODIES[system]; i++)
 	{
-		mass[i] = m;
-		has_gravity[i] = true;
+		mass[sysIdx+i] = m;
+		has_gravity[sysIdx+i] = true;
 		
 		r = (R-Ri)*drand() + Ri;
 		
@@ -71,15 +86,15 @@ void Simulation::LoadGalaxyDiscState(double M, double Mfrac, double R, double Ri
 		theta = 2*M_PI*drand();
 		vset(r*sin(phi)*cos(theta),r*cos(phi),r*sin(phi)*sin(theta),p);
 
-		m_orbit = M + m*(N_SYSTEM_BODIES[0]-1)*(r*r/(R*R));
+		m_orbit = M + m*(N_SYSTEM_BODIES[system]-1)*(r*r/(R*R));
 		vm = sqrt(G*m_orbit/r);
 		vm = (-1.0+Vtol*(2*drand()-1))*vm;
 
 		vcopy(p,v); vnorm(v);
 		vcross(v,y,v); vnorm(v);
 		vscale(v,1.0*vm,v);
-		vadd(p,pos[0],pos[i]);
-		vadd(v,vel[0],vel[i]);
+		vadd(p,pos[sysIdx],pos[sysIdx+i]);
+		vadd(v,vel[sysIdx],vel[sysIdx+i]);
 	}
 }
 
@@ -128,16 +143,47 @@ void Simulation::LoadDefaultState()
 {
 
 	G = 1.0;
-	FDE = 0*1.0;
-	dt = 0.001;	
-	r_soft = 0.5;
+	FDE = 0.0*1.0;
+	dt = 0.0005;	
+	r_soft = 0.1;
+	double pos[3];
+	double vel[3];
+
+	vset(0.0, 0.0, 0.0, pos);
+	vset(0.0, 0.0, 0.0, vel);
+	LoadGalaxyDiscState(0, pos, vel, 1.0e7, 0.5, 250.0, 25.0, 0.1);
 	
-	LoadGalaxyDiscState(1.0e7, 0.1, 250.0, 25.0, 0.1);
+	vset( 300.0, 0.0, -300.0, pos);
+	vset(-1000.0, 0.0, 0.0, vel);
+	LoadGalaxyDiscState(1, pos, vel, 7.0e6, 0.5, 100.0, 10.0, 0.1);
+	
 	//LoadSphericalUniverseState(1.0e7, 217.5, 200.0);
 
 	vset(0.0,500.0,500.0,Cam.pos);
 	Cam.phi = atan2(-Cam.pos[1],Cam.pos[2]);
 	Cam.theta = 0;
+}
+
+void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
+
+	double a[3];
+	double r;
+
+	for (int i=iStart; i<=iEnd; i++)
+		{
+			vscaleadd(pos_t[i],FDE,acc_t[i]);
+
+			for (int j=0; j<N_BODIES; j++)
+			{
+				if ((j != i) && (has_gravity[j]))
+				{
+					vsub(pos_t[j],pos_t[i],a);
+					r = vmagsoft(a,r_soft);
+					vscale(a,G/(r*r*r),a);
+					if (has_gravity[j]) vscaleadd(a,mass[j],acc_t[i]);
+				}
+			}
+		}
 }
 
 void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
@@ -153,13 +199,11 @@ void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
 	}
 }
 
-void Simulation::CalcDerivatives(double *s, double *s_d)
-{
-	double a[3];
-	double r;
-		
+void Simulation::PrepareDerivativeDataRange(double *s, double *s_d, int iStart, int iEnd) {
+	
 	int ki;
-	for (int i=0; i<N_BODIES; i++)
+	
+	for (int i=iStart; i<=iEnd; i++)
 	{
 		ki = i*N_STATES;
 
@@ -169,42 +213,41 @@ void Simulation::CalcDerivatives(double *s, double *s_d)
 		vcopy(s+ki+3,s_d+ki);
 		vset(0.0,0.0,0.0,acc_t[i]);
 	}
+}
 
-	if (GRAVITY_P2P) {
-		for (int i=0; i<N_BODIES; i++)
-		{
-			vscaleadd(pos_t[i],FDE,acc_t[i]);
-
-			for (int j=0; j<N_BODIES; j++)
-			{
-				if (j > i)
-				{
-					vsub(pos_t[j],pos_t[i],a);
-					r = vmagsoft(a,r_soft);
-					vscale(a,G/(r*r*r),a);
-					if (has_gravity[j]) vscaleadd(a,mass[j],acc_t[i]);
-					if (has_gravity[i]) vscaleadd(a,-1.0*mass[i],acc_t[j]);
-				}
-			}
-		}
-	}
-
-	if (GRAVITY_OCT) {
-		
-		int numThreads = 4;
-		std::vector<std::thread> threads;
+void Simulation::CalcDerivatives(double *s, double *s_d)
+{		
+	if (multiThreading) {
+		threads.clear();
 		int chunk_size = N_BODIES / numThreads;
 
 		for (int i = 0; i < numThreads; ++i) {
 			int iStart = i * chunk_size;
 			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
-			threads.emplace_back(&Simulation::CalcAccelRangeOct, this, iStart, iEnd);
+			threads.emplace_back(&Simulation::PrepareDerivativeDataRange, this, s, s_d, iStart, iEnd);
 		}
 
 		for (auto& thread : threads) {
 			thread.join();
 		}
+
+		threads.clear();
+		for (int i = 0; i < numThreads; ++i) {
+			int iStart = i * chunk_size;
+			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
+			if (GRAVITY_P2P) threads.emplace_back(&Simulation::CalcAccelRangeP2P, this, iStart, iEnd);
+			if (GRAVITY_OCT) threads.emplace_back(&Simulation::CalcAccelRangeOct, this, iStart, iEnd);
+		}
+
+		for (auto& thread : threads) {
+			thread.join();
+		}
+	} else {
+		PrepareDerivativeDataRange(s, s_d, 0, N_BODIES-1);
+		if (GRAVITY_P2P) CalcAccelRangeP2P(0, N_BODIES-1);
+		if (GRAVITY_OCT) CalcAccelRangeOct(0, N_BODIES-1);
 	}
+	
 }
 
 void Simulation::BuildOctree()
@@ -257,18 +300,21 @@ void Simulation::CalcOutputsRange(int iStart, int iEnd) {
 
 void Simulation::CalcOutputs()
 {
-	int numThreads = 4;
-	std::vector<std::thread> threads;
-	int chunk_size = N_BODIES / numThreads;
+	if (multiThreading) {
+		threads.clear();
+		int chunk_size = N_BODIES / numThreads;
 
-	for (int i = 0; i < numThreads; ++i) {
-		int iStart = i * chunk_size;
-		int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
-		threads.emplace_back(&Simulation::CalcOutputsRange, this, iStart, iEnd);
-	}
+		for (int i = 0; i < numThreads; ++i) {
+			int iStart = i * chunk_size;
+			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
+			threads.emplace_back(&Simulation::CalcOutputsRange, this, iStart, iEnd);
+		}
 
-	for (auto& thread : threads) {
-		thread.join();
+		for (auto& thread : threads) {
+			thread.join();
+		}
+	} else {
+		CalcOutputsRange(0, N_BODIES-1);
 	}
 }
 
@@ -282,19 +328,23 @@ void Simulation::CalcRK4StateEstimateRange(double *s_est, double *s_curr, double
 
 void Simulation::CalcRK4StateEstimate(double *s_est, double *s_curr, double *s_d, double scalar, double dt) {
 
-	int numThreads = 4;
-	std::vector<std::thread> threads;
-	int chunk_size = N_BODIES*N_STATES / numThreads;
+	if (multiThreading) {
+		threads.clear();
+		int chunk_size = N_BODIES*N_STATES / numThreads;
 
-	for (int i = 0; i < numThreads; ++i) {
-		int iStart = i * chunk_size;
-		int iEnd = (i == numThreads - 1) ? (N_BODIES*N_STATES-1) : (iStart + chunk_size - 1);
-		threads.emplace_back(&Simulation::CalcRK4StateEstimateRange, this, s_est, s_curr, s_d, scalar, dt, iStart, iEnd);
-	}
+		for (int i = 0; i < numThreads; ++i) {
+			int iStart = i * chunk_size;
+			int iEnd = (i == numThreads - 1) ? (N_BODIES*N_STATES-1) : (iStart + chunk_size - 1);
+			threads.emplace_back(&Simulation::CalcRK4StateEstimateRange, this, s_est, s_curr, s_d, scalar, dt, iStart, iEnd);
+		}
 
-	for (auto& thread : threads) {
-		thread.join();
+		for (auto& thread : threads) {
+			thread.join();
+		}
+	} else {
+		CalcRK4StateEstimateRange(s_est, s_curr, s_d, scalar, dt, 0, N_BODIES*N_STATES-1);
 	}
+	
 }
 
 void Simulation::CalcLeapFrogPositionsRange(int iStart, int iEnd) {
@@ -309,19 +359,23 @@ void Simulation::CalcLeapFrogPositionsRange(int iStart, int iEnd) {
 
 void Simulation::CalcLeapFrogPositions() {
 
-	int numThreads = 4;
-	std::vector<std::thread> threads;
-	int chunk_size = N_BODIES / numThreads;
+	if (multiThreading) {
+		threads.clear();
+		int chunk_size = N_BODIES / numThreads;
 
-	for (int i = 0; i < numThreads; ++i) {
-		int iStart = i * chunk_size;
-		int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
-		threads.emplace_back(&Simulation::CalcLeapFrogPositionsRange, this, iStart, iEnd);
-	}
+		for (int i = 0; i < numThreads; ++i) {
+			int iStart = i * chunk_size;
+			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
+			threads.emplace_back(&Simulation::CalcLeapFrogPositionsRange, this, iStart, iEnd);
+		}
 
-	for (auto& thread : threads) {
-		thread.join();
+		for (auto& thread : threads) {
+			thread.join();
+		}
+	} else {
+		CalcLeapFrogPositionsRange(0, N_BODIES-1);
 	}
+	
 }
 
 void Simulation::CalcLeapFrogVelocitiesRange(int iStart, int iEnd) {
@@ -336,20 +390,22 @@ void Simulation::CalcLeapFrogVelocitiesRange(int iStart, int iEnd) {
 
 void Simulation::CalcLeapFrogVelocities() {
 
-	int numThreads = 4;
-	std::vector<std::thread> threads;
-	int chunk_size = N_BODIES / numThreads;
+	if (multiThreading) {
+		threads.clear();
+		int chunk_size = N_BODIES / numThreads;
 
-	for (int i = 0; i < numThreads; ++i) {
-		int iStart = i * chunk_size;
-		int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
-		threads.emplace_back(&Simulation::CalcLeapFrogVelocitiesRange, this, iStart, iEnd);
-	}
+		for (int i = 0; i < numThreads; ++i) {
+			int iStart = i * chunk_size;
+			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
+			threads.emplace_back(&Simulation::CalcLeapFrogVelocitiesRange, this, iStart, iEnd);
+		}
 
-	for (auto& thread : threads) {
-		thread.join();
+		for (auto& thread : threads) {
+			thread.join();
+		}
+	} else {
+		CalcLeapFrogVelocitiesRange(0, N_BODIES-1);
 	}
-	
 }
 
 void Simulation::Step()
@@ -559,7 +615,7 @@ void Simulation::DrawGL(GLvoid)
 			glRotated(phi,1.0f,0.0f,0.0f);
 
 
-			r = pow(acc_sq[i]/400000.0,1.0/3.0);
+			r = pow(acc_sq[i]/1000000.0,1.0/3.0);
 			g = 0.3;
 			b = 1.0 - r;
 				

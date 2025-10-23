@@ -1,3 +1,4 @@
+#include <iostream>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
 #include <vector>
@@ -6,9 +7,9 @@
 #include "VectorMath.h"
 #include "BHTree.h"
 
-const int N_BODIES = 20000;
-const int N_SYSTEMS = 1;
-const int N_SYSTEM_BODIES[N_SYSTEMS] = {N_BODIES};
+const int N_BODIES = 40000;
+const int N_SYSTEMS = 2;
+const int N_SYSTEM_BODIES[N_SYSTEMS] = {30000, 10000};
 
 const int N_STATES = 6;
 
@@ -59,9 +60,13 @@ class Simulation
 	BHTree *Octree;
 
 	FILE *DataLog;
+
+	std::vector<std::thread> threads;
 	
 	void InitGL();
+	void CalcAccelRangeP2P(int iStart, int iEnd);
 	void CalcAccelRangeOct(int iStart, int iEnd);
+	void PrepareDerivativeDataRange(double *s, double *s_d, int iStart, int iEnd);
 	void CalcDerivatives(double *s, double *s_d);
 	void CalcRK4StateEstimateRange(double *s_est, double *s_curr, double *s_d, double scalar, double dt, int iStart, int iEnd);
 	void CalcRK4StateEstimate(double *s_est, double *s_curr, double *s_d, double scalar, double dt);
@@ -72,12 +77,14 @@ class Simulation
 	void CalcOutputsRange(int iStart, int iEnd);
 	void CalcOutputs();
 public:
-	bool DrawOctree;
+	bool DrawOctree = false;
+	bool multiThreading = true;
+	int numThreads = 4;
 	
 	Simulation();
 	~Simulation();
 	
-	void LoadGalaxyDiscState(double M, double Mfrac, double R, double Ri, double Vtol);
+	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double M, double Mfrac, double R, double Ri, double Vtol);
 	void LoadSphericalUniverseState(double M, double R, double V);
 	void LoadDefaultState();
 	void BuildOctree();

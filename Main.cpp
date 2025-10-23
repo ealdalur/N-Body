@@ -94,6 +94,14 @@ bool handleInput(const bool* keys) {
 	if (keyPressed(SDL_SCANCODE_O, keys)) {
 		Sim->DrawOctree = !Sim->DrawOctree;
 	}
+	if (keyPressed(SDL_SCANCODE_M, keys)) {
+		Sim->multiThreading = !Sim->multiThreading;
+		if (Sim->multiThreading) {
+			std::cout << "Number of compute threads: " << Sim->numThreads << std::endl;
+		} else {
+			std::cout << "Number of compute threads: " << 1 << std::endl;
+		}
+	}
 	if (keyPressed(SDL_SCANCODE_P, keys)) {
 		SimPaused = !SimPaused;
 		if (SimPaused)
@@ -149,6 +157,10 @@ void close()
 
 int main()
 {
+	std::cout << "---- N-Body Simulation ----" << std::endl;
+	std::cout << "Developed by Erick Aldalur" << std::endl;
+	std::cout << "2025" << std::endl << std::endl; 
+
 	bool quit = false;
 	SDL_Event e;
 
