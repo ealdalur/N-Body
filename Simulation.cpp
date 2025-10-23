@@ -153,8 +153,8 @@ void Simulation::LoadDefaultState()
 	vset(0.0, 0.0, 0.0, vel);
 	LoadGalaxyDiscState(0, pos, vel, 1.0e7, 0.5, 250.0, 25.0, 0.1);
 	
-	vset( 300.0, 0.0, -300.0, pos);
-	vset(-1000.0, 0.0, 0.0, vel);
+	vset( 300.0, 0.0, -400.0, pos);
+	vset(-200.0, 0.0, 0.0, vel);
 	LoadGalaxyDiscState(1, pos, vel, 7.0e6, 0.5, 100.0, 10.0, 0.1);
 	
 	//LoadSphericalUniverseState(1.0e7, 217.5, 200.0);
