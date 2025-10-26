@@ -153,8 +153,8 @@ void Simulation::LoadDefaultState()
 	vset(0.0, 0.0, 0.0, vel);
 	LoadGalaxyDiscState(0, pos, vel, 1.0e7, 0.5, 250.0, 25.0, 0.1);
 	
-	vset( 300.0, 0.0, -400.0, pos);
-	vset(-200.0, 0.0, 0.0, vel);
+	vset( 300.0, 0.0, -500.0, pos);
+	vset(-150.0, 0.0, 0.0, vel);
 	LoadGalaxyDiscState(1, pos, vel, 7.0e6, 0.5, 100.0, 10.0, 0.1);
 	
 	//LoadSphericalUniverseState(1.0e7, 217.5, 200.0);
@@ -607,6 +607,8 @@ void Simulation::DrawGL(GLvoid)
 	glTranslated(-Cam.pos[0],-Cam.pos[1],-Cam.pos[2]);
 
 	double r,g,b,a;
+	bool sysBody = false;
+	int sysIdx = 0;
 	for (int i=0; i<N_BODIES; i++)
 	{
 		glPushMatrix();
@@ -614,18 +616,32 @@ void Simulation::DrawGL(GLvoid)
 			glRotated(theta,0.0f,1.0f,0.0f);
 			glRotated(phi,1.0f,0.0f,0.0f);
 
+			sysBody = false;
+			sysIdx = 0;
+			for (int j=0; j<N_SYSTEMS; j++) {
+				if (sysIdx == i) sysBody = true;
+				sysIdx += N_SYSTEM_BODIES[j];
+			}
 
-			r = pow(acc_sq[i]/1000000.0,1.0/3.0);
-			g = 0.3;
-			b = 1.0 - r;
-				
-			r = (r<0.3)?0.3:r;
-			g = (g<0.3)?0.3:g;
-			b = (b<0.3)?0.3:b;
-				
-			a = 10000.0/N_BODIES;
-			a = (a>0.2)?0.2:a;
-			a = (a<0.02)?0.02:a;
+			if (sysBody) {
+				r = 0.0;
+				g = 1.0;
+				b = 0.0;
+				a = 1.0;
+			} else {
+				r = pow(acc_sq[i]/1000000.0,1.0/3.0);
+				g = 0.3;
+				b = 1.0 - r;
+					
+				r = (r<0.3)?0.3:r;
+				g = (g<0.3)?0.3:g;
+				b = (b<0.3)?0.3:b;
+					
+				a = 10000.0/N_BODIES;
+				a = (a>0.2)?0.2:a;
+				a = (a<0.02)?0.02:a;
+			}
+			
 			glColor4d(r,g,b,a);
 			
 
