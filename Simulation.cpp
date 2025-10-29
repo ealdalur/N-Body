@@ -149,15 +149,16 @@ void Simulation::LoadDefaultState()
 	double pos[3];
 	double vel[3];
 
+	FDE = 0.0;
 	vset(0.0, 0.0, 0.0, pos);
 	vset(0.0, 0.0, 0.0, vel);
 	LoadGalaxyDiscState(0, pos, vel, 1.0e7, 0.5, 250.0, 25.0, 0.1);
-	
 	vset( 300.0, 0.0, -500.0, pos);
 	vset(-150.0, 0.0, 0.0, vel);
-	LoadGalaxyDiscState(1, pos, vel, 7.0e6, 0.5, 100.0, 10.0, 0.1);
+	LoadGalaxyDiscState(1, pos, vel, 6.0e6, 0.5, 125.0, 25.0, 0.1);
 	
-	//LoadSphericalUniverseState(1.0e7, 217.5, 200.0);
+	// FDE = 1.0;
+	// LoadSphericalUniverseState(2.1e7, 210.0, 200.0);
 
 	vset(0.0,500.0,500.0,Cam.pos);
 	Cam.phi = atan2(-Cam.pos[1],Cam.pos[2]);

@@ -11,6 +11,10 @@ const int N_BODIES = 40000;
 const int N_SYSTEMS = 2;
 const int N_SYSTEM_BODIES[N_SYSTEMS] = {30000, 10000};
 
+// const int N_BODIES = 100000;
+// const int N_SYSTEMS = 1;
+// const int N_SYSTEM_BODIES[N_SYSTEMS] = {N_BODIES};
+
 const int N_STATES = 6;
 
 const bool GRAVITY_P2P = false;
