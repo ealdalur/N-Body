@@ -2,7 +2,7 @@
 
 BHTree::BHTree()
 {
-	nodes.resize(128000);
+	nodes.resize(512000);
 	nodeCount = 0;
 }
 
@@ -106,47 +106,59 @@ void BHTree::InsertBody(double *p, double m, int BodyIdxIn)
 	int stack[64];
 	int top = 0;
 	stack[top++] = 0;
+	int depth = 0;
 
 	while (top > 0) {
+		if (depth >= 60) {
+			nodes[stack[top-1]].Mass += m;
+			nodes[stack[top-1]].Num_Bodies++;
+			break;
+		}
+
 		int idx = stack[--top];
-		BHNode &n = nodes[idx];
 
-		if (n.Num_Bodies == 0) {
-			vcopy(p, n.p_cm);
-			n.Mass = m;
-			n.BodyIdx = BodyIdxIn;
-			n.Num_Bodies++;
-		} else if (n.Num_Bodies == 1) {
-			Octant oct_existing = DetermineOctant(idx, n.p_cm);
-			if (n.Octants[oct_existing] == -1) CreateChild(idx, oct_existing);
+		if (nodes[idx].Num_Bodies == 0) {
+			vcopy(p, nodes[idx].p_cm);
+			nodes[idx].Mass = m;
+			nodes[idx].BodyIdx = BodyIdxIn;
+			nodes[idx].Num_Bodies++;
+		} else if (nodes[idx].Num_Bodies == 1) {
+			double existing_cm[3];
+			vcopy(nodes[idx].p_cm, existing_cm);
+			double existing_mass = nodes[idx].Mass;
+			int existing_body = nodes[idx].BodyIdx;
 
-			if (vequal(n.p_cm, p)) {
-				BHNode &child = nodes[n.Octants[oct_existing]];
-				vcopy(n.p_cm, child.p_cm);
-				child.Mass = n.Mass + m;
-				child.BodyIdx = n.BodyIdx;
-				child.Num_Bodies = 1;
+			Octant oct_existing = DetermineOctant(idx, existing_cm);
+			if (nodes[idx].Octants[oct_existing] == -1) CreateChild(idx, oct_existing);
+
+			if (vequal(existing_cm, p)) {
+				int child_idx = nodes[idx].Octants[oct_existing];
+				vcopy(existing_cm, nodes[child_idx].p_cm);
+				nodes[child_idx].Mass = existing_mass + m;
+				nodes[child_idx].BodyIdx = existing_body;
+				nodes[child_idx].Num_Bodies = 1;
 			} else {
-				int existing_child = nodes[idx].Octants[oct_existing];
-				BHNode &ec = nodes[existing_child];
-				vcopy(nodes[idx].p_cm, ec.p_cm);
-				ec.Mass = nodes[idx].Mass;
-				ec.BodyIdx = nodes[idx].BodyIdx;
-				ec.Num_Bodies = 1;
+				int child_existing = nodes[idx].Octants[oct_existing];
+				vcopy(existing_cm, nodes[child_existing].p_cm);
+				nodes[child_existing].Mass = existing_mass;
+				nodes[child_existing].BodyIdx = existing_body;
+				nodes[child_existing].Num_Bodies = 1;
 
 				Octant oct_new = DetermineOctant(idx, p);
 				if (nodes[idx].Octants[oct_new] == -1) CreateChild(idx, oct_new);
 
 				stack[top++] = nodes[idx].Octants[oct_new];
 				nodes[idx].Num_Bodies++;
+				depth++;
 				continue;
 			}
-			n.Num_Bodies++;
+			nodes[idx].Num_Bodies++;
 		} else {
 			Octant oct = DetermineOctant(idx, p);
-			if (n.Octants[oct] == -1) CreateChild(idx, oct);
-			n.Num_Bodies++;
-			stack[top++] = n.Octants[oct];
+			if (nodes[idx].Octants[oct] == -1) CreateChild(idx, oct);
+			nodes[idx].Num_Bodies++;
+			stack[top++] = nodes[idx].Octants[oct];
+			depth++;
 		}
 	}
 }
@@ -182,7 +194,7 @@ void BHTree::CalcAcceleration(double *p, int BodyIdxIn, double G, double r_soft,
 {
 	vset(0.0, 0.0, 0.0, a);
 
-	int stack[64];
+	int stack[512];
 	int top = 0;
 	stack[top++] = 0;
 
@@ -209,7 +221,7 @@ void BHTree::CalcAcceleration(double *p, int BodyIdxIn, double G, double r_soft,
 				vscaleadd(v, G * n.Mass * r3_inv, a);
 			} else {
 				for (int i = 0; i < 8; i++) {
-					if (n.Octants[i] != -1) {
+					if (n.Octants[i] != -1 && top < 510) {
 						stack[top++] = n.Octants[i];
 					}
 				}
