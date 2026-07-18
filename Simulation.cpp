@@ -55,6 +55,7 @@ Simulation::Simulation()
 Simulation::~Simulation()
 {
 	glDeleteVertexArrays(1, &particleVAO);
+	glDeleteBuffers(1, &particleShapeVBO);
 	glDeleteBuffers(1, &particlePosVBO);
 	glDeleteBuffers(1, &particleColorVBO);
 	glDeleteProgram(particleShader);
@@ -494,43 +495,20 @@ void Simulation::InitGL()
 	glEnable(GL_BLEND);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
-	// --- Particle shader (billboard expansion on GPU via geometry shader) ---
+	// --- Particle shader (instanced billboards, expansion on GPU) ---
 	const char *particleVert = R"(
 		#version 330 core
-		layout(location = 0) in vec3 aPos;
-		layout(location = 1) in vec4 aColor;
-		out vec4 vColor;
-		void main() {
-			gl_Position = vec4(aPos, 1.0);
-			vColor = aColor;
-		}
-	)";
-
-	const char *particleGeom = R"(
-		#version 330 core
-		layout(points) in;
-		layout(triangle_strip, max_vertices = 12) out;
-		in vec4 vColor[];
+		layout(location = 0) in vec2 aOffset;
+		layout(location = 1) in vec3 aPos;
+		layout(location = 2) in vec4 aColor;
 		out vec4 fColor;
 		uniform mat4 uVP;
 		uniform vec3 uRight;
 		uniform vec3 uUp;
-		const float d = 0.5;
-		const float s45 = 0.7071067;
-		void emitQuad(vec3 center, vec3 r, vec3 u) {
-			fColor = vColor[0];
-			gl_Position = uVP * vec4(center + (-d)*r + (-d)*u, 1.0); EmitVertex();
-			gl_Position = uVP * vec4(center + (-d)*r + ( d)*u, 1.0); EmitVertex();
-			gl_Position = uVP * vec4(center + ( d)*r + (-d)*u, 1.0); EmitVertex();
-			gl_Position = uVP * vec4(center + ( d)*r + ( d)*u, 1.0); EmitVertex();
-			EndPrimitive();
-		}
 		void main() {
-			vec3 center = gl_in[0].gl_Position.xyz;
-			emitQuad(center, uRight, uUp);
-			vec3 r45 = s45 * (uRight + uUp);
-			vec3 u45 = s45 * (-uRight + uUp);
-			emitQuad(center, r45, u45);
+			vec3 worldPos = aPos + aOffset.x * uRight + aOffset.y * uUp;
+			gl_Position = uVP * vec4(worldPos, 1.0);
+			fColor = aColor;
 		}
 	)";
 
@@ -543,37 +521,63 @@ void Simulation::InitGL()
 		}
 	)";
 
-	// Compile particle shader with geometry stage
-	GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vs, 1, &particleVert, nullptr);
-	glCompileShader(vs);
-	GLuint gs = glCreateShader(GL_GEOMETRY_SHADER);
-	glShaderSource(gs, 1, &particleGeom, nullptr);
-	glCompileShader(gs);
-	GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fs, 1, &particleFrag, nullptr);
-	glCompileShader(fs);
-	particleShader = glCreateProgram();
-	glAttachShader(particleShader, vs);
-	glAttachShader(particleShader, gs);
-	glAttachShader(particleShader, fs);
-	glLinkProgram(particleShader);
-	glDeleteShader(vs);
-	glDeleteShader(gs);
-	glDeleteShader(fs);
+	particleShader = CompileShader(particleVert, particleFrag);
+
+	// Star shape: 2 quads (rotated 45 deg), each as 2 triangles = 12 vertices
+	const float d = 0.5f;
+	const float s45 = 0.7071067f;
+	// Quad 1 triangle vertices in 2D billboard space
+	float shapeData[24];
+	// Quad 1, tri 1: (-d,-d), (-d,d), (d,d)
+	shapeData[0]=-d; shapeData[1]=-d;
+	shapeData[2]=-d; shapeData[3]= d;
+	shapeData[4]= d; shapeData[5]= d;
+	// Quad 1, tri 2: (-d,-d), (d,d), (d,-d)
+	shapeData[6]=-d; shapeData[7]=-d;
+	shapeData[8]= d; shapeData[9]= d;
+	shapeData[10]=d; shapeData[11]=-d;
+	// Quad 2 (rotated 45 degrees): corners rotated
+	float c0x=-d*s45-(-d)*s45, c0y=-d*s45+(-d)*s45;  // (-d,-d) rotated 45
+	float c1x=-d*s45-d*s45,    c1y=-d*s45+d*s45;      // (-d, d) rotated 45
+	float c2x=d*s45-d*s45,     c2y=d*s45+d*s45;       // ( d, d) rotated 45
+	float c3x=d*s45-(-d)*s45,  c3y=d*s45+(-d)*s45;    // ( d,-d) rotated 45
+	// Quad 2, tri 1
+	shapeData[12]=c0x; shapeData[13]=c0y;
+	shapeData[14]=c1x; shapeData[15]=c1y;
+	shapeData[16]=c2x; shapeData[17]=c2y;
+	// Quad 2, tri 2
+	shapeData[18]=c0x; shapeData[19]=c0y;
+	shapeData[20]=c2x; shapeData[21]=c2y;
+	shapeData[22]=c3x; shapeData[23]=c3y;
 
 	glGenVertexArrays(1, &particleVAO);
+	glGenBuffers(1, &particleShapeVBO);
 	glGenBuffers(1, &particlePosVBO);
 	glGenBuffers(1, &particleColorVBO);
+
 	glBindVertexArray(particleVAO);
+
+	// Attribute 0: shape offsets (per-vertex, from shape VBO)
+	glBindBuffer(GL_ARRAY_BUFFER, particleShapeVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(shapeData), shapeData, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+	glEnableVertexAttribArray(0);
+	glVertexAttribDivisor(0, 0);
+
+	// Attribute 1: instance position (per-instance)
 	glBindBuffer(GL_ARRAY_BUFFER, particlePosVBO);
 	glBufferData(GL_ARRAY_BUFFER, N_BODIES * 3 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
-	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+	glEnableVertexAttribArray(1);
+	glVertexAttribDivisor(1, 1);
+
+	// Attribute 2: instance color (per-instance)
 	glBindBuffer(GL_ARRAY_BUFFER, particleColorVBO);
 	glBufferData(GL_ARRAY_BUFFER, N_BODIES * 4 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
-	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, nullptr);
-	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 0, nullptr);
+	glEnableVertexAttribArray(2);
+	glVertexAttribDivisor(2, 1);
+
 	glBindVertexArray(0);
 
 	// --- Octree wireframe shader ---
@@ -803,7 +807,7 @@ void Simulation::DrawGL()
 		}
 	}
 
-	// Upload and draw particles
+	// Upload and draw particles (instanced: 12 verts per star shape, N_BODIES instances)
 	glUseProgram(particleShader);
 	glUniformMatrix4fv(glGetUniformLocation(particleShader, "uVP"), 1, GL_FALSE, vp);
 	glUniform3fv(glGetUniformLocation(particleShader, "uRight"), 1, right);
@@ -814,7 +818,7 @@ void Simulation::DrawGL()
 	glBufferSubData(GL_ARRAY_BUFFER, 0, N_BODIES * 3 * sizeof(float), posBuf);
 	glBindBuffer(GL_ARRAY_BUFFER, particleColorVBO);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, N_BODIES * 4 * sizeof(float), clrBuf);
-	glDrawArrays(GL_POINTS, 0, N_BODIES);
+	glDrawArraysInstanced(GL_TRIANGLES, 0, 12, N_BODIES);
 	glBindVertexArray(0);
 
 	// --- Draw octree wireframe ---

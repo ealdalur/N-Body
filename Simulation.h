@@ -63,8 +63,8 @@ class Simulation
 
 	Camera Cam;
 
-	// Particle rendering (modern GL)
-	GLuint particleVAO, particlePosVBO, particleColorVBO;
+	// Particle rendering (modern GL, instanced)
+	GLuint particleVAO, particleShapeVBO, particlePosVBO, particleColorVBO;
 	GLuint particleShader;
 	float *posBuf;
 	float *clrBuf;
