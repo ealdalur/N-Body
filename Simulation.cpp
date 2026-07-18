@@ -14,8 +14,8 @@ Simulation::Simulation()
 
 	pool = new ThreadPool(numThreads);
 
-	vtxBuf = new float[N_BODIES * 8 * 3];
-	clrBuf = new float[N_BODIES * 8 * 4];
+	vtxBuf = new float[N_BODIES * 12 * 3];
+	clrBuf = new float[N_BODIES * 12 * 4];
 	vtxCount = 0;
 
 	InitGL();
@@ -55,7 +55,7 @@ Simulation::Simulation()
 
 Simulation::~Simulation()
 {
-	glDeleteLists(dList,2);
+	glDeleteLists(dList,1);
 	delete pool;
 	delete[] vtxBuf;
 	delete[] clrBuf;
@@ -472,56 +472,29 @@ void Simulation::InitGL()
 	glColor4d(1.0,0.95,0.92,0.1);	
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
-	double d = 0.5;	
-	dList = glGenLists(2);
+	double d = 0.5;
+	dList = glGenLists(1);
 	glNewList(dList,GL_COMPILE);
-		glPushMatrix();
-		glBegin(GL_QUADS);		
-			glVertex3d(-d,-d, 0.0);
-			glVertex3d(-d, d, 0.0);
-			glVertex3d( d, d, 0.0);
-			glVertex3d( d,-d, 0.0);
-		glEnd();
-		glRotated(45,0,0,1);
-		glBegin(GL_QUADS);		
-			glVertex3d(-d,-d, 0.0);
-			glVertex3d(-d, d, 0.0);
-			glVertex3d( d, d, 0.0);
-			glVertex3d( d,-d, 0.0);
-		glEnd();
-		glPopMatrix();
-	glEndList();
-
-	d = 0.5;
-	glNewList(dList+1,GL_COMPILE);
 		glColor4d(0.0,0.0,1.0,0.1);
 		glDisable(GL_BLEND);
-		glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
-		glBegin(GL_QUADS);		
+		glBegin(GL_LINE_LOOP);
 			glVertex3d(-d,-d, d);
 			glVertex3d(-d, d, d);
 			glVertex3d( d, d, d);
 			glVertex3d( d,-d, d);
 		glEnd();
-		glBegin(GL_QUADS);		
+		glBegin(GL_LINE_LOOP);
 			glVertex3d(-d,-d,-d);
 			glVertex3d(-d, d,-d);
 			glVertex3d( d, d,-d);
 			glVertex3d( d,-d,-d);
 		glEnd();
-		glBegin(GL_QUADS);		
-			glVertex3d(-d, d,-d);
-			glVertex3d(-d, d, d);
-			glVertex3d( d, d, d);
-			glVertex3d( d, d,-d);
+		glBegin(GL_LINES);
+			glVertex3d(-d,-d,-d); glVertex3d(-d,-d, d);
+			glVertex3d(-d, d,-d); glVertex3d(-d, d, d);
+			glVertex3d( d, d,-d); glVertex3d( d, d, d);
+			glVertex3d( d,-d,-d); glVertex3d( d,-d, d);
 		glEnd();
-		glBegin(GL_QUADS);		
-			glVertex3d(-d,-d,-d);
-			glVertex3d(-d,-d, d);
-			glVertex3d( d,-d, d);
-			glVertex3d( d,-d,-d);
-		glEnd();
-		glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
 		glEnable(GL_BLEND);
 		glColor4d(1.0,0.95,0.92,0.1);
 	glEndList();
@@ -560,7 +533,7 @@ void Simulation::DrawOctant(int nodeIdx)
 	glPushMatrix();
 		glTranslated(bd[0],bd[1],bd[2]);
 		glScaled(bd[3],bd[3],bd[3]);
-		glCallList(dList+1);
+		glCallList(dList);
 	glPopMatrix();
 
 	for (int i=0; i<8; i++)
@@ -625,6 +598,9 @@ void Simulation::DrawGL(GLvoid)
 	sysIndices[0] = 0;
 	for (int j = 1; j < N_SYSTEMS; j++) sysIndices[j] = sysIndices[j-1] + N_SYSTEM_BODIES[j-1];
 
+	// Triangle index pattern for a quad (vertices 0,1,2,3) -> triangles (0,1,2) and (0,2,3)
+	const int triIdx[6] = {0, 1, 2, 0, 2, 3};
+
 	int vi = 0, ci = 0;
 	for (int i = 0; i < N_BODIES; i++)
 	{
@@ -649,15 +625,17 @@ void Simulation::DrawGL(GLvoid)
 
 		float px = (float)pos[i][0], py = (float)pos[i][1], pz = (float)pos[i][2];
 
-		// Quad 1 (4 vertices)
-		for (int k = 0; k < 4; k++) {
+		// Quad 1 as 2 triangles (vertices 0,1,2,3 -> tris 0,1,2 and 0,2,3)
+		for (int t = 0; t < 6; t++) {
+			int k = triIdx[t];
 			vtxBuf[vi++] = px + (float)offsets[k][0];
 			vtxBuf[vi++] = py + (float)offsets[k][1];
 			vtxBuf[vi++] = pz + (float)offsets[k][2];
 			clrBuf[ci++] = r; clrBuf[ci++] = g; clrBuf[ci++] = b; clrBuf[ci++] = a;
 		}
-		// Quad 2 (4 vertices)
-		for (int k = 4; k < 8; k++) {
+		// Quad 2 as 2 triangles (vertices 4,5,6,7 -> tris 4,5,6 and 4,6,7)
+		for (int t = 0; t < 6; t++) {
+			int k = triIdx[t] + 4;
 			vtxBuf[vi++] = px + (float)offsets[k][0];
 			vtxBuf[vi++] = py + (float)offsets[k][1];
 			vtxBuf[vi++] = pz + (float)offsets[k][2];
@@ -665,13 +643,13 @@ void Simulation::DrawGL(GLvoid)
 		}
 	}
 
-	vtxCount = N_BODIES * 8;
+	vtxCount = N_BODIES * 12;
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_COLOR_ARRAY);
 	glVertexPointer(3, GL_FLOAT, 0, vtxBuf);
 	glColorPointer(4, GL_FLOAT, 0, clrBuf);
-	glDrawArrays(GL_QUADS, 0, vtxCount);
+	glDrawArrays(GL_TRIANGLES, 0, vtxCount);
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisableClientState(GL_VERTEX_ARRAY);
 
