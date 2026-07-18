@@ -5,7 +5,6 @@
 #include <functional>
 #include <mutex>
 #include <condition_variable>
-#include <atomic>
 
 class ThreadPool
 {
@@ -15,7 +14,7 @@ private:
 	std::mutex mtx;
 	std::condition_variable cv_work;
 	std::condition_variable cv_done;
-	std::atomic<int> active_tasks{0};
+	int pending_tasks = 0;
 	bool stop = false;
 
 public:
@@ -33,8 +32,11 @@ public:
 						tasks.pop_back();
 					}
 					task();
-					if (--active_tasks == 0) {
-						cv_done.notify_one();
+					{
+						std::lock_guard<std::mutex> lock(mtx);
+						if (--pending_tasks == 0) {
+							cv_done.notify_one();
+						}
 					}
 				}
 			});
@@ -44,7 +46,7 @@ public:
 	~ThreadPool()
 	{
 		{
-			std::unique_lock<std::mutex> lock(mtx);
+			std::lock_guard<std::mutex> lock(mtx);
 			stop = true;
 		}
 		cv_work.notify_all();
@@ -55,9 +57,9 @@ public:
 	void submit(F&& f)
 	{
 		{
-			std::unique_lock<std::mutex> lock(mtx);
+			std::lock_guard<std::mutex> lock(mtx);
 			tasks.emplace_back(std::forward<F>(f));
-			active_tasks++;
+			pending_tasks++;
 		}
 		cv_work.notify_one();
 	}
@@ -65,6 +67,6 @@ public:
 	void waitAll()
 	{
 		std::unique_lock<std::mutex> lock(mtx);
-		cv_done.wait(lock, [this]() { return active_tasks == 0; });
+		cv_done.wait(lock, [this]() { return pending_tasks == 0; });
 	}
 };
