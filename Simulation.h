@@ -1,6 +1,8 @@
+#pragma once
+
 #include <iostream>
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_opengl.h>
+#include "glad.h"
 #include <vector>
 #include <thread>
 #include <random>
@@ -37,15 +39,15 @@ class Simulation
 {
 	double G;
 	double FDE;
-	double dt;	
+	double dt;
 	double r_soft;
 
 	double mass[N_BODIES];
-	
+
 	double states[N_BODIES*N_STATES];
 	double states_e[N_BODIES*N_STATES];
 	double states_d[4][N_BODIES*N_STATES];
-	
+
 	double *pos[N_BODIES];
 	double *pos_t[N_BODIES];
 	double *vel[N_BODIES];
@@ -58,21 +60,34 @@ class Simulation
 	double pos_sq[N_BODIES];
 	double vel_sq[N_BODIES];
 	double acc_sq[N_BODIES];
-	
-	Camera Cam;
-	GLuint dList;
 
-	float *vtxBuf;
+	Camera Cam;
+
+	// Particle rendering (modern GL)
+	GLuint particleVAO, particlePosVBO, particleColorVBO;
+	GLuint particleShader;
+	float *posBuf;
 	float *clrBuf;
-	int vtxCount;
+
+	// Octree wireframe rendering
+	GLuint octreeVAO, octreeVBO;
+	GLuint octreeShader;
+	std::vector<float> octreeVerts;
+
+	// FPS overlay
+	GLuint fpsVAO, fpsVBO;
+	GLuint fpsShader;
+
+	int winWidth, winHeight;
 
 	BHTree Octree;
 
 	FILE *DataLog;
 
 	ThreadPool *pool;
-	
+
 	void InitGL();
+	GLuint CompileShader(const char *vertSrc, const char *fragSrc);
 	void CalcAccelRangeP2P(int iStart, int iEnd);
 	void CalcAccelRangeOct(int iStart, int iEnd);
 	void PrepareDerivativeDataRange(double *s, double *s_d, int iStart, int iEnd);
@@ -85,24 +100,24 @@ class Simulation
 	void CalcLeapFrogVelocities();
 	void CalcOutputsRange(int iStart, int iEnd);
 	void CalcOutputs();
+	void BuildOctreeVerts(int nodeIdx);
 public:
 	bool DrawOctree = false;
 	bool multiThreading = true;
 	int numThreads = 4;
-	
+
 	Simulation();
 	~Simulation();
-	
+
 	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double M, double Mfrac, double R, double Ri, double Vtol);
 	void LoadSphericalUniverseState(double M, double R, double V);
 	void LoadDefaultState();
 	void BuildOctree();
 	void Step();
 	void CamMove(double d_phi, double d_theta, double d_r);
-	void SetPerspective(double fovY, double aspect, double zNear, double zFar);
 	void ReSizeGL(int width, int height);
 	void DrawGL();
-	void DrawOctant(int nodeIdx);
+	void DrawFPS(double fps);
 	void SaveState();
 	bool ReadState();
 };

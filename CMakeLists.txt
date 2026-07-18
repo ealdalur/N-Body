@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 cmake_policy(SET CMP0091 NEW) # Enforce the modern MSVC runtime policy
 
-project(N-Body CXX)
+project(N-Body C CXX)
 
 add_executable(${PROJECT_NAME})
 
@@ -9,6 +9,7 @@ target_sources(${PROJECT_NAME} PRIVATE
   Main.cpp
   Simulation.cpp
   BHTree.cpp
+  glad.c
 )
 
 if(MSVC)

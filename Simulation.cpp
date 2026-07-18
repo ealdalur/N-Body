@@ -14,9 +14,8 @@ Simulation::Simulation()
 
 	pool = new ThreadPool(numThreads);
 
-	vtxBuf = new float[N_BODIES * 12 * 3];
-	clrBuf = new float[N_BODIES * 12 * 4];
-	vtxCount = 0;
+	posBuf = new float[N_BODIES * 3];
+	clrBuf = new float[N_BODIES * 4];
 
 	InitGL();
 
@@ -55,9 +54,18 @@ Simulation::Simulation()
 
 Simulation::~Simulation()
 {
-	glDeleteLists(dList,1);
+	glDeleteVertexArrays(1, &particleVAO);
+	glDeleteBuffers(1, &particlePosVBO);
+	glDeleteBuffers(1, &particleColorVBO);
+	glDeleteProgram(particleShader);
+	glDeleteVertexArrays(1, &octreeVAO);
+	glDeleteBuffers(1, &octreeVBO);
+	glDeleteProgram(octreeShader);
+	glDeleteVertexArrays(1, &fpsVAO);
+	glDeleteBuffers(1, &fpsVBO);
+	glDeleteProgram(fpsShader);
 	delete pool;
-	delete[] vtxBuf;
+	delete[] posBuf;
 	delete[] clrBuf;
 
 	if (DATA_LOG) fclose(DataLog);
@@ -457,154 +465,327 @@ void Simulation::CamMove(double d_phi, double d_theta, double d_r)
 
 }
 
+GLuint Simulation::CompileShader(const char *vertSrc, const char *fragSrc)
+{
+	GLuint vert = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(vert, 1, &vertSrc, nullptr);
+	glCompileShader(vert);
+
+	GLuint frag = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(frag, 1, &fragSrc, nullptr);
+	glCompileShader(frag);
+
+	GLuint prog = glCreateProgram();
+	glAttachShader(prog, vert);
+	glAttachShader(prog, frag);
+	glLinkProgram(prog);
+
+	glDeleteShader(vert);
+	glDeleteShader(frag);
+	return prog;
+}
+
 void Simulation::InitGL()
 {
-	//glHint(GL_PERSPECTIVE_CORRECTION_HINT,GL_NICEST);
-
 	glDisable(GL_DEPTH_TEST);
-	glDepthMask(false);
+	glDepthMask(GL_FALSE);
 	glDisable(GL_CULL_FACE);
-	glDisable(GL_LIGHTING);
-	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-	glBlendFunc(GL_SRC_ALPHA,GL_ONE);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 	glEnable(GL_BLEND);
-	
-	glColor4d(1.0,0.95,0.92,0.1);	
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
-	double d = 0.5;
-	dList = glGenLists(1);
-	glNewList(dList,GL_COMPILE);
-		glColor4d(0.0,0.0,1.0,0.1);
-		glDisable(GL_BLEND);
-		glBegin(GL_LINE_LOOP);
-			glVertex3d(-d,-d, d);
-			glVertex3d(-d, d, d);
-			glVertex3d( d, d, d);
-			glVertex3d( d,-d, d);
-		glEnd();
-		glBegin(GL_LINE_LOOP);
-			glVertex3d(-d,-d,-d);
-			glVertex3d(-d, d,-d);
-			glVertex3d( d, d,-d);
-			glVertex3d( d,-d,-d);
-		glEnd();
-		glBegin(GL_LINES);
-			glVertex3d(-d,-d,-d); glVertex3d(-d,-d, d);
-			glVertex3d(-d, d,-d); glVertex3d(-d, d, d);
-			glVertex3d( d, d,-d); glVertex3d( d, d, d);
-			glVertex3d( d,-d,-d); glVertex3d( d,-d, d);
-		glEnd();
-		glEnable(GL_BLEND);
-		glColor4d(1.0,0.95,0.92,0.1);
-	glEndList();
-}
+	// --- Particle shader (billboard expansion on GPU via geometry shader) ---
+	const char *particleVert = R"(
+		#version 330 core
+		layout(location = 0) in vec3 aPos;
+		layout(location = 1) in vec4 aColor;
+		out vec4 vColor;
+		void main() {
+			gl_Position = vec4(aPos, 1.0);
+			vColor = aColor;
+		}
+	)";
 
-void Simulation::SetPerspective(double fovY, double aspect, double zNear, double zFar) {
-    
-	double fH = tan(fovY / 360 * M_PI) * zNear;
-    double fW = fH * aspect;
-    glFrustum(-fW, fW, -fH, fH, zNear, zFar);
-}
+	const char *particleGeom = R"(
+		#version 330 core
+		layout(points) in;
+		layout(triangle_strip, max_vertices = 12) out;
+		in vec4 vColor[];
+		out vec4 fColor;
+		uniform mat4 uVP;
+		uniform vec3 uRight;
+		uniform vec3 uUp;
+		const float d = 0.5;
+		const float s45 = 0.7071067;
+		void emitQuad(vec3 center, vec3 r, vec3 u) {
+			fColor = vColor[0];
+			gl_Position = uVP * vec4(center + (-d)*r + (-d)*u, 1.0); EmitVertex();
+			gl_Position = uVP * vec4(center + (-d)*r + ( d)*u, 1.0); EmitVertex();
+			gl_Position = uVP * vec4(center + ( d)*r + (-d)*u, 1.0); EmitVertex();
+			gl_Position = uVP * vec4(center + ( d)*r + ( d)*u, 1.0); EmitVertex();
+			EndPrimitive();
+		}
+		void main() {
+			vec3 center = gl_in[0].gl_Position.xyz;
+			emitQuad(center, uRight, uUp);
+			vec3 r45 = s45 * (uRight + uUp);
+			vec3 u45 = s45 * (-uRight + uUp);
+			emitQuad(center, r45, u45);
+		}
+	)";
 
+	const char *particleFrag = R"(
+		#version 330 core
+		in vec4 fColor;
+		out vec4 FragColor;
+		void main() {
+			FragColor = fColor;
+		}
+	)";
+
+	// Compile particle shader with geometry stage
+	GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(vs, 1, &particleVert, nullptr);
+	glCompileShader(vs);
+	GLuint gs = glCreateShader(GL_GEOMETRY_SHADER);
+	glShaderSource(gs, 1, &particleGeom, nullptr);
+	glCompileShader(gs);
+	GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(fs, 1, &particleFrag, nullptr);
+	glCompileShader(fs);
+	particleShader = glCreateProgram();
+	glAttachShader(particleShader, vs);
+	glAttachShader(particleShader, gs);
+	glAttachShader(particleShader, fs);
+	glLinkProgram(particleShader);
+	glDeleteShader(vs);
+	glDeleteShader(gs);
+	glDeleteShader(fs);
+
+	glGenVertexArrays(1, &particleVAO);
+	glGenBuffers(1, &particlePosVBO);
+	glGenBuffers(1, &particleColorVBO);
+	glBindVertexArray(particleVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, particlePosVBO);
+	glBufferData(GL_ARRAY_BUFFER, N_BODIES * 3 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, particleColorVBO);
+	glBufferData(GL_ARRAY_BUFFER, N_BODIES * 4 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, nullptr);
+	glEnableVertexAttribArray(1);
+	glBindVertexArray(0);
+
+	// --- Octree wireframe shader ---
+	const char *octreeVert = R"(
+		#version 330 core
+		layout(location = 0) in vec3 aPos;
+		uniform mat4 uVP;
+		void main() {
+			gl_Position = uVP * vec4(aPos, 1.0);
+		}
+	)";
+	const char *octreeFrag = R"(
+		#version 330 core
+		out vec4 FragColor;
+		uniform vec4 uColor;
+		void main() {
+			FragColor = uColor;
+		}
+	)";
+	octreeShader = CompileShader(octreeVert, octreeFrag);
+
+	glGenVertexArrays(1, &octreeVAO);
+	glGenBuffers(1, &octreeVBO);
+	glBindVertexArray(octreeVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, octreeVBO);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+	glEnableVertexAttribArray(0);
+	glBindVertexArray(0);
+
+	// --- FPS overlay shader ---
+	const char *fpsVert = R"(
+		#version 330 core
+		layout(location = 0) in vec2 aPos;
+		uniform mat4 uProj;
+		void main() {
+			gl_Position = uProj * vec4(aPos, 0.0, 1.0);
+		}
+	)";
+	const char *fpsFrag = R"(
+		#version 330 core
+		out vec4 FragColor;
+		uniform vec4 uColor;
+		void main() {
+			FragColor = uColor;
+		}
+	)";
+	fpsShader = CompileShader(fpsVert, fpsFrag);
+
+	glGenVertexArrays(1, &fpsVAO);
+	glGenBuffers(1, &fpsVBO);
+	glBindVertexArray(fpsVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, fpsVBO);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+	glEnableVertexAttribArray(0);
+	glBindVertexArray(0);
+}
 
 void Simulation::ReSizeGL(int width, int height)
 {
-	if (height==0)
-	{
-		height=1;
-	}
-
-	glViewport(0,0,width,height);
-
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-
-	SetPerspective(45.0,(double)width/(double)height,0.1,10000.0);
-
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
+	if (height == 0) height = 1;
+	winWidth = width;
+	winHeight = height;
+	glViewport(0, 0, width, height);
 }
 
-void Simulation::DrawOctant(int nodeIdx)
+void Simulation::BuildOctreeVerts(int nodeIdx)
 {
-	double bd[4];
-	Octree.GetBounds(nodeIdx, bd);
-	glPushMatrix();
-		glTranslated(bd[0],bd[1],bd[2]);
-		glScaled(bd[3],bd[3],bd[3]);
-		glCallList(dList);
-	glPopMatrix();
+	BHNode &n = Octree.GetNode(nodeIdx);
+	float x0 = (float)n.p_min[0], y0 = (float)n.p_min[1], z0 = (float)n.p_min[2];
+	float x1 = (float)n.p_max[0], y1 = (float)n.p_max[1], z1 = (float)n.p_max[2];
 
-	for (int i=0; i<8; i++)
-	{
-		int child = Octree.GetOctant(nodeIdx, i);
-		if (child != -1)
-		{
-			DrawOctant(child);
+	// 12 edges of the cube as line segments (24 vertices)
+	float edges[] = {
+		x0,y0,z0, x1,y0,z0,  x1,y0,z0, x1,y1,z0,  x1,y1,z0, x0,y1,z0,  x0,y1,z0, x0,y0,z0,
+		x0,y0,z1, x1,y0,z1,  x1,y0,z1, x1,y1,z1,  x1,y1,z1, x0,y1,z1,  x0,y1,z1, x0,y0,z1,
+		x0,y0,z0, x0,y0,z1,  x1,y0,z0, x1,y0,z1,  x1,y1,z0, x1,y1,z1,  x0,y1,z0, x0,y1,z1
+	};
+	octreeVerts.insert(octreeVerts.end(), edges, edges + 72);
+
+	for (int i = 0; i < 8; i++) {
+		if (n.Octants[i] != -1) {
+			BuildOctreeVerts(n.Octants[i]);
 		}
 	}
 }
 
-void Simulation::DrawGL(GLvoid)
+void Simulation::DrawGL()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glLoadIdentity();
 
-	double phi_deg = 180.0/M_PI*Cam.phi;
-	double theta_deg = 180.0/M_PI*Cam.theta;
+	// View = Rx(-phi) * Ry(-theta) * T(-cam)
+	// Rx(-phi): rotates around X by -phi
+	// Ry(-theta): rotates around Y by -theta
+	double phi = Cam.phi, theta = Cam.theta;
+	double cp = cos(-phi), sp = sin(-phi);
+	double ct = cos(-theta), st = sin(-theta);
 
-	glRotated(-phi_deg,1.0,0.0,0.0);
-	glRotated(-theta_deg,0.0,1.0,0.0);
-	glTranslated(-Cam.pos[0],-Cam.pos[1],-Cam.pos[2]);
+	// R = Rx * Ry (column-major)
+	// Row 0: (ct, 0, -st)
+	// Row 1: (sp*st, cp, sp*ct) -- wait, let me just expand properly
+	// Rx(-phi) = {{1,0,0},{0,cp,-sp},{0,sp,cp}}  (using cp=cos(-phi), sp=sin(-phi))
+	// Ry(-theta) = {{ct,0,st},{0,1,0},{-st,0,ct}}
+	// R = Rx * Ry:
+	//   row0: ct, 0, st
+	//   row1: sp*(-st), cp, sp*ct  -- wait no: Rx*Ry[row1] = {0*ct + cp*0 + (-sp)*(-st), 0*0+cp*1+(-sp)*0, 0*st+cp*0+(-sp)*ct}
+	//       = {sp*st, cp, -sp*ct}  (using sp=sin(-phi)=-sin(phi), so sp*st = -sin(phi)*(-sin(theta)) = sin(phi)*sin(theta))
+	//   row2: {sp*ct+...}  let me just compute it directly
 
-	double phi_r = Cam.phi;
-	double theta_r = Cam.theta;
+	// Rx(-phi) * Ry(-theta), element by element:
+	// [0][0]=ct      [0][1]=0   [0][2]=st
+	// [1][0]=-sp*st  [1][1]=cp  [1][2]=sp*ct   (note: actually sp*(-st) for first but sp=sin(-phi))
+	// [2][0]=-cp*st  [2][1]=-sp [2][2]=cp*ct   (wait, let me redo)
 
-	double cp = cos(phi_r), sp = sin(phi_r);
-	double ct = cos(theta_r), st = sin(theta_r);
+	// Standard: Rx(a) = {{1,0,0},{0,cos(a),-sin(a)},{0,sin(a),cos(a)}}
+	// Ry(b) = {{cos(b),0,sin(b)},{0,1,0},{-sin(b),0,cos(b)}}
+	// With a=-phi, b=-theta:
+	// Let's just use cp=cos(phi), sp=sin(phi), ct=cos(theta), st=sin(theta)
+	// and compute Rx(-phi)*Ry(-theta) directly:
+	// Rx(-phi) = {{1,0,0},{0,cos(phi),sin(phi)},{0,-sin(phi),cos(phi)}}
+	// Ry(-theta) = {{cos(theta),0,-sin(theta)},{0,1,0},{sin(theta),0,cos(theta)}}
+	// Product R = Rx(-phi)*Ry(-theta):
+	// R[0] = {ct, 0, -st}
+	// R[1] = {sp*st, cp, sp*ct}  -- wait: row1 = {0*ct+cp*0+sp*st, 0*0+cp*1+sp*0, 0*(-st)+cp*0+sp*ct} = {sp*st, cp, sp*ct}
+	//   Actually: Rx(-phi) row1 = {0, cos(phi), sin(phi)}
+	//   Ry(-theta) col0={cos(theta), 0, sin(theta)}, col1={0,1,0}, col2={-sin(theta),0,cos(theta)}
+	//   R[1][0] = 0*ct + cos(phi)*0 + sin(phi)*st = sin(phi)*sin(theta)
+	//   R[1][1] = 0*0 + cos(phi)*1 + sin(phi)*0 = cos(phi)
+	//   R[1][2] = 0*(-st) + cos(phi)*0 + sin(phi)*ct = sin(phi)*cos(theta)
+	//   Hmm that gives the same sign issue. Let me just re-derive properly.
 
-	// Billboard right and up vectors (rows 0 and 1 of the view rotation matrix)
-	double rx = ct, ry = 0.0, rz = -st;
-	double ux = sp*st, uy = cp, uz = sp*ct;
+	// Use the ORIGINAL angles from old code:
+	// The old code did: glRotated(-phi_deg, 1,0,0); glRotated(-theta_deg, 0,1,0); glTranslated(-cam)
+	// where phi_deg = Cam.phi * 180/PI, theta_deg = Cam.theta * 180/PI
+	// So the view rotation is Rx(-Cam.phi) * Ry(-Cam.theta)
 
-	const float d = 0.5f;
+	double cphi = cos(Cam.phi), sphi = sin(Cam.phi);
+	double ctheta = cos(Cam.theta), stheta = sin(Cam.theta);
 
-	// Precompute the 8 offsets for the star shape (2 quads, second rotated 45 deg)
-	// Quad 1: corners at (-d,-d), (-d,d), (d,d), (d,-d) in billboard space
-	// Quad 2: rotated 45 degrees -> corners at (0,-d*sqrt2), (-d*sqrt2,0), (0,d*sqrt2), (d*sqrt2,0)
-	const double s45 = 0.7071067811865476; // sin(45) = cos(45)
-	double offsets[8][3]; // 4 corners for quad 1, 4 for quad 2
+	// Rx(-phi) * Ry(-theta), rows of the 3x3 rotation part:
+	// Row 0: { cos(theta), 0, -sin(theta) }
+	// Row 1: { -sin(phi)*(-sin(theta)), cos(phi), -sin(phi)*cos(theta) }
+	//       = { sin(phi)*sin(theta), cos(phi), -sin(phi)*cos(theta) }
+	// Row 2: { -cos(phi)*(-sin(theta)), -(-sin(phi)), -cos(phi)*... }
+	//   Let me expand Rx(-phi) = {{1,0,0},{0,cos(phi),sin(phi)},{0,-sin(phi),cos(phi)}}
+	//   Ry(-theta) = {{cos(theta),0,-sin(theta)},{0,1,0},{sin(theta),0,cos(theta)}}
+	//   R = Rx(-phi) * Ry(-theta):
+	//   R[0][0..2] = {cos(theta), 0, -sin(theta)}  (first row of Rx is {1,0,0})
+	//   R[1][0] = 0*cos(theta) + cos(phi)*0 + sin(phi)*sin(theta) = sin(phi)*sin(theta)
+	//   R[1][1] = 0*0 + cos(phi)*1 + sin(phi)*0 = cos(phi)
+	//   R[1][2] = 0*(-sin(theta)) + cos(phi)*0 + sin(phi)*cos(theta) = sin(phi)*cos(theta)
+	//   R[2][0] = 0*cos(theta) + (-sin(phi))*0 + cos(phi)*sin(theta) = cos(phi)*sin(theta)
+	//   R[2][1] = 0*0 + (-sin(phi))*1 + cos(phi)*0 = -sin(phi)
+	//   R[2][2] = 0*(-sin(theta)) + (-sin(phi))*0 + cos(phi)*cos(theta) = cos(phi)*cos(theta)
 
-	// Quad 1 corners in world-space offsets
-	offsets[0][0] = (-d)*rx + (-d)*ux; offsets[0][1] = (-d)*ry + (-d)*uy; offsets[0][2] = (-d)*rz + (-d)*uz;
-	offsets[1][0] = (-d)*rx + ( d)*ux; offsets[1][1] = (-d)*ry + ( d)*uy; offsets[1][2] = (-d)*rz + ( d)*uz;
-	offsets[2][0] = ( d)*rx + ( d)*ux; offsets[2][1] = ( d)*ry + ( d)*uy; offsets[2][2] = ( d)*rz + ( d)*uz;
-	offsets[3][0] = ( d)*rx + (-d)*ux; offsets[3][1] = ( d)*ry + (-d)*uy; offsets[3][2] = ( d)*rz + (-d)*uz;
+	// Column-major view matrix (rotation part in columns, translation in column 3)
+	float r00=(float)ctheta,       r10=(float)(sphi*stheta),  r20=(float)(cphi*stheta);
+	float r01=0.0f,                r11=(float)cphi,           r21=(float)(-sphi);
+	float r02=(float)(-stheta),    r12=(float)(sphi*ctheta),  r22=(float)(cphi*ctheta);
 
-	// Quad 2 corners (rotated 45 degrees in billboard plane)
-	double r45x = s45*(rx+ux), r45y = s45*(ry+uy), r45z = s45*(rz+uz);
-	double u45x = s45*(-rx+ux), u45y = s45*(-ry+uy), u45z = s45*(-rz+uz);
-	offsets[4][0] = (-d)*r45x + (-d)*u45x; offsets[4][1] = (-d)*r45y + (-d)*u45y; offsets[4][2] = (-d)*r45z + (-d)*u45z;
-	offsets[5][0] = (-d)*r45x + ( d)*u45x; offsets[5][1] = (-d)*r45y + ( d)*u45y; offsets[5][2] = (-d)*r45z + ( d)*u45z;
-	offsets[6][0] = ( d)*r45x + ( d)*u45x; offsets[6][1] = ( d)*r45y + ( d)*u45y; offsets[6][2] = ( d)*r45z + ( d)*u45z;
-	offsets[7][0] = ( d)*r45x + (-d)*u45x; offsets[7][1] = ( d)*r45y + (-d)*u45y; offsets[7][2] = ( d)*r45z + (-d)*u45z;
+	// Translation = R * (-camPos)
+	float cx=(float)Cam.pos[0], cy=(float)Cam.pos[1], cz=(float)Cam.pos[2];
+	float tx = -(r00*cx + r01*cy + r02*cz);
+	float ty = -(r10*cx + r11*cy + r12*cz);
+	float tz = -(r20*cx + r21*cy + r22*cz);
 
-	const float alpha_base = 10000.0f/N_BODIES;
+	// Column-major 4x4
+	float view[16] = {
+		r00, r10, r20, 0,
+		r01, r11, r21, 0,
+		r02, r12, r22, 0,
+		tx,  ty,  tz,  1
+	};
+
+	// Projection matrix (perspective, column-major)
+	float aspect = (float)winWidth / (float)winHeight;
+	float fov = 45.0f * (float)M_PI / 180.0f;
+	float zNear = 0.1f, zFar = 10000.0f;
+	float f = 1.0f / tanf(fov / 2.0f);
+	float proj[16] = {
+		f/aspect, 0, 0, 0,
+		0, f, 0, 0,
+		0, 0, (zFar+zNear)/(zNear-zFar), -1,
+		0, 0, 2*zFar*zNear/(zNear-zFar), 0
+	};
+
+	// VP = proj * view (column-major)
+	float vp[16];
+	for (int c = 0; c < 4; c++) {
+		for (int r = 0; r < 4; r++) {
+			vp[c*4+r] = 0;
+			for (int k = 0; k < 4; k++) {
+				vp[c*4+r] += proj[k*4+r] * view[c*4+k];
+			}
+		}
+	}
+
+	// Billboard vectors (row 0 and row 1 of the view rotation = camera right and up in world space)
+	float right[3] = { r00, (float)0.0f, r02 };  // {cos(theta), 0, -sin(theta)}
+	float up[3] = { r10, r11, r12 };              // {sin(phi)*sin(theta), cos(phi), sin(phi)*cos(theta)}
+
+	// --- Update particle data ---
+	const float alpha_base = 10000.0f / N_BODIES;
 	const float alpha_clamped = (alpha_base > 0.2f) ? 0.2f : ((alpha_base < 0.02f) ? 0.02f : alpha_base);
 
-	// Precompute which body indices are system bodies
 	int sysIndices[N_SYSTEMS];
 	sysIndices[0] = 0;
 	for (int j = 1; j < N_SYSTEMS; j++) sysIndices[j] = sysIndices[j-1] + N_SYSTEM_BODIES[j-1];
 
-	// Triangle index pattern for a quad (vertices 0,1,2,3) -> triangles (0,1,2) and (0,2,3)
-	const int triIdx[6] = {0, 1, 2, 0, 2, 3};
-
-	int vi = 0, ci = 0;
-	for (int i = 0; i < N_BODIES; i++)
-	{
-		float r, g, b, a;
+	for (int i = 0; i < N_BODIES; i++) {
+		posBuf[i*3+0] = (float)pos[i][0];
+		posBuf[i*3+1] = (float)pos[i][1];
+		posBuf[i*3+2] = (float)pos[i][2];
 
 		bool sysBody = false;
 		for (int j = 0; j < N_SYSTEMS; j++) {
@@ -612,48 +793,162 @@ void Simulation::DrawGL(GLvoid)
 		}
 
 		if (sysBody) {
-			r = 0.0f; g = 1.0f; b = 0.0f; a = 1.0f;
+			clrBuf[i*4+0] = 0.0f; clrBuf[i*4+1] = 1.0f; clrBuf[i*4+2] = 0.0f; clrBuf[i*4+3] = 1.0f;
 		} else {
-			r = (float)cbrt(acc_sq[i]/1000000.0);
-			g = 0.3f;
-			b = 1.0f - r;
+			float r = (float)cbrt(acc_sq[i] / 1000000.0);
+			float b = 1.0f - r;
 			r = (r < 0.3f) ? 0.3f : r;
-			g = 0.3f;
 			b = (b < 0.3f) ? 0.3f : b;
-			a = alpha_clamped;
-		}
-
-		float px = (float)pos[i][0], py = (float)pos[i][1], pz = (float)pos[i][2];
-
-		// Quad 1 as 2 triangles (vertices 0,1,2,3 -> tris 0,1,2 and 0,2,3)
-		for (int t = 0; t < 6; t++) {
-			int k = triIdx[t];
-			vtxBuf[vi++] = px + (float)offsets[k][0];
-			vtxBuf[vi++] = py + (float)offsets[k][1];
-			vtxBuf[vi++] = pz + (float)offsets[k][2];
-			clrBuf[ci++] = r; clrBuf[ci++] = g; clrBuf[ci++] = b; clrBuf[ci++] = a;
-		}
-		// Quad 2 as 2 triangles (vertices 4,5,6,7 -> tris 4,5,6 and 4,6,7)
-		for (int t = 0; t < 6; t++) {
-			int k = triIdx[t] + 4;
-			vtxBuf[vi++] = px + (float)offsets[k][0];
-			vtxBuf[vi++] = py + (float)offsets[k][1];
-			vtxBuf[vi++] = pz + (float)offsets[k][2];
-			clrBuf[ci++] = r; clrBuf[ci++] = g; clrBuf[ci++] = b; clrBuf[ci++] = a;
+			clrBuf[i*4+0] = r; clrBuf[i*4+1] = 0.3f; clrBuf[i*4+2] = b; clrBuf[i*4+3] = alpha_clamped;
 		}
 	}
 
-	vtxCount = N_BODIES * 12;
+	// Upload and draw particles
+	glUseProgram(particleShader);
+	glUniformMatrix4fv(glGetUniformLocation(particleShader, "uVP"), 1, GL_FALSE, vp);
+	glUniform3fv(glGetUniformLocation(particleShader, "uRight"), 1, right);
+	glUniform3fv(glGetUniformLocation(particleShader, "uUp"), 1, up);
 
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_COLOR_ARRAY);
-	glVertexPointer(3, GL_FLOAT, 0, vtxBuf);
-	glColorPointer(4, GL_FLOAT, 0, clrBuf);
-	glDrawArrays(GL_TRIANGLES, 0, vtxCount);
-	glDisableClientState(GL_COLOR_ARRAY);
-	glDisableClientState(GL_VERTEX_ARRAY);
+	glBindVertexArray(particleVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, particlePosVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, N_BODIES * 3 * sizeof(float), posBuf);
+	glBindBuffer(GL_ARRAY_BUFFER, particleColorVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, N_BODIES * 4 * sizeof(float), clrBuf);
+	glDrawArrays(GL_POINTS, 0, N_BODIES);
+	glBindVertexArray(0);
 
-	if (DrawOctree) DrawOctant(0);
+	// --- Draw octree wireframe ---
+	if (DrawOctree) {
+		octreeVerts.clear();
+		BuildOctreeVerts(0);
+
+		glUseProgram(octreeShader);
+		glUniformMatrix4fv(glGetUniformLocation(octreeShader, "uVP"), 1, GL_FALSE, vp);
+		glUniform4f(glGetUniformLocation(octreeShader, "uColor"), 0.0f, 0.0f, 1.0f, 0.5f);
+
+		glBindVertexArray(octreeVAO);
+		glBindBuffer(GL_ARRAY_BUFFER, octreeVBO);
+		glBufferData(GL_ARRAY_BUFFER, octreeVerts.size() * sizeof(float), octreeVerts.data(), GL_DYNAMIC_DRAW);
+		glDrawArrays(GL_LINES, 0, (GLsizei)(octreeVerts.size() / 3));
+		glBindVertexArray(0);
+	}
+
+	glUseProgram(0);
+}
+
+void Simulation::DrawFPS(double fps)
+{
+	static const GLubyte font5x7[][7] = {
+		{0x00,0x00,0x00,0x00,0x00,0x00,0x00}, // ' ' 32
+		{0x04,0x04,0x04,0x04,0x04,0x00,0x04}, // '!' 33
+		{0x0A,0x0A,0x00,0x00,0x00,0x00,0x00}, // '"' 34
+		{0x0A,0x0A,0x1F,0x0A,0x1F,0x0A,0x0A}, // '#' 35
+		{0x04,0x0F,0x14,0x0E,0x05,0x1E,0x04}, // '$' 36
+		{0x18,0x19,0x02,0x04,0x08,0x13,0x03}, // '%' 37
+		{0x08,0x14,0x14,0x08,0x15,0x12,0x0D}, // '&' 38
+		{0x04,0x04,0x00,0x00,0x00,0x00,0x00}, // '\'' 39
+		{0x02,0x04,0x08,0x08,0x08,0x04,0x02}, // '(' 40
+		{0x08,0x04,0x02,0x02,0x02,0x04,0x08}, // ')' 41
+		{0x00,0x04,0x15,0x0E,0x15,0x04,0x00}, // '*' 42
+		{0x00,0x04,0x04,0x1F,0x04,0x04,0x00}, // '+' 43
+		{0x00,0x00,0x00,0x00,0x00,0x04,0x08}, // ',' 44
+		{0x00,0x00,0x00,0x1F,0x00,0x00,0x00}, // '-' 45
+		{0x00,0x00,0x00,0x00,0x00,0x00,0x04}, // '.' 46
+		{0x00,0x01,0x02,0x04,0x08,0x10,0x00}, // '/' 47
+		{0x0E,0x11,0x13,0x15,0x19,0x11,0x0E}, // '0' 48
+		{0x04,0x0C,0x04,0x04,0x04,0x04,0x0E}, // '1' 49
+		{0x0E,0x11,0x01,0x06,0x08,0x10,0x1F}, // '2' 50
+		{0x0E,0x11,0x01,0x06,0x01,0x11,0x0E}, // '3' 51
+		{0x02,0x06,0x0A,0x12,0x1F,0x02,0x02}, // '4' 52
+		{0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E}, // '5' 53
+		{0x06,0x08,0x10,0x1E,0x11,0x11,0x0E}, // '6' 54
+		{0x1F,0x01,0x02,0x04,0x08,0x08,0x08}, // '7' 55
+		{0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E}, // '8' 56
+		{0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C}, // '9' 57
+		{0x00,0x00,0x04,0x00,0x04,0x00,0x00}, // ':' 58
+		{0x00,0x00,0x04,0x00,0x04,0x04,0x08}, // ';' 59
+		{0x02,0x04,0x08,0x10,0x08,0x04,0x02}, // '<' 60
+		{0x00,0x00,0x1F,0x00,0x1F,0x00,0x00}, // '=' 61
+		{0x08,0x04,0x02,0x01,0x02,0x04,0x08}, // '>' 62
+		{0x0E,0x11,0x01,0x02,0x04,0x00,0x04}, // '?' 63
+		{0x0E,0x11,0x17,0x15,0x17,0x10,0x0E}, // '@' 64
+		{0x0E,0x11,0x11,0x1F,0x11,0x11,0x11}, // 'A' 65
+		{0x1E,0x11,0x11,0x1E,0x11,0x11,0x1E}, // 'B' 66
+		{0x0E,0x11,0x10,0x10,0x10,0x11,0x0E}, // 'C' 67
+		{0x1E,0x11,0x11,0x11,0x11,0x11,0x1E}, // 'D' 68
+		{0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F}, // 'E' 69
+		{0x1F,0x10,0x10,0x1E,0x10,0x10,0x10}, // 'F' 70
+		{0x0E,0x11,0x10,0x17,0x11,0x11,0x0F}, // 'G' 71
+		{0x11,0x11,0x11,0x1F,0x11,0x11,0x11}, // 'H' 72
+		{0x0E,0x04,0x04,0x04,0x04,0x04,0x0E}, // 'I' 73
+		{0x07,0x02,0x02,0x02,0x02,0x12,0x0C}, // 'J' 74
+		{0x11,0x12,0x14,0x18,0x14,0x12,0x11}, // 'K' 75
+		{0x10,0x10,0x10,0x10,0x10,0x10,0x1F}, // 'L' 76
+		{0x11,0x1B,0x15,0x15,0x11,0x11,0x11}, // 'M' 77
+		{0x11,0x19,0x15,0x13,0x11,0x11,0x11}, // 'N' 78
+		{0x0E,0x11,0x11,0x11,0x11,0x11,0x0E}, // 'O' 79
+		{0x1E,0x11,0x11,0x1E,0x10,0x10,0x10}, // 'P' 80
+		{0x0E,0x11,0x11,0x11,0x15,0x12,0x0D}, // 'Q' 81
+		{0x1E,0x11,0x11,0x1E,0x14,0x12,0x11}, // 'R' 82
+		{0x0E,0x11,0x10,0x0E,0x01,0x11,0x0E}, // 'S' 83
+		{0x1F,0x04,0x04,0x04,0x04,0x04,0x04}, // 'T' 84
+		{0x11,0x11,0x11,0x11,0x11,0x11,0x0E}, // 'U' 85
+		{0x11,0x11,0x11,0x11,0x11,0x0A,0x04}, // 'V' 86
+		{0x11,0x11,0x11,0x15,0x15,0x1B,0x11}, // 'W' 87
+		{0x11,0x11,0x0A,0x04,0x0A,0x11,0x11}, // 'X' 88
+		{0x11,0x11,0x0A,0x04,0x04,0x04,0x04}, // 'Y' 89
+		{0x1F,0x01,0x02,0x04,0x08,0x10,0x1F}, // 'Z' 90
+	};
+
+	char fpsText[16];
+	snprintf(fpsText, sizeof(fpsText), "FPS:%d", (int)(fps + 0.5));
+
+	std::vector<float> verts;
+	float x = (float)winWidth - (float)strlen(fpsText) * 6.0f - 4.0f;
+	float y = (float)winHeight - 12.0f;
+	int scale = 1;
+
+	for (const char *p = fpsText; *p; p++) {
+		char c = *p;
+		if (c < 32 || c > 90) { x += 6 * scale; continue; }
+		const GLubyte *glyph = font5x7[c - 32];
+		for (int row = 0; row < 7; row++) {
+			for (int col = 0; col < 5; col++) {
+				if (glyph[6 - row] & (1 << (4 - col))) {
+					float bx = x + col * scale, by = y + row * scale;
+					float bx2 = bx + scale, by2 = by + scale;
+					verts.push_back(bx);  verts.push_back(by);
+					verts.push_back(bx2); verts.push_back(by);
+					verts.push_back(bx2); verts.push_back(by2);
+					verts.push_back(bx);  verts.push_back(by);
+					verts.push_back(bx2); verts.push_back(by2);
+					verts.push_back(bx);  verts.push_back(by2);
+				}
+			}
+		}
+		x += 6 * scale;
+	}
+
+	if (verts.empty()) return;
+
+	// Orthographic projection
+	float proj[16] = {
+		2.0f/winWidth, 0, 0, 0,
+		0, 2.0f/winHeight, 0, 0,
+		0, 0, -1, 0,
+		-1, -1, 0, 1
+	};
+
+	glUseProgram(fpsShader);
+	glUniformMatrix4fv(glGetUniformLocation(fpsShader, "uProj"), 1, GL_FALSE, proj);
+	glUniform4f(glGetUniformLocation(fpsShader, "uColor"), 1.0f, 1.0f, 1.0f, 0.8f);
+
+	glBindVertexArray(fpsVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, fpsVBO);
+	glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_DYNAMIC_DRAW);
+	glDrawArrays(GL_TRIANGLES, 0, (GLsizei)(verts.size() / 2));
+	glBindVertexArray(0);
+	glUseProgram(0);
 }
 
 void Simulation::SaveState()
