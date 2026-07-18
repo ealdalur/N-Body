@@ -24,6 +24,7 @@ Simulation *Sim;
 const bool* keys;
 std::map<int, bool> keyPressedMap;
 bool SimPaused = false;
+double deltaTime = 0.016;
 
 bool init()
 {
@@ -131,23 +132,24 @@ bool handleInput(const bool* keys) {
 		}
 	}
 
+	double dt = deltaTime;
 	if (keys[SDL_SCANCODE_W]) {
-		Sim->CamMove(-0.05, 0.0, 0.0);
+		Sim->CamMove(-1.75*dt, 0.0, 0.0);
 	}
 	if (keys[SDL_SCANCODE_A]) {
-		Sim->CamMove( 0.0, 0.05, 0.0);
+		Sim->CamMove( 0.0, 1.75*dt, 0.0);
 	}
 	if (keys[SDL_SCANCODE_S]) {
-		Sim->CamMove( 0.05, 0.0, 0.0);
+		Sim->CamMove( 1.75*dt, 0.0, 0.0);
 	}
 	if (keys[SDL_SCANCODE_D]) {
-		Sim->CamMove( 0.0,-0.05, 0.0);
+		Sim->CamMove( 0.0,-1.75*dt, 0.0);
 	}
 	if (keys[SDL_SCANCODE_J]) {
-		Sim->CamMove( 0.0, 0.0, -12.0);
+		Sim->CamMove( 0.0, 0.0, -420.0*dt);
 	}
 	if (keys[SDL_SCANCODE_L]) {
-		Sim->CamMove( 0.0, 0.0, 12.0);
+		Sim->CamMove( 0.0, 0.0, 420.0*dt);
 	}
 
 	if (keys[SDL_SCANCODE_ESCAPE]) {
@@ -175,6 +177,7 @@ void close()
 Uint64 fpsLastTime = 0;
 int fpsFrameCount = 0;
 double fpsCurrent = 0.0;
+Uint64 frameLastTime = 0;
 
 int main()
 {
@@ -194,8 +197,13 @@ int main()
 	Sim->ReSizeGL(Win.width, Win.height);
 
 	fpsLastTime = SDL_GetPerformanceCounter();
+	frameLastTime = SDL_GetPerformanceCounter();
 
 	while (!quit) {
+		Uint64 frameNow = SDL_GetPerformanceCounter();
+		deltaTime = (double)(frameNow - frameLastTime) / SDL_GetPerformanceFrequency();
+		frameLastTime = frameNow;
+
         handleEvents(quit);
         keys = SDL_GetKeyboardState(NULL);
 		if (!handleInput(keys)) quit = true;

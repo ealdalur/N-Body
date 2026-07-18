@@ -814,10 +814,11 @@ void Simulation::DrawGL()
 	glUniform3fv(glGetUniformLocation(particleShader, "uUp"), 1, up);
 
 	glBindVertexArray(particleVAO);
+	// Buffer orphaning: re-allocate before uploading to avoid implicit sync stalls
 	glBindBuffer(GL_ARRAY_BUFFER, particlePosVBO);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, N_BODIES * 3 * sizeof(float), posBuf);
+	glBufferData(GL_ARRAY_BUFFER, N_BODIES * 3 * sizeof(float), posBuf, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, particleColorVBO);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, N_BODIES * 4 * sizeof(float), clrBuf);
+	glBufferData(GL_ARRAY_BUFFER, N_BODIES * 4 * sizeof(float), clrBuf, GL_DYNAMIC_DRAW);
 	glDrawArraysInstanced(GL_TRIANGLES, 0, 12, N_BODIES);
 	glBindVertexArray(0);
 
@@ -838,6 +839,7 @@ void Simulation::DrawGL()
 	}
 
 	glUseProgram(0);
+	glFlush();
 }
 
 void Simulation::DrawFPS(double fps)
