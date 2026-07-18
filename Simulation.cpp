@@ -352,11 +352,6 @@ void Simulation::CalcLeapFrogPositionsRange(int iStart, int iEnd) {
 
 		vscaleadd(vel[i],dt,pos[i]);
 		vscaleadd(acc[i],0.5*dt*dt,pos[i]);
-
-		if (pos[i][0] != pos[i][0] || pos[i][1] != pos[i][1] || pos[i][2] != pos[i][2]) {
-			vset(0.0, 0.0, 0.0, pos[i]);
-			vset(0.0, 0.0, 0.0, vel[i]);
-		}
 	}
 }
 
