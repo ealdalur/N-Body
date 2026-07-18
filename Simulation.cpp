@@ -12,6 +12,12 @@ Simulation::Simulation()
 	}
 	std::cout << "Number of compute threads: " << numThreads << std::endl;
 
+	pool = new ThreadPool(numThreads);
+
+	vtxBuf = new float[N_BODIES * 8 * 3];
+	clrBuf = new float[N_BODIES * 8 * 4];
+	vtxCount = 0;
+
 	InitGL();
 
 	int ki;
@@ -26,20 +32,17 @@ Simulation::Simulation()
 
 		has_gravity[i] = true;
 	}
-	
+
 	if (!ReadState())
 	{
 		LoadDefaultState();
 	}
-	
+
 	CalcOutputs();
-	
-	double p[3];
-	vset(0.0,0.0,0.0,p);
-	Octree = new BHTree(p,p,nullptr);
+
 	BuildOctree();
 	DrawOctree = false;
-	
+
 	CalcDerivatives(states,states_d[0]);
 	CalcOutputs();
 
@@ -53,7 +56,9 @@ Simulation::Simulation()
 Simulation::~Simulation()
 {
 	glDeleteLists(dList,2);
-	delete Octree;
+	delete pool;
+	delete[] vtxBuf;
+	delete[] clrBuf;
 
 	if (DATA_LOG) fclose(DataLog);
 }
@@ -168,23 +173,22 @@ void Simulation::LoadDefaultState()
 void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
 
 	double a[3];
-	double r;
 
 	for (int i=iStart; i<=iEnd; i++)
-		{
-			vscaleadd(pos_t[i],FDE,acc_t[i]);
+	{
+		vscaleadd(pos_t[i],FDE,acc_t[i]);
 
-			for (int j=0; j<N_BODIES; j++)
+		for (int j=0; j<N_BODIES; j++)
+		{
+			if (j != i)
 			{
-				if ((j != i) && (has_gravity[j]))
-				{
-					vsub(pos_t[j],pos_t[i],a);
-					r = vmagsoft(a,r_soft);
-					vscale(a,G/(r*r*r),a);
-					if (has_gravity[j]) vscaleadd(a,mass[j],acc_t[i]);
-				}
+				vsub(pos_t[j],pos_t[i],a);
+				double dsq = vmagsqsoft(a, r_soft);
+				double r3_inv = 1.0 / (dsq * sqrt(dsq));
+				vscaleadd(a, G * mass[j] * r3_inv, acc_t[i]);
 			}
 		}
+	}
 }
 
 void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
@@ -195,7 +199,7 @@ void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
 	{
 		vscaleadd(pos_t[i],FDE,acc_t[i]);
 
-		Octree->CalcAcceleration(pos_t[i],i,G,r_soft,a);
+		Octree.CalcAcceleration(pos_t[i],i,G,r_soft,a);
 		vadd(acc_t[i],a,acc_t[i]);
 	}
 }
@@ -217,38 +221,29 @@ void Simulation::PrepareDerivativeDataRange(double *s, double *s_d, int iStart, 
 }
 
 void Simulation::CalcDerivatives(double *s, double *s_d)
-{		
+{
 	if (multiThreading) {
-		threads.clear();
 		int chunk_size = N_BODIES / numThreads;
 
 		for (int i = 0; i < numThreads; ++i) {
 			int iStart = i * chunk_size;
 			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
-			threads.emplace_back(&Simulation::PrepareDerivativeDataRange, this, s, s_d, iStart, iEnd);
+			pool->submit([this, s, s_d, iStart, iEnd]() { PrepareDerivativeDataRange(s, s_d, iStart, iEnd); });
 		}
+		pool->waitAll();
 
-		for (auto& thread : threads) {
-			thread.join();
-		}
-
-		threads.clear();
 		for (int i = 0; i < numThreads; ++i) {
 			int iStart = i * chunk_size;
 			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
-			if (GRAVITY_P2P) threads.emplace_back(&Simulation::CalcAccelRangeP2P, this, iStart, iEnd);
-			if (GRAVITY_OCT) threads.emplace_back(&Simulation::CalcAccelRangeOct, this, iStart, iEnd);
+			if (GRAVITY_P2P) pool->submit([this, iStart, iEnd]() { CalcAccelRangeP2P(iStart, iEnd); });
+			if (GRAVITY_OCT) pool->submit([this, iStart, iEnd]() { CalcAccelRangeOct(iStart, iEnd); });
 		}
-
-		for (auto& thread : threads) {
-			thread.join();
-		}
+		pool->waitAll();
 	} else {
 		PrepareDerivativeDataRange(s, s_d, 0, N_BODIES-1);
 		if (GRAVITY_P2P) CalcAccelRangeP2P(0, N_BODIES-1);
 		if (GRAVITY_OCT) CalcAccelRangeOct(0, N_BODIES-1);
 	}
-	
 }
 
 void Simulation::BuildOctree()
@@ -258,7 +253,7 @@ void Simulation::BuildOctree()
 	const double MAX_OCT_DST_SQ = 1000000.0;
 
 	for (int i=0; i<N_BODIES; i++)
-	{	
+	{
 		if ((has_gravity[i]) && (pos_sq[i] < MAX_OCT_DST_SQ))
 		{
 			if (first)
@@ -276,17 +271,17 @@ void Simulation::BuildOctree()
 	}
 
 	vmaxboundcube(p_min,p_max,p_min,p_max);
-	Octree->Reset(p_min,p_max);
-	
+	Octree.Reset(p_min,p_max);
+
 	for (int i=0; i<N_BODIES; i++)
 	{
 		if ((has_gravity[i]) && (pos_sq[i] < MAX_OCT_DST_SQ))
 		{
-			Octree->InsertBody(pos[i],mass[i],i);
+			Octree.InsertBody(pos[i],mass[i],i);
 		}
 	}
 
-	Octree->CalcMasses();
+	Octree.CalcMasses();
 }
 
 void Simulation::CalcOutputsRange(int iStart, int iEnd) {
@@ -302,18 +297,14 @@ void Simulation::CalcOutputsRange(int iStart, int iEnd) {
 void Simulation::CalcOutputs()
 {
 	if (multiThreading) {
-		threads.clear();
 		int chunk_size = N_BODIES / numThreads;
 
 		for (int i = 0; i < numThreads; ++i) {
 			int iStart = i * chunk_size;
 			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
-			threads.emplace_back(&Simulation::CalcOutputsRange, this, iStart, iEnd);
+			pool->submit([this, iStart, iEnd]() { CalcOutputsRange(iStart, iEnd); });
 		}
-
-		for (auto& thread : threads) {
-			thread.join();
-		}
+		pool->waitAll();
 	} else {
 		CalcOutputsRange(0, N_BODIES-1);
 	}
@@ -330,22 +321,19 @@ void Simulation::CalcRK4StateEstimateRange(double *s_est, double *s_curr, double
 void Simulation::CalcRK4StateEstimate(double *s_est, double *s_curr, double *s_d, double scalar, double dt) {
 
 	if (multiThreading) {
-		threads.clear();
 		int chunk_size = N_BODIES*N_STATES / numThreads;
 
 		for (int i = 0; i < numThreads; ++i) {
 			int iStart = i * chunk_size;
 			int iEnd = (i == numThreads - 1) ? (N_BODIES*N_STATES-1) : (iStart + chunk_size - 1);
-			threads.emplace_back(&Simulation::CalcRK4StateEstimateRange, this, s_est, s_curr, s_d, scalar, dt, iStart, iEnd);
+			pool->submit([this, s_est, s_curr, s_d, scalar, dt, iStart, iEnd]() {
+				CalcRK4StateEstimateRange(s_est, s_curr, s_d, scalar, dt, iStart, iEnd);
+			});
 		}
-
-		for (auto& thread : threads) {
-			thread.join();
-		}
+		pool->waitAll();
 	} else {
 		CalcRK4StateEstimateRange(s_est, s_curr, s_d, scalar, dt, 0, N_BODIES*N_STATES-1);
 	}
-	
 }
 
 void Simulation::CalcLeapFrogPositionsRange(int iStart, int iEnd) {
@@ -361,22 +349,17 @@ void Simulation::CalcLeapFrogPositionsRange(int iStart, int iEnd) {
 void Simulation::CalcLeapFrogPositions() {
 
 	if (multiThreading) {
-		threads.clear();
 		int chunk_size = N_BODIES / numThreads;
 
 		for (int i = 0; i < numThreads; ++i) {
 			int iStart = i * chunk_size;
 			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
-			threads.emplace_back(&Simulation::CalcLeapFrogPositionsRange, this, iStart, iEnd);
+			pool->submit([this, iStart, iEnd]() { CalcLeapFrogPositionsRange(iStart, iEnd); });
 		}
-
-		for (auto& thread : threads) {
-			thread.join();
-		}
+		pool->waitAll();
 	} else {
 		CalcLeapFrogPositionsRange(0, N_BODIES-1);
 	}
-	
 }
 
 void Simulation::CalcLeapFrogVelocitiesRange(int iStart, int iEnd) {
@@ -392,18 +375,14 @@ void Simulation::CalcLeapFrogVelocitiesRange(int iStart, int iEnd) {
 void Simulation::CalcLeapFrogVelocities() {
 
 	if (multiThreading) {
-		threads.clear();
 		int chunk_size = N_BODIES / numThreads;
 
 		for (int i = 0; i < numThreads; ++i) {
 			int iStart = i * chunk_size;
 			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
-			threads.emplace_back(&Simulation::CalcLeapFrogVelocitiesRange, this, iStart, iEnd);
+			pool->submit([this, iStart, iEnd]() { CalcLeapFrogVelocitiesRange(iStart, iEnd); });
 		}
-
-		for (auto& thread : threads) {
-			thread.join();
-		}
+		pool->waitAll();
 	} else {
 		CalcLeapFrogVelocitiesRange(0, N_BODIES-1);
 	}
@@ -574,10 +553,10 @@ void Simulation::ReSizeGL(int width, int height)
 	glLoadIdentity();
 }
 
-void Simulation::DrawOctant(BHTree *Oct)
+void Simulation::DrawOctant(int nodeIdx)
 {
 	double bd[4];
-	Oct->GetBounds(bd);
+	Octree.GetBounds(nodeIdx, bd);
 	glPushMatrix();
 		glTranslated(bd[0],bd[1],bd[2]);
 		glScaled(bd[3],bd[3],bd[3]);
@@ -586,9 +565,10 @@ void Simulation::DrawOctant(BHTree *Oct)
 
 	for (int i=0; i<8; i++)
 	{
-		if (Oct->GetOctant(i))
+		int child = Octree.GetOctant(nodeIdx, i);
+		if (child != -1)
 		{
-			DrawOctant(Oct->GetOctant(i));
+			DrawOctant(child);
 		}
 	}
 }
@@ -598,59 +578,104 @@ void Simulation::DrawGL(GLvoid)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
 
-	double phi, theta;
+	double phi_deg = 180.0/M_PI*Cam.phi;
+	double theta_deg = 180.0/M_PI*Cam.theta;
 
-	phi = 180.0/M_PI*Cam.phi;
-	theta = 180.0/M_PI*Cam.theta;
-
-	glRotated(-phi,1.0,0.0,0.0);
-	glRotated(-theta,0.0,1.0,0.0);
+	glRotated(-phi_deg,1.0,0.0,0.0);
+	glRotated(-theta_deg,0.0,1.0,0.0);
 	glTranslated(-Cam.pos[0],-Cam.pos[1],-Cam.pos[2]);
 
-	double r,g,b,a;
-	bool sysBody = false;
-	int sysIdx = 0;
-	for (int i=0; i<N_BODIES; i++)
+	double phi_r = Cam.phi;
+	double theta_r = Cam.theta;
+
+	double cp = cos(phi_r), sp = sin(phi_r);
+	double ct = cos(theta_r), st = sin(theta_r);
+
+	// Billboard right and up vectors (rows 0 and 1 of the view rotation matrix)
+	double rx = ct, ry = 0.0, rz = -st;
+	double ux = sp*st, uy = cp, uz = sp*ct;
+
+	const float d = 0.5f;
+
+	// Precompute the 8 offsets for the star shape (2 quads, second rotated 45 deg)
+	// Quad 1: corners at (-d,-d), (-d,d), (d,d), (d,-d) in billboard space
+	// Quad 2: rotated 45 degrees -> corners at (0,-d*sqrt2), (-d*sqrt2,0), (0,d*sqrt2), (d*sqrt2,0)
+	const double s45 = 0.7071067811865476; // sin(45) = cos(45)
+	double offsets[8][3]; // 4 corners for quad 1, 4 for quad 2
+
+	// Quad 1 corners in world-space offsets
+	offsets[0][0] = (-d)*rx + (-d)*ux; offsets[0][1] = (-d)*ry + (-d)*uy; offsets[0][2] = (-d)*rz + (-d)*uz;
+	offsets[1][0] = (-d)*rx + ( d)*ux; offsets[1][1] = (-d)*ry + ( d)*uy; offsets[1][2] = (-d)*rz + ( d)*uz;
+	offsets[2][0] = ( d)*rx + ( d)*ux; offsets[2][1] = ( d)*ry + ( d)*uy; offsets[2][2] = ( d)*rz + ( d)*uz;
+	offsets[3][0] = ( d)*rx + (-d)*ux; offsets[3][1] = ( d)*ry + (-d)*uy; offsets[3][2] = ( d)*rz + (-d)*uz;
+
+	// Quad 2 corners (rotated 45 degrees in billboard plane)
+	double r45x = s45*(rx+ux), r45y = s45*(ry+uy), r45z = s45*(rz+uz);
+	double u45x = s45*(-rx+ux), u45y = s45*(-ry+uy), u45z = s45*(-rz+uz);
+	offsets[4][0] = (-d)*r45x + (-d)*u45x; offsets[4][1] = (-d)*r45y + (-d)*u45y; offsets[4][2] = (-d)*r45z + (-d)*u45z;
+	offsets[5][0] = (-d)*r45x + ( d)*u45x; offsets[5][1] = (-d)*r45y + ( d)*u45y; offsets[5][2] = (-d)*r45z + ( d)*u45z;
+	offsets[6][0] = ( d)*r45x + ( d)*u45x; offsets[6][1] = ( d)*r45y + ( d)*u45y; offsets[6][2] = ( d)*r45z + ( d)*u45z;
+	offsets[7][0] = ( d)*r45x + (-d)*u45x; offsets[7][1] = ( d)*r45y + (-d)*u45y; offsets[7][2] = ( d)*r45z + (-d)*u45z;
+
+	const float alpha_base = 10000.0f/N_BODIES;
+	const float alpha_clamped = (alpha_base > 0.2f) ? 0.2f : ((alpha_base < 0.02f) ? 0.02f : alpha_base);
+
+	// Precompute which body indices are system bodies
+	int sysIndices[N_SYSTEMS];
+	sysIndices[0] = 0;
+	for (int j = 1; j < N_SYSTEMS; j++) sysIndices[j] = sysIndices[j-1] + N_SYSTEM_BODIES[j-1];
+
+	int vi = 0, ci = 0;
+	for (int i = 0; i < N_BODIES; i++)
 	{
-		glPushMatrix();
-			glTranslated(pos[i][0],pos[i][1],pos[i][2]);
-			glRotated(theta,0.0f,1.0f,0.0f);
-			glRotated(phi,1.0f,0.0f,0.0f);
+		float r, g, b, a;
 
-			sysBody = false;
-			sysIdx = 0;
-			for (int j=0; j<N_SYSTEMS; j++) {
-				if (sysIdx == i) sysBody = true;
-				sysIdx += N_SYSTEM_BODIES[j];
-			}
+		bool sysBody = false;
+		for (int j = 0; j < N_SYSTEMS; j++) {
+			if (i == sysIndices[j]) { sysBody = true; break; }
+		}
 
-			if (sysBody) {
-				r = 0.0;
-				g = 1.0;
-				b = 0.0;
-				a = 1.0;
-			} else {
-				r = pow(acc_sq[i]/1000000.0,1.0/3.0);
-				g = 0.3;
-				b = 1.0 - r;
-					
-				r = (r<0.3)?0.3:r;
-				g = (g<0.3)?0.3:g;
-				b = (b<0.3)?0.3:b;
-					
-				a = 10000.0/N_BODIES;
-				a = (a>0.2)?0.2:a;
-				a = (a<0.02)?0.02:a;
-			}
-			
-			glColor4d(r,g,b,a);
-			
+		if (sysBody) {
+			r = 0.0f; g = 1.0f; b = 0.0f; a = 1.0f;
+		} else {
+			r = (float)cbrt(acc_sq[i]/1000000.0);
+			g = 0.3f;
+			b = 1.0f - r;
+			r = (r < 0.3f) ? 0.3f : r;
+			g = 0.3f;
+			b = (b < 0.3f) ? 0.3f : b;
+			a = alpha_clamped;
+		}
 
-			glCallList(dList);		
-		glPopMatrix();
+		float px = (float)pos[i][0], py = (float)pos[i][1], pz = (float)pos[i][2];
+
+		// Quad 1 (4 vertices)
+		for (int k = 0; k < 4; k++) {
+			vtxBuf[vi++] = px + (float)offsets[k][0];
+			vtxBuf[vi++] = py + (float)offsets[k][1];
+			vtxBuf[vi++] = pz + (float)offsets[k][2];
+			clrBuf[ci++] = r; clrBuf[ci++] = g; clrBuf[ci++] = b; clrBuf[ci++] = a;
+		}
+		// Quad 2 (4 vertices)
+		for (int k = 4; k < 8; k++) {
+			vtxBuf[vi++] = px + (float)offsets[k][0];
+			vtxBuf[vi++] = py + (float)offsets[k][1];
+			vtxBuf[vi++] = pz + (float)offsets[k][2];
+			clrBuf[ci++] = r; clrBuf[ci++] = g; clrBuf[ci++] = b; clrBuf[ci++] = a;
+		}
 	}
 
-	if (DrawOctree) DrawOctant(Octree);
+	vtxCount = N_BODIES * 8;
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_COLOR_ARRAY);
+	glVertexPointer(3, GL_FLOAT, 0, vtxBuf);
+	glColorPointer(4, GL_FLOAT, 0, clrBuf);
+	glDrawArrays(GL_QUADS, 0, vtxCount);
+	glDisableClientState(GL_COLOR_ARRAY);
+	glDisableClientState(GL_VERTEX_ARRAY);
+
+	if (DrawOctree) DrawOctant(0);
 }
 
 void Simulation::SaveState()

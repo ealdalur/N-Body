@@ -9,7 +9,6 @@ target_sources(${PROJECT_NAME} PRIVATE
   Main.cpp
   Simulation.cpp
   BHTree.cpp
-  VectorMath.cpp
 )
 
 if(MSVC)

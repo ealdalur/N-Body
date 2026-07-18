@@ -1,258 +1,226 @@
 #include "BHTree.h"
 
-BHTree::BHTree(double *p_min_new, double *p_max_new, BHTree *Parent_new)
+BHTree::BHTree()
 {
-	Parent = Parent_new;
-	for (int i=0; i<8; i++)
-	{
-		Octants[i] = nullptr;
-	}
-	
-	Initialize(p_min_new,p_max_new);
+	nodes.resize(128000);
+	nodeCount = 0;
 }
 
-BHTree::~BHTree()
+void BHTree::InitNode(int idx, double *p_min_new, double *p_max_new)
 {
-	DeleteOctants();
+	BHNode &n = nodes[idx];
+	vcopy(p_min_new, n.p_min);
+	vcopy(p_max_new, n.p_max);
+	vmean(n.p_min, n.p_max, n.p_c);
+	vcopy(n.p_c, n.p_cm);
+	n.Mass = 0;
+	n.Num_Bodies = 0;
+	n.BodyIdx = -1;
+	for (int i = 0; i < 8; i++) n.Octants[i] = -1;
+}
+
+int BHTree::AllocNode(double *p_min_new, double *p_max_new)
+{
+	int idx = nodeCount++;
+	if (idx >= (int)nodes.size()) {
+		nodes.resize(nodes.size() * 2);
+	}
+	InitNode(idx, p_min_new, p_max_new);
+	return idx;
 }
 
 void BHTree::Reset(double *p_min_new, double *p_max_new)
 {
-	DeleteOctants();
-	Initialize(p_min_new,p_max_new);
+	nodeCount = 0;
+	AllocNode(p_min_new, p_max_new);
 }
 
-void BHTree::Initialize(double *p_min_new, double *p_max_new)
+Octant BHTree::DetermineOctant(int idx, double *p)
 {
-	vcopy(p_min_new,p_min);
-	vcopy(p_max_new,p_max);
-	vmean(p_min,p_max,p_c);
-	vcopy(p_c,p_cm);
-	Mass = 0;
-	Num_Bodies = 0;
-	BodyIdx = -1;
-}
-
-void BHTree::DeleteOctants()
-{
-	for (int i=0; i<8; i++)
-	{
-		delete Octants[i];
-		Octants[i] = nullptr;
-	}
-}
-
-Octant BHTree::DetermineOctant(double *p)
-{
-	if (p[2] >= p_c[2])
-	{
-		if (p[1] >= p_c[1])
-		{
-			if (p[0] >= p_c[0])
-			{
-				return FNE;
-			}
-			else
-			{
-				return FNW;
-			}
+	BHNode &n = nodes[idx];
+	int oct = 0;
+	if (p[2] >= n.p_c[2]) {
+		if (p[1] >= n.p_c[1]) {
+			oct = (p[0] >= n.p_c[0]) ? FNE : FNW;
+		} else {
+			oct = (p[0] >= n.p_c[0]) ? FSE : FSW;
 		}
-		else
-		{
-			if (p[0] >= p_c[0])
-			{
-				return FSE;
-			}
-			else
-			{
-				return FSW;
-			}
+	} else {
+		if (p[1] >= n.p_c[1]) {
+			oct = (p[0] >= n.p_c[0]) ? BNE : BNW;
+		} else {
+			oct = (p[0] >= n.p_c[0]) ? BSE : BSW;
 		}
 	}
-	else
-	{
-		if (p[1] >= p_c[1])
-		{
-			if (p[0] >= p_c[0])
-			{
-				return BNE;
-			}
-			else
-			{
-				return BNW;
-			}
-		}
-		else
-		{
-			if (p[0] >= p_c[0])
-			{
-				return BSE;
-			}
-			else
-			{
-				return BSW;
-			}
-		}
-	}
+	return (Octant)oct;
 }
 
-BHTree *BHTree::CreateNode(Octant Oct)
+int BHTree::CreateChild(int idx, Octant Oct)
 {
+	BHNode &n = nodes[idx];
 	double p_min_new[3], p_max_new[3];
+
 	switch (Oct)
 	{
-		case FNE: 
-			vset(p_c[0],	p_c[1],		p_c[2],		p_min_new);
-			vset(p_max[0],	p_max[1],	p_max[2],	p_max_new);
+		case FNE:
+			vset(n.p_c[0], n.p_c[1], n.p_c[2], p_min_new);
+			vset(n.p_max[0], n.p_max[1], n.p_max[2], p_max_new);
 			break;
-		case FNW: 
-			vset(p_min[0],	p_c[1],		p_c[2],		p_min_new);
-			vset(p_c[0],	p_max[1],	p_max[2],	p_max_new);
+		case FNW:
+			vset(n.p_min[0], n.p_c[1], n.p_c[2], p_min_new);
+			vset(n.p_c[0], n.p_max[1], n.p_max[2], p_max_new);
 			break;
-		case FSW: 
-			vset(p_min[0],	p_min[1],	p_c[2],		p_min_new);
-			vset(p_c[0],	p_c[1],		p_max[2],	p_max_new);
+		case FSW:
+			vset(n.p_min[0], n.p_min[1], n.p_c[2], p_min_new);
+			vset(n.p_c[0], n.p_c[1], n.p_max[2], p_max_new);
 			break;
-		case FSE: 
-			vset(p_c[0],	p_min[1],	p_c[2],		p_min_new);
-			vset(p_max[0],	p_c[1],		p_max[2],	p_max_new);
+		case FSE:
+			vset(n.p_c[0], n.p_min[1], n.p_c[2], p_min_new);
+			vset(n.p_max[0], n.p_c[1], n.p_max[2], p_max_new);
 			break;
-		case BNE: 
-			vset(p_c[0],	p_c[1],		p_min[2],	p_min_new);
-			vset(p_max[0],	p_max[1],	p_c[2],		p_max_new);
+		case BNE:
+			vset(n.p_c[0], n.p_c[1], n.p_min[2], p_min_new);
+			vset(n.p_max[0], n.p_max[1], n.p_c[2], p_max_new);
 			break;
-		case BNW: 
-			vset(p_min[0],	p_c[1],		p_min[2],	p_min_new);
-			vset(p_c[0],	p_max[1],	p_c[2],		p_max_new);
+		case BNW:
+			vset(n.p_min[0], n.p_c[1], n.p_min[2], p_min_new);
+			vset(n.p_c[0], n.p_max[1], n.p_c[2], p_max_new);
 			break;
-		case BSW: 
-			vset(p_min[0],	p_min[1],	p_min[2],	p_min_new);
-			vset(p_c[0],	p_c[1],		p_c[2],		p_max_new);
+		case BSW:
+			vset(n.p_min[0], n.p_min[1], n.p_min[2], p_min_new);
+			vset(n.p_c[0], n.p_c[1], n.p_c[2], p_max_new);
 			break;
-		case BSE: 
-			vset(p_c[0],	p_min[1],	p_min[2],	p_min_new);
-			vset(p_max[0],	p_c[1],		p_c[2],		p_max_new);
+		case BSE:
+			vset(n.p_c[0], n.p_min[1], n.p_min[2], p_min_new);
+			vset(n.p_max[0], n.p_c[1], n.p_c[2], p_max_new);
 			break;
 	}
 
-	return new BHTree(p_min_new,p_max_new,this);
+	int child = AllocNode(p_min_new, p_max_new);
+	nodes[idx].Octants[Oct] = child;
+	return child;
 }
 
 void BHTree::InsertBody(double *p, double m, int BodyIdxIn)
 {
-	Octant Oct;
+	int stack[64];
+	int top = 0;
+	stack[top++] = 0;
 
-	if (Num_Bodies == 0)
-	{
-		vcopy(p,p_cm);
-		Mass = m;
-		BodyIdx = BodyIdxIn;
-	}
-	else
-	{
-		if (Num_Bodies == 1)
-		{
-			Oct = DetermineOctant(p_cm);
-			if (!Octants[Oct]) Octants[Oct] = CreateNode(Oct);
-			if (vequal(p_cm,p))
-			{
-				Octants[Oct]->InsertBody(p_cm,Mass+m,BodyIdx);
+	while (top > 0) {
+		int idx = stack[--top];
+		BHNode &n = nodes[idx];
+
+		if (n.Num_Bodies == 0) {
+			vcopy(p, n.p_cm);
+			n.Mass = m;
+			n.BodyIdx = BodyIdxIn;
+			n.Num_Bodies++;
+		} else if (n.Num_Bodies == 1) {
+			Octant oct_existing = DetermineOctant(idx, n.p_cm);
+			if (n.Octants[oct_existing] == -1) CreateChild(idx, oct_existing);
+
+			if (vequal(n.p_cm, p)) {
+				BHNode &child = nodes[n.Octants[oct_existing]];
+				vcopy(n.p_cm, child.p_cm);
+				child.Mass = n.Mass + m;
+				child.BodyIdx = n.BodyIdx;
+				child.Num_Bodies = 1;
+			} else {
+				int existing_child = nodes[idx].Octants[oct_existing];
+				BHNode &ec = nodes[existing_child];
+				vcopy(nodes[idx].p_cm, ec.p_cm);
+				ec.Mass = nodes[idx].Mass;
+				ec.BodyIdx = nodes[idx].BodyIdx;
+				ec.Num_Bodies = 1;
+
+				Octant oct_new = DetermineOctant(idx, p);
+				if (nodes[idx].Octants[oct_new] == -1) CreateChild(idx, oct_new);
+
+				stack[top++] = nodes[idx].Octants[oct_new];
+				nodes[idx].Num_Bodies++;
+				continue;
 			}
-			else
-			{
-				Octants[Oct]->InsertBody(p_cm,Mass,BodyIdx);
-
-				Oct = DetermineOctant(p);
-				if (!Octants[Oct]) Octants[Oct] = CreateNode(Oct);
-				Octants[Oct]->InsertBody(p,m,BodyIdxIn);
-			}
-		}
-		else
-		{
-			Oct = DetermineOctant(p);
-			if (!Octants[Oct]) Octants[Oct] = CreateNode(Oct);
-			Octants[Oct]->InsertBody(p,m,BodyIdxIn);
+			n.Num_Bodies++;
+		} else {
+			Octant oct = DetermineOctant(idx, p);
+			if (n.Octants[oct] == -1) CreateChild(idx, oct);
+			n.Num_Bodies++;
+			stack[top++] = n.Octants[oct];
 		}
 	}
-
-	Num_Bodies++;
 }
 
 void BHTree::CalcMasses()
 {
-	if (Num_Bodies > 1)
-	{
-		Mass = 0.0;
-		vset(0.0,0.0,0.0,p_cm);
-		double oct_cm[3];
+	CalcMassesNode(0);
+}
 
-		for (int i=0; i<8; i++)
-		{
-			if (Octants[i])
-			{
-				Octants[i]->CalcMasses();
-				Mass += Octants[i]->Mass;
-				vscale(Octants[i]->p_cm,Octants[i]->Mass,oct_cm);
-				vadd(p_cm,oct_cm,p_cm);
-			}
+void BHTree::CalcMassesNode(int idx)
+{
+	BHNode &n = nodes[idx];
+	if (n.Num_Bodies <= 1) return;
+
+	n.Mass = 0.0;
+	vset(0.0, 0.0, 0.0, n.p_cm);
+	double oct_cm[3];
+
+	for (int i = 0; i < 8; i++) {
+		if (n.Octants[i] != -1) {
+			CalcMassesNode(n.Octants[i]);
+			BHNode &child = nodes[n.Octants[i]];
+			n.Mass += child.Mass;
+			vscale(child.p_cm, child.Mass, oct_cm);
+			vadd(n.p_cm, oct_cm, n.p_cm);
 		}
-		
-		vscale(p_cm,1.0/Mass,p_cm);
 	}
+
+	vscale(n.p_cm, 1.0 / n.Mass, n.p_cm);
 }
 
 void BHTree::CalcAcceleration(double *p, int BodyIdxIn, double G, double r_soft, double *a)
 {
-	vset(0.0,0.0,0.0,a);
+	vset(0.0, 0.0, 0.0, a);
+
+	int stack[64];
+	int top = 0;
+	stack[top++] = 0;
+
 	double v[3];
-	double r,d;
-	
-	if (Num_Bodies == 1)
-	{
-		if (BodyIdx != BodyIdxIn)
-		{
-			vsub(p_cm,p,v);
-			r = vmagsoft(v,r_soft);
-			vscale(v,G*Mass/(r*r*r),a);
-		}
-	}
-	else
-	{
-		vsub(p_cm,p,v);
-		r = vmag(v);
-		d = p_max[0] - p_min[0];
-		if (d/r <= 1.0)
-		{
-			vscale(v,G*Mass/(r*r*r),a);
-		}
-		else
-		{
-			double a_oct[3];
-			for (int i=0; i<8; i++)
-			{
-				if (Octants[i])
-				{
-					Octants[i]->CalcAcceleration(p,BodyIdxIn,G,r_soft,a_oct);
-					vadd(a,a_oct,a);
+
+	while (top > 0) {
+		int idx = stack[--top];
+		BHNode &n = nodes[idx];
+
+		if (n.Num_Bodies == 1) {
+			if (n.BodyIdx != BodyIdxIn) {
+				vsub(n.p_cm, p, v);
+				double dsq = vmagsqsoft(v, r_soft);
+				double r3_inv = 1.0 / (dsq * sqrt(dsq));
+				vscaleadd(v, G * n.Mass * r3_inv, a);
+			}
+		} else {
+			vsub(n.p_cm, p, v);
+			double dsq = vmagsq(v);
+			double d = n.p_max[0] - n.p_min[0];
+			if (d * d <= dsq) {
+				double dsq_soft = dsq + r_soft;
+				double r3_inv = 1.0 / (dsq_soft * sqrt(dsq_soft));
+				vscaleadd(v, G * n.Mass * r3_inv, a);
+			} else {
+				for (int i = 0; i < 8; i++) {
+					if (n.Octants[i] != -1) {
+						stack[top++] = n.Octants[i];
+					}
 				}
 			}
 		}
 	}
 }
 
-void BHTree::GetBounds(double *p_min_out, double *p_max_out)
+void BHTree::GetBounds(int idx, double *BoundData)
 {
-	vcopy(p_min,p_min_out);
-	vcopy(p_max,p_max_out);
-}
-
-void BHTree::GetBounds(double *BoundData)
-{
-	vcopy(p_c,BoundData);
-	BoundData[3] = p_max[0] - p_min[0];
-}
-
-BHTree *BHTree::GetOctant(int Oct)
-{
-	return Octants[Oct];
+	BHNode &n = nodes[idx];
+	vcopy(n.p_c, BoundData);
+	BoundData[3] = n.p_max[0] - n.p_min[0];
 }

@@ -6,6 +6,7 @@
 #include <random>
 #include "VectorMath.h"
 #include "BHTree.h"
+#include "ThreadPool.h"
 
 const int N_BODIES = 40000;
 const int N_SYSTEMS = 2;
@@ -61,11 +62,15 @@ class Simulation
 	Camera Cam;
 	GLuint dList;
 
-	BHTree *Octree;
+	float *vtxBuf;
+	float *clrBuf;
+	int vtxCount;
+
+	BHTree Octree;
 
 	FILE *DataLog;
 
-	std::vector<std::thread> threads;
+	ThreadPool *pool;
 	
 	void InitGL();
 	void CalcAccelRangeP2P(int iStart, int iEnd);
@@ -97,7 +102,7 @@ public:
 	void SetPerspective(double fovY, double aspect, double zNear, double zFar);
 	void ReSizeGL(int width, int height);
 	void DrawGL();
-	void DrawOctant(BHTree *Oct);
+	void DrawOctant(int nodeIdx);
 	void SaveState();
 	bool ReadState();
 };
