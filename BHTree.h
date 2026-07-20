@@ -17,8 +17,8 @@ enum Octant
 
 struct BHNode
 {
-	double p_min[3], p_max[3], p_c[3], p_cm[3];
-	double Mass;
+	float p_min[3], p_max[3], p_c[3], p_cm[3];
+	float Mass;
 	int BodyIdx;
 	int Num_Bodies;
 	int Octants[8];
@@ -30,20 +30,20 @@ private:
 	std::vector<BHNode> nodes;
 	int nodeCount;
 
-	void InitNode(int idx, double *p_min_new, double *p_max_new);
-	int AllocNode(double *p_min_new, double *p_max_new);
-	Octant DetermineOctant(int idx, double *p);
+	void InitNode(int idx, float *p_min_new, float *p_max_new);
+	int AllocNode(float *p_min_new, float *p_max_new);
+	Octant DetermineOctant(int idx, float *p);
 	int CreateChild(int idx, Octant Oct);
 
 public:
 	BHTree();
 
-	void Reset(double *p_min_new, double *p_max_new);
-	void InsertBody(double *p, double m, int BodyIdxIn);
+	void Reset(float *p_min_new, float *p_max_new);
+	void InsertBody(float *p, float m, int BodyIdxIn);
 	void CalcMasses();
 	void CalcMassesNode(int idx);
-	void CalcAcceleration(double *p, int BodyIdxIn, double G, double r_soft, double *a);
-	void GetBounds(int idx, double *BoundData);
+	void CalcAcceleration(float *p, int BodyIdxIn, float G, float r_soft, double *a);
+	void GetBounds(int idx, float *BoundData);
 	int GetRoot() { return 0; }
 	int GetOctant(int idx, int oct) { return nodes[idx].Octants[oct]; }
 	int GetNodeCount() { return nodeCount; }

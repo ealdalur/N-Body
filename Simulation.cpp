@@ -1,15 +1,13 @@
 #include "Simulation.h"
+#include <cstring>
 
 Simulation::Simulation()
 {
 	multiThreading = true;
 	int hardwareConcurrency = std::thread::hardware_concurrency();
 	std::cout << "Hardware thread contexts: " << hardwareConcurrency << std::endl;
-	if (hardwareConcurrency > 8) {
-		numThreads = 8;
-	} else {
-		numThreads = 4;
-	}
+	numThreads = hardwareConcurrency - 2;
+	if (numThreads < 4) numThreads = 4;
 	std::cout << "Number of compute threads: " << numThreads << std::endl;
 
 	pool = new ThreadPool(numThreads);
@@ -203,13 +201,18 @@ void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
 void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
 
 	double a[3];
+	float pf[3];
 
 	for (int i=iStart; i<=iEnd; i++)
 	{
-		vscaleadd(pos_t[i],FDE,acc_t[i]);
+		int bi = sortedIdx[i];
+		vscaleadd(pos_t[bi],FDE,acc_t[bi]);
 
-		Octree.CalcAcceleration(pos_t[i],i,G,r_soft,a);
-		vadd(acc_t[i],a,acc_t[i]);
+		pf[0] = (float)pos_t[bi][0];
+		pf[1] = (float)pos_t[bi][1];
+		pf[2] = (float)pos_t[bi][2];
+		Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft, a);
+		vadd(acc_t[bi],a,acc_t[bi]);
 	}
 }
 
@@ -241,9 +244,10 @@ void Simulation::CalcDerivatives(double *s, double *s_d)
 		}
 		pool->waitAll();
 
+		int accel_chunk = numActiveBodies / numThreads;
 		for (int i = 0; i < numThreads; ++i) {
-			int iStart = i * chunk_size;
-			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
+			int iStart = i * accel_chunk;
+			int iEnd = (i == numThreads - 1) ? (numActiveBodies-1) : (iStart + accel_chunk - 1);
 			if (GRAVITY_P2P) pool->submit([this, iStart, iEnd]() { CalcAccelRangeP2P(iStart, iEnd); });
 			if (GRAVITY_OCT) pool->submit([this, iStart, iEnd]() { CalcAccelRangeOct(iStart, iEnd); });
 		}
@@ -251,46 +255,101 @@ void Simulation::CalcDerivatives(double *s, double *s_d)
 	} else {
 		PrepareDerivativeDataRange(s, s_d, 0, N_BODIES-1);
 		if (GRAVITY_P2P) CalcAccelRangeP2P(0, N_BODIES-1);
-		if (GRAVITY_OCT) CalcAccelRangeOct(0, N_BODIES-1);
+		if (GRAVITY_OCT) CalcAccelRangeOct(0, numActiveBodies-1);
 	}
+}
+
+static uint32_t expandBits(uint32_t v)
+{
+	v = (v | (v << 16)) & 0x030000FF;
+	v = (v | (v <<  8)) & 0x0300F00F;
+	v = (v | (v <<  4)) & 0x030C30C3;
+	v = (v | (v <<  2)) & 0x09249249;
+	return v;
+}
+
+static uint32_t morton3D(float x, float y, float z, float *p_min, float *p_max)
+{
+	float inv = 1.0f / (p_max[0] - p_min[0]);
+	uint32_t ix = (uint32_t)((x - p_min[0]) * inv * 1023.0f);
+	uint32_t iy = (uint32_t)((y - p_min[1]) * inv * 1023.0f);
+	uint32_t iz = (uint32_t)((z - p_min[2]) * inv * 1023.0f);
+	if (ix > 1023) ix = 1023;
+	if (iy > 1023) iy = 1023;
+	if (iz > 1023) iz = 1023;
+	return (expandBits(ix) << 2) | (expandBits(iy) << 1) | expandBits(iz);
 }
 
 void Simulation::BuildOctree()
 {
-	double p_min[3],p_max[3];
-	bool first = true;
 	const double MAX_OCT_DST_SQ = 1000000.0;
+	int numActive = 0;
 
-	for (int i=0; i<N_BODIES; i++)
+	for (int i = 0; i < N_BODIES; i++)
 	{
 		if ((has_gravity[i]) && (pos_sq[i] < MAX_OCT_DST_SQ))
 		{
-			if (first)
-			{
-				vcopy(pos[i],p_min);
-				vcopy(pos[i],p_max);
-				first = false;
-			}
-			else
-			{
-				vmin(pos[i],p_min,p_min);
-				vmax(pos[i],p_max,p_max);
-			}
+			pos_f[i*3]   = (float)pos[i][0];
+			pos_f[i*3+1] = (float)pos[i][1];
+			pos_f[i*3+2] = (float)pos[i][2];
+			sortedIdx[numActive++] = i;
 		}
 	}
 
-	vmaxboundcube(p_min,p_max,p_min,p_max);
-	Octree.Reset(p_min,p_max);
-
-	for (int i=0; i<N_BODIES; i++)
+	float p_min[3], p_max[3];
+	vcopyf(pos_f + sortedIdx[0]*3, p_min);
+	vcopyf(pos_f + sortedIdx[0]*3, p_max);
+	for (int i = 1; i < numActive; i++)
 	{
-		if ((has_gravity[i]) && (pos_sq[i] < MAX_OCT_DST_SQ))
-		{
-			Octree.InsertBody(pos[i],mass[i],i);
+		vminf(pos_f + sortedIdx[i]*3, p_min, p_min);
+		vmaxf(pos_f + sortedIdx[i]*3, p_max, p_max);
+	}
+
+	float halfwidth;
+	float sub[3], mean[3], delta[3];
+	vsubf(p_max, p_min, sub);
+	halfwidth = sub[0];
+	if (sub[1] > halfwidth) halfwidth = sub[1];
+	if (sub[2] > halfwidth) halfwidth = sub[2];
+	halfwidth *= 0.5f;
+	vmeanf(p_max, p_min, mean);
+	vsetf(halfwidth, halfwidth, halfwidth, delta);
+	vsubf(mean, delta, p_min);
+	vaddf(mean, delta, p_max);
+
+	for (int i = 0; i < numActive; i++)
+	{
+		int bi = sortedIdx[i];
+		mortonCodes[bi] = morton3D(pos_f[bi*3], pos_f[bi*3+1], pos_f[bi*3+2], p_min, p_max);
+	}
+
+	// Radix sort by Morton code (3 passes over 10-bit chunks)
+	static int sortTemp[N_BODIES];
+	for (int shift = 0; shift < 30; shift += 10) {
+		int counts[1024] = {};
+		for (int i = 0; i < numActive; i++)
+			counts[(mortonCodes[sortedIdx[i]] >> shift) & 0x3FF]++;
+		int total = 0;
+		for (int i = 0; i < 1024; i++) {
+			int c = counts[i]; counts[i] = total; total += c;
 		}
+		for (int i = 0; i < numActive; i++) {
+			int bi = sortedIdx[i];
+			sortTemp[counts[(mortonCodes[bi] >> shift) & 0x3FF]++] = bi;
+		}
+		memcpy(sortedIdx, sortTemp, numActive * sizeof(int));
+	}
+
+	Octree.Reset(p_min, p_max);
+
+	for (int i = 0; i < numActive; i++)
+	{
+		int bi = sortedIdx[i];
+		Octree.InsertBody(pos_f + bi*3, (float)mass[bi], bi);
 	}
 
 	Octree.CalcMasses();
+	numActiveBodies = numActive;
 }
 
 void Simulation::CalcOutputsRange(int iStart, int iEnd) {
@@ -371,6 +430,36 @@ void Simulation::CalcLeapFrogPositions() {
 	}
 }
 
+void Simulation::CalcLeapFrogVelocitiesAndOutputsRange(int iStart, int iEnd) {
+	double a[3];
+
+	for (int i=iStart; i<=iEnd; i++)
+	{
+		vadd(acc[i],acc_prev[i],a);
+		vscaleadd(a,0.5*dt,vel[i]);
+
+		pos_sq[i] = vdot(pos[i],pos[i]);
+		vel_sq[i] = vdot(vel[i],vel[i]);
+		acc_sq[i] = vdot(acc[i],acc[i]);
+	}
+}
+
+void Simulation::CalcLeapFrogVelocitiesAndOutputs() {
+
+	if (multiThreading) {
+		int chunk_size = N_BODIES / numThreads;
+
+		for (int i = 0; i < numThreads; ++i) {
+			int iStart = i * chunk_size;
+			int iEnd = (i == numThreads - 1) ? (N_BODIES-1) : (iStart + chunk_size - 1);
+			pool->submit([this, iStart, iEnd]() { CalcLeapFrogVelocitiesAndOutputsRange(iStart, iEnd); });
+		}
+		pool->waitAll();
+	} else {
+		CalcLeapFrogVelocitiesAndOutputsRange(0, N_BODIES-1);
+	}
+}
+
 void Simulation::CalcLeapFrogVelocitiesRange(int iStart, int iEnd) {
 	double a[3];
 
@@ -421,10 +510,12 @@ void Simulation::Step()
 	{
 		CalcLeapFrogPositions();
 		CalcDerivatives(states,states_d[0]);
-		CalcLeapFrogVelocities();
+		CalcLeapFrogVelocitiesAndOutputs();
 	}
-
-	CalcOutputs();
+	else
+	{
+		CalcOutputs();
+	}
 
 	if (GRAVITY_OCT)
 	{

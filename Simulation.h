@@ -6,6 +6,7 @@
 #include <vector>
 #include <thread>
 #include <random>
+#include <algorithm>
 #include "VectorMath.h"
 #include "BHTree.h"
 #include "ThreadPool.h"
@@ -61,6 +62,11 @@ class Simulation
 	double vel_sq[N_BODIES];
 	double acc_sq[N_BODIES];
 
+	float pos_f[N_BODIES * 3];
+	int sortedIdx[N_BODIES];
+	uint32_t mortonCodes[N_BODIES];
+	int numActiveBodies;
+
 	Camera Cam;
 
 	// Particle rendering (modern GL, instanced)
@@ -98,6 +104,8 @@ class Simulation
 	void CalcLeapFrogPositions();
 	void CalcLeapFrogVelocitiesRange(int iStart, int iEnd);
 	void CalcLeapFrogVelocities();
+	void CalcLeapFrogVelocitiesAndOutputsRange(int iStart, int iEnd);
+	void CalcLeapFrogVelocitiesAndOutputs();
 	void CalcOutputsRange(int iStart, int iEnd);
 	void CalcOutputs();
 	void BuildOctreeVerts(int nodeIdx);

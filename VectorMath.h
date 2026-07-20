@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <math.h>
+#include <xmmintrin.h>
 
 inline double drand()
 {
@@ -167,4 +168,94 @@ inline void vrot_zy(double *v, double angle, double *vr)
 	vt[0] = v[0];
 
 	vcopy(vt,vr);
+}
+
+// Float versions for BHTree
+
+inline void vsetf(float x, float y, float z, float *v)
+{
+	v[0] = x; v[1] = y; v[2] = z;
+}
+
+inline void vcopyf(float *v, float *vr)
+{
+	vr[0] = v[0]; vr[1] = v[1]; vr[2] = v[2];
+}
+
+inline void vaddf(float *v1, float *v2, float *vr)
+{
+	vr[0] = v1[0]+v2[0]; vr[1] = v1[1]+v2[1]; vr[2] = v1[2]+v2[2];
+}
+
+inline void vsubf(float *v1, float *v2, float *vr)
+{
+	vr[0] = v1[0]-v2[0]; vr[1] = v1[1]-v2[1]; vr[2] = v1[2]-v2[2];
+}
+
+inline void vscalef(float *v, float s, float *vr)
+{
+	vr[0] = v[0]*s; vr[1] = v[1]*s; vr[2] = v[2]*s;
+}
+
+inline float vmagsqf(float *v)
+{
+	return v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
+}
+
+inline float vmagsqsoftf(float *v, float r_soft)
+{
+	return v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + r_soft;
+}
+
+inline void vmeanf(float *v1, float *v2, float *vr)
+{
+	vr[0] = (v1[0]+v2[0])*0.5f;
+	vr[1] = (v1[1]+v2[1])*0.5f;
+	vr[2] = (v1[2]+v2[2])*0.5f;
+}
+
+inline bool vequalf(float *v1, float *v2)
+{
+	return (v1[0]==v2[0]) && (v1[1]==v2[1]) && (v1[2]==v2[2]);
+}
+
+inline void vscaleaddf(float *v, float s, double *vr)
+{
+	vr[0] += v[0] * s;
+	vr[1] += v[1] * s;
+	vr[2] += v[2] * s;
+}
+
+inline void vminf(float *v1, float *v2, float *vr)
+{
+	vr[0] = (v1[0]<v2[0])?v1[0]:v2[0];
+	vr[1] = (v1[1]<v2[1])?v1[1]:v2[1];
+	vr[2] = (v1[2]<v2[2])?v1[2]:v2[2];
+}
+
+inline void vmaxf(float *v1, float *v2, float *vr)
+{
+	vr[0] = (v1[0]>v2[0])?v1[0]:v2[0];
+	vr[1] = (v1[1]>v2[1])?v1[1]:v2[1];
+	vr[2] = (v1[2]>v2[2])?v1[2]:v2[2];
+}
+
+inline float fast_rsqrtf(float x)
+{
+	__m128 val = _mm_set_ss(x);
+	__m128 est = _mm_rsqrt_ss(val);
+	__m128 half = _mm_set_ss(0.5f);
+	__m128 three = _mm_set_ss(3.0f);
+	// One Newton-Raphson iteration: est = est * (3 - x * est^2) * 0.5
+	__m128 est2 = _mm_mul_ss(est, est);
+	__m128 xe2 = _mm_mul_ss(val, est2);
+	__m128 diff = _mm_sub_ss(three, xe2);
+	__m128 refined = _mm_mul_ss(_mm_mul_ss(est, diff), half);
+	return _mm_cvtss_f32(refined);
+}
+
+inline float fast_r3_inv(float dsq)
+{
+	float rsqrt = fast_rsqrtf(dsq);
+	return rsqrt * rsqrt * rsqrt;
 }
