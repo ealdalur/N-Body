@@ -70,8 +70,8 @@ Simulation::~Simulation()
 	if (DATA_LOG) fclose(DataLog);
 }
 
-void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double M, double Mfrac, double R, double Ri, double Vtol){
-	
+void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double M, double Mfrac, double R, double Ri, double Vtol, double haloVc, double haloRc){
+
 	double m,r,theta,phi,vm,m_orbit;
 	double p[3],v[3];
 	double y[3] = {0.0, 1.0, 0.0};
@@ -79,11 +79,16 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	int sysIdx = 0;
 	for (int i=0; i<system; i++) sysIdx += N_SYSTEM_BODIES[i];
 
+	halo_vc[system] = haloVc;
+	halo_rc_sq[system] = haloRc * haloRc;
+	halo_central[system] = sysIdx;
+
+	for (int i=0; i<N_SYSTEM_BODIES[system]; i++)
+		body_system[sysIdx+i] = system;
+
 	m = Mfrac*M/(N_SYSTEM_BODIES[system]-1);
 	mass[sysIdx] = M;
 	has_gravity[sysIdx] = true;
-	//vset(0.0,0.0,0.0,pos[sysIdx]);
-	//vset(0.0,0.0,0.0,vel[sysIdx]);
 	vcopy(sysPos, pos[sysIdx]);
 	vcopy(sysVel, vel[sysIdx]);
 
@@ -99,7 +104,8 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 		vset(r*sin(phi)*cos(theta),r*cos(phi),r*sin(phi)*sin(theta),p);
 
 		m_orbit = M + m*(N_SYSTEM_BODIES[system]-1)*(r*r/(R*R));
-		vm = sqrt(G*m_orbit/r);
+		double vc_sq = G*m_orbit/r + haloVc*haloVc*r*r/(r*r + haloRc*haloRc);
+		vm = sqrt(vc_sq);
 		vm = (-1.0+Vtol*(2*drand()-1))*vm;
 
 		vcopy(p,v); vnorm(v);
@@ -158,16 +164,17 @@ void Simulation::LoadDefaultState()
 	FDE = 0.0*1.0;
 	dt = 0.0005;	
 	r_soft = 0.1;
+	BH_Opening_Theta = 0.5;
 	double pos[3];
 	double vel[3];
 
 	FDE = 0.0;
 	vset(0.0, 0.0, 0.0, pos);
 	vset(0.0, 0.0, 0.0, vel);
-	LoadGalaxyDiscState(0, pos, vel, 1.0e7, 0.5, 250.0, 25.0, 0.1);
+	LoadGalaxyDiscState(0, pos, vel, 1.0e7, 0.5, 250.0, 25.0, 0.1, 200.0, 50.0);
 	vset( 300.0, 0.0, -500.0, pos);
 	vset(-150.0, 0.0, 0.0, vel);
-	LoadGalaxyDiscState(1, pos, vel, 6.0e6, 0.5, 125.0, 25.0, 0.1);
+	LoadGalaxyDiscState(1, pos, vel, 6.0e6, 0.5, 125.0, 25.0, 0.1, 155.0, 25.0);
 	
 	// FDE = 1.0;
 	// LoadSphericalUniverseState(2.1e7, 210.0, 200.0);
@@ -180,6 +187,7 @@ void Simulation::LoadDefaultState()
 void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
 
 	double a[3];
+	double r_halo[3];
 
 	for (int i=iStart; i<=iEnd; i++)
 	{
@@ -195,12 +203,22 @@ void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
 				vscaleadd(a, G * mass[j] * r3_inv, acc_t[i]);
 			}
 		}
+
+		int sys = body_system[i];
+		int ci = halo_central[sys];
+		if (i != ci) {
+			vsub(pos_t[ci], pos_t[i], r_halo);
+			double rsq = vmagsq(r_halo);
+			double halo_scale = halo_vc[sys] * halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+			vscaleadd(r_halo, halo_scale, acc_t[i]);
+		}
 	}
 }
 
 void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
 
 	double a[3];
+	double r_halo[3];
 	float pf[3];
 
 	for (int i=iStart; i<=iEnd; i++)
@@ -211,8 +229,17 @@ void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
 		pf[0] = (float)pos_t[bi][0];
 		pf[1] = (float)pos_t[bi][1];
 		pf[2] = (float)pos_t[bi][2];
-		Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft, a);
+		Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft, (float)(BH_Opening_Theta * BH_Opening_Theta), a);
 		vadd(acc_t[bi],a,acc_t[bi]);
+
+		int sys = body_system[bi];
+		int ci = halo_central[sys];
+		if (bi != ci) {
+			vsub(pos_t[ci], pos_t[bi], r_halo);
+			double rsq = vmagsq(r_halo);
+			double halo_scale = halo_vc[sys] * halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+			vscaleadd(r_halo, halo_scale, acc_t[bi]);
+		}
 	}
 }
 

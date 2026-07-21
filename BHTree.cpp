@@ -192,7 +192,7 @@ void BHTree::CalcMassesNode(int idx)
 	(void)idx;
 }
 
-void BHTree::CalcAcceleration(float *p, int BodyIdxIn, float G, float r_soft, double *a)
+void BHTree::CalcAcceleration(float *p, int BodyIdxIn, float G, float r_soft, float theta_sq, double *a)
 {
 	vset(0.0, 0.0, 0.0, a);
 
@@ -217,7 +217,7 @@ void BHTree::CalcAcceleration(float *p, int BodyIdxIn, float G, float r_soft, do
 			vsubf(n.p_cm, p, v);
 			float dsq = vmagsqf(v);
 			float d = n.p_max[0] - n.p_min[0];
-			if (d * d <= dsq) {
+			if (d * d <= theta_sq * dsq) {
 				float dsq_soft = dsq + r_soft;
 				float r3_inv = fast_r3_inv(dsq_soft);
 				vscaleaddf(v, G * n.Mass * r3_inv, a);

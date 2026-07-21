@@ -42,6 +42,12 @@ class Simulation
 	double FDE;
 	double dt;
 	double r_soft;
+	double BH_Opening_Theta;
+
+	double halo_vc[N_SYSTEMS];
+	double halo_rc_sq[N_SYSTEMS];
+	int halo_central[N_SYSTEMS];
+	int body_system[N_BODIES];
 
 	double mass[N_BODIES];
 
@@ -117,7 +123,7 @@ public:
 	Simulation();
 	~Simulation();
 
-	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double M, double Mfrac, double R, double Ri, double Vtol);
+	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double M, double Mfrac, double R, double Ri, double Vtol, double haloVc, double haloRc);
 	void LoadSphericalUniverseState(double M, double R, double V);
 	void LoadDefaultState();
 	void BuildOctree();

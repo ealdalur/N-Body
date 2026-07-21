@@ -42,7 +42,7 @@ public:
 	void InsertBody(float *p, float m, int BodyIdxIn);
 	void CalcMasses();
 	void CalcMassesNode(int idx);
-	void CalcAcceleration(float *p, int BodyIdxIn, float G, float r_soft, double *a);
+	void CalcAcceleration(float *p, int BodyIdxIn, float G, float r_soft, float theta_sq, double *a);
 	void GetBounds(int idx, float *BoundData);
 	int GetRoot() { return 0; }
 	int GetOctant(int idx, int oct) { return nodes[idx].Octants[oct]; }
