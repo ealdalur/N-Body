@@ -9,6 +9,7 @@ target_sources(${PROJECT_NAME} PRIVATE
   Main.cpp
   Simulation.cpp
   BHTree.cpp
+  VideoRecorder.cpp
   glad.c
 )
 
@@ -35,7 +36,10 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED ON)
 
 find_package(SDL3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE 
+find_package(FFMPEG REQUIRED)
+target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME} PRIVATE
   SDL3::SDL3
-  OpenGL::GL 
+  OpenGL::GL
+  ${FFMPEG_LIBRARIES}
 )

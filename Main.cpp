@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include "Simulation.h"
+#include "VideoRecorder.h"
 
 #ifdef _WIN32
 extern "C" {
@@ -21,6 +22,7 @@ struct Window
 
 Window Win;
 Simulation *Sim;
+VideoRecorder *Recorder = nullptr;
 const bool* keys;
 std::map<int, bool> keyPressedMap;
 bool SimPaused = false;
@@ -196,6 +198,9 @@ int main()
 	Sim = new Simulation();
 	Sim->ReSizeGL(Win.width, Win.height);
 
+	if (RECORD_VIDEO)
+		Recorder = new VideoRecorder("output.mp4", Win.width, Win.height, 30);
+
 	fpsLastTime = SDL_GetPerformanceCounter();
 	frameLastTime = SDL_GetPerformanceCounter();
 
@@ -221,6 +226,13 @@ int main()
 
 		Sim->DrawFPS(fpsCurrent);
 
+		if (Recorder) {
+			uint8_t *pixels = new uint8_t[Win.width * Win.height * 3];
+			Sim->ReadFramePixels(pixels);
+			Recorder->WriteFrame(pixels);
+			delete[] pixels;
+		}
+
 		SDL_GL_SwapWindow(Win.gWindow);
 
 		if (!SimPaused)
@@ -229,6 +241,7 @@ int main()
 		}
     }
 
+	delete Recorder;
 	delete Sim;
 	close();
 

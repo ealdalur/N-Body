@@ -11,9 +11,9 @@
 #include "BHTree.h"
 #include "ThreadPool.h"
 
-const int N_BODIES = 40000;
+const int N_BODIES = 800000;
 const int N_SYSTEMS = 2;
-const int N_SYSTEM_BODIES[N_SYSTEMS] = {30000, 10000};
+const int N_SYSTEM_BODIES[N_SYSTEMS] = {600000, 200000};
 
 // const int N_BODIES = 100000;
 // const int N_SYSTEMS = 1;
@@ -28,7 +28,7 @@ const bool SOLVER_RK4		= false;
 const bool SOLVER_LEAP_FROG = true;
 
 const bool DATA_LOG		= false;
-const bool RECORD_IMG	= false;
+const bool RECORD_VIDEO	= true;
 
 struct Camera
 {
@@ -90,6 +90,9 @@ class Simulation
 	GLuint fpsVAO, fpsVBO;
 	GLuint fpsShader;
 
+	// Off-screen FBO for recording
+	GLuint recordFBO, recordColorTex, recordDepthRBO;
+
 	int winWidth, winHeight;
 
 	BHTree Octree;
@@ -99,6 +102,7 @@ class Simulation
 	ThreadPool *pool;
 
 	void InitGL();
+	void CreateRecordFBO(int width, int height);
 	GLuint CompileShader(const char *vertSrc, const char *fragSrc);
 	void CalcAccelRangeP2P(int iStart, int iEnd);
 	void CalcAccelRangeOct(int iStart, int iEnd);
@@ -132,6 +136,7 @@ public:
 	void ReSizeGL(int width, int height);
 	void DrawGL();
 	void DrawFPS(double fps);
+	void ReadFramePixels(uint8_t *rgbOut);
 	void SaveState();
 	bool ReadState();
 };

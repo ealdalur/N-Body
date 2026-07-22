@@ -63,6 +63,11 @@ Simulation::~Simulation()
 	glDeleteVertexArrays(1, &fpsVAO);
 	glDeleteBuffers(1, &fpsVBO);
 	glDeleteProgram(fpsShader);
+	if (recordFBO) {
+		glDeleteFramebuffers(1, &recordFBO);
+		glDeleteTextures(1, &recordColorTex);
+		glDeleteRenderbuffers(1, &recordDepthRBO);
+	}
 	delete pool;
 	delete[] posBuf;
 	delete[] clrBuf;
@@ -606,6 +611,10 @@ GLuint Simulation::CompileShader(const char *vertSrc, const char *fragSrc)
 
 void Simulation::InitGL()
 {
+	recordFBO = 0;
+	recordColorTex = 0;
+	recordDepthRBO = 0;
+
 	glDisable(GL_DEPTH_TEST);
 	glDepthMask(GL_FALSE);
 	glDisable(GL_CULL_FACE);
@@ -753,12 +762,41 @@ void Simulation::InitGL()
 	glBindVertexArray(0);
 }
 
+void Simulation::CreateRecordFBO(int width, int height)
+{
+	if (recordFBO) {
+		glDeleteFramebuffers(1, &recordFBO);
+		glDeleteTextures(1, &recordColorTex);
+		glDeleteRenderbuffers(1, &recordDepthRBO);
+	}
+
+	glGenFramebuffers(1, &recordFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, recordFBO);
+
+	glGenTextures(1, &recordColorTex);
+	glBindTexture(GL_TEXTURE_2D, recordColorTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, recordColorTex, 0);
+
+	glGenRenderbuffers(1, &recordDepthRBO);
+	glBindRenderbuffer(GL_RENDERBUFFER, recordDepthRBO);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, recordDepthRBO);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void Simulation::ReSizeGL(int width, int height)
 {
 	if (height == 0) height = 1;
 	winWidth = width;
 	winHeight = height;
 	glViewport(0, 0, width, height);
+
+	if (RECORD_VIDEO)
+		CreateRecordFBO(width, height);
 }
 
 void Simulation::BuildOctreeVerts(int nodeIdx)
@@ -784,6 +822,9 @@ void Simulation::BuildOctreeVerts(int nodeIdx)
 
 void Simulation::DrawGL()
 {
+	if (RECORD_VIDEO)
+		glBindFramebuffer(GL_FRAMEBUFFER, recordFBO);
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// View = Rx(-phi) * Ry(-theta) * T(-cam)
@@ -1073,6 +1114,31 @@ void Simulation::DrawFPS(double fps)
 	glDrawArrays(GL_TRIANGLES, 0, (GLsizei)(verts.size() / 2));
 	glBindVertexArray(0);
 	glUseProgram(0);
+}
+
+void Simulation::ReadFramePixels(uint8_t *rgbOut)
+{
+	// Read pixels from the FBO
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, recordFBO);
+	glReadPixels(0, 0, winWidth, winHeight, GL_RGB, GL_UNSIGNED_BYTE, rgbOut);
+
+	// Blit FBO to the default framebuffer for on-screen display
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glBlitFramebuffer(0, 0, winWidth, winHeight, 0, 0, winWidth, winHeight,
+					  GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	// glReadPixels returns bottom-up; flip vertically
+	int rowBytes = winWidth * 3;
+	for (int y = 0; y < winHeight / 2; y++) {
+		uint8_t *top = rgbOut + y * rowBytes;
+		uint8_t *bot = rgbOut + (winHeight - 1 - y) * rowBytes;
+		for (int x = 0; x < rowBytes; x++) {
+			uint8_t tmp = top[x];
+			top[x] = bot[x];
+			bot[x] = tmp;
+		}
+	}
 }
 
 void Simulation::SaveState()
