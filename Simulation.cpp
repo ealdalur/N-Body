@@ -208,14 +208,14 @@ void Simulation::LoadScript(const std::string &path)
 		} else if (key == "SphericalUniverse") {
 			int system;
 			double px, py, pz, vx, vy, vz;
-			double M, R, V, haloVc, haloRc;
-			iss >> system >> px >> py >> pz >> vx >> vy >> vz >> M >> R >> V >> haloVc >> haloRc;
+			double M, R, H, haloVc, haloRc;
+			iss >> system >> px >> py >> pz >> vx >> vy >> vz >> M >> R >> H >> haloVc >> haloRc;
 
 			if (states.empty()) Allocate();
 
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
-			LoadSphericalUniverseState(system, sysPos, sysVel, M, R, V, haloVc, haloRc);
+			LoadSphericalUniverseState(system, sysPos, sysVel, M, R, H, haloVc, haloRc);
 		} else if (key == "Body") {
 			int system;
 			double px, py, pz, vx, vy, vz, m;
@@ -326,7 +326,7 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	}
 }
 
-void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double V, double haloVc, double haloRc) {
+void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc) {
 
 	double m,r,theta,phi;
 	double p[3],v[3];
@@ -361,8 +361,8 @@ void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *
 		vscale(pp,10.0,pp);
 		vadd(p,pp,p);
 
-		vrand(v);
-		vscale(v,V,v);
+		// Hubble flow: each particle gets velocity v = H * r (radial outward)
+		vscale(p, H, v);
 
 		vadd(p, sysPos, pos[sysIdx+i]);
 		vadd(v, sysVel, vel[sysIdx+i]);
@@ -1140,9 +1140,10 @@ void Simulation::DrawGL()
 	float up[3] = { r10, r11, r12 };
 
 	// --- Update particle data ---
-	const float alpha_base = 10000.0f / N_Bodies;
-	const float alpha_clamped = (alpha_base > 0.2f) ? 0.2f : ((alpha_base < 0.02f) ? 0.02f : alpha_base);
-
+	//const float alpha_base = 100000.0f / N_Bodies;
+	//const float alpha_clamped = (alpha_base > 0.2f) ? 0.2f : ((alpha_base < 0.02f) ? 0.02f : alpha_base);
+	const float alpha_clamped = 0.2f;
+	
 	std::vector<int> sysIndices(N_Systems);
 	sysIndices[0] = 0;
 	for (int j = 1; j < N_Systems; j++) sysIndices[j] = sysIndices[j-1] + N_System_Bodies[j-1];

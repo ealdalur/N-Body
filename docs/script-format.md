@@ -291,10 +291,10 @@ GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1.0e7 0.5 250.0 25.0 0
 ### `SphericalUniverse` — Procedural Spherical Distribution
 
 ```
-SphericalUniverse  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <total_mass> <radius> <max_velocity>  <halo_circular_velocity> <halo_core_radius>
+SphericalUniverse  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <total_mass> <radius> <H>  <halo_circular_velocity> <halo_core_radius>
 ```
 
-Generates a uniform spherical distribution of particles with random velocities. Useful for simulating collapsing gas clouds, globular clusters, or cosmological initial conditions.
+Generates a uniform spherical distribution of particles with Hubble flow initial velocities. Each particle receives an outward radial velocity proportional to its distance from the center (v = H * r), mimicking cosmological expansion. Useful for simulating large-scale structure formation, collapsing gas clouds, or cosmological initial conditions.
 
 | Parameter | Description |
 |---|---|
@@ -302,14 +302,14 @@ Generates a uniform spherical distribution of particles with random velocities. 
 | `posX`, `posY`, `posZ` | Position of the sphere center |
 | `velX`, `velY`, `velZ` | Bulk velocity of the entire sphere |
 | `total_mass` | Total mass distributed equally among all particles |
-| `radius` | Radius of the spherical distribution. Particles are placed uniformly in volume (r scales as `rand^(1/3)`) with a small Gaussian perturbation |
-| `max_velocity` | Maximum random velocity magnitude assigned to each particle. Directions are random (isotropic). Controls initial kinetic energy / "temperature" |
+| `radius` | Radius of the spherical distribution. Particles are placed uniformly in volume (r scales as `rand^(1/3)`) with a small Gaussian perturbation (sigma=10 code units) |
+| `H` | Hubble parameter. Each particle receives a radial outward velocity v = H * r, where r is its distance from the sphere center. This establishes Hubble flow (expansion proportional to distance). The critical value H_crit = sqrt(2*G*M/R^3) gives marginal unbinding; H < H_crit produces a bound (closed) system, H > H_crit produces an unbound (open) system. Set to 0 for no initial expansion (static sphere). |
 | `halo_circular_velocity` | Dark matter halo circular velocity (same model as GalaxyDisc). Set to `0.0` for no halo |
 | `halo_core_radius` | Dark matter halo core radius. Irrelevant if `halo_circular_velocity` is 0 |
 
-**Example (40k-body confined sphere):**
+**Example (100k-body expanding sphere with Hubble flow for structure formation):**
 ```
-SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   2.1e7 210.0 200.0  0.0 1.0
+SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   5.0e7 200.0 2.83  0.0 1.0
 ```
 
 ---

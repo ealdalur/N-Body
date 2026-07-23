@@ -134,7 +134,7 @@ public:
 	~Simulation();
 
 	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double Vtol, double haloVc, double haloRc);
-	void LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double V, double haloVc, double haloRc);
+	void LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc);
 	void BuildOctree();
 	void Step();
 	void CamMove(double d_phi, double d_theta, double d_r);

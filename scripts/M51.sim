@@ -1,0 +1,75 @@
+# ── M51 Whirlpool Galaxy Interaction ──────────────────────────
+#
+# Unit system (G=1):
+#   1 distance unit = 60 pc = 0.060 kpc
+#   1 mass unit     = 10^4 solar masses
+#   1 velocity unit = 1 km/s
+#   1 time unit     = 58.7 Myr
+#
+# NGC 5194 (M51a): Grand-design Sbc spiral galaxy
+#   - Bulge mass: 1e10 Msun, Disc+gas: 4.9e10 Msun
+#   - Disc radius: 11.2 kpc (186.7 code units)
+#   - Flat rotation curve: 210 km/s
+#   - DM halo core: 5.0 kpc
+#
+# NGC 5195 (M51b): Compact SB0-pec lenticular companion
+#   - Mass: 1e10 Msun (bulge-dominated), Disc: 5e9 Msun
+#   - Radius: 2.1 kpc (35 code units)
+#   - Vc: 130 km/s, Halo core: 2.5 kpc
+#   - Mass ratio M51b:M51a ~ 1:4
+#
+# Interaction: PROGRADE tidal encounter
+#   - M51b starts at apocenter (40 kpc, 667 code units)
+#   - Orbit computed for pericenter at 20 kpc (333 code units)
+#   - Orbital inclination: 15 deg to M51a disc plane
+#   - v_tangential at apocenter: 86 km/s
+#   - v_pericenter: 172 km/s
+#
+# Expected timeline:
+#   t ~ 0-4:   M51b approaches, tidal perturbation grows
+#   t ~ 4-7:   Spiral arms develop as M51b nears pericenter
+#   t ~ 7:     First pericenter passage (closest approach 20 kpc)
+#   t ~ 7-11:  Strong tidal tails and grand-design spiral arms
+#   t ~ 15:    Second passage
+#
+# The prograde orbit (M51b co-rotating with M51a's disc) is
+# critical: it produces strong, long-lasting two-arm spiral
+# structure via resonant tidal excitation (Toomre & Toomre 1972).
+# A retrograde encounter would produce only weak, transient
+# perturbations.
+#
+# Sources: Salo & Laurikainen 2000; Dobbs et al. 2010;
+#          Querejeta et al. 2015; McQuinn et al. 2016
+# Parameters derived by: scripts/compute_M51.py
+#
+
+G               1.0
+FDE             0.0
+dt              0.0005
+r_soft          0.1
+BH_Opening_Theta  0.5
+
+Solver          LeapFrog
+Gravity         Octree
+
+DataLog         0
+RecordVideo     0
+
+# ── Systems ────────────────────────────────────────────────────
+# M51a: 40000 bodies (spiral resolution), M51b: 10000 bodies
+N_SystemBodies  40000  10000
+
+# ── Camera ─────────────────────────────────────────────────────
+# Face-on view of M51a disc (normal along +y), distant enough
+# to see both galaxies throughout interaction
+Camera          0.0  747.0  0.0
+
+# ── Initial Conditions ─────────────────────────────────────────
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Vtol  haloVc  haloRc
+
+# M51a (NGC 5194) at origin, disc in x-z plane (normal +y)
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1000000.0 4.90 186.7 5.0 0.1  210.0 83.3
+
+# M51b (NGC 5195) at apocenter along +x, prograde orbit velocity in +z
+# with 15-deg orbital inclination (small +y velocity component)
+GalaxyDisc  1   644.0 0.0 0.0   0.0 22.3 83.1   0.2588 0.9659 0.0000   1000000.0 0.50 35.0 3.3 0.1  130.0 41.7

@@ -68,7 +68,7 @@ print(f"  Separation: {r_close:.0f} code units = {sep_kpc:.0f} kpc")
 print(f"  Approach velocity: {v_approach:.0f} km/s (from energy conservation)")
 print(f"  Transverse velocity: {v_transverse:.0f} km/s (for grazing encounter)")
 print(f"  Gap between disc edges: {r_close - mw_R - and_R:.0f} code units = {(r_close-mw_R-and_R)*du:.0f} kpc")
-print(f"  Time to first overlap (no extra accel): {(r_close-mw_R-and_R)/v_approach:.0f} time units = {(r_close-mw_R-and_R)/v_approach*0.06:.1f} Myr")
+print(f"  Time to first overlap (no extra accel): {(r_close-mw_R-and_R)/v_approach:.0f} time units = {(r_close-mw_R-and_R)/v_approach*58.7:.0f} Myr")
 
 # Camera: midpoint between galaxies, elevated
 cam_x = r_close / 2.0
@@ -95,4 +95,4 @@ for r in [5000, 4000, 3500, 3000, 2500]:
     v_r = math.sqrt(v_sq_r)
     gap = r - mw_R - and_R
     t_contact = gap / v_r if v_r > 0 else 9999
-    print(f"{r:10d} {r*du:9.0f} {v_r:9.1f} {gap:6.0f} {t_contact:10.0f} {t_contact*0.06:8.1f}")
+    print(f"{r:10d} {r*du:9.0f} {v_r:9.1f} {gap:6.0f} {t_contact:10.0f} {t_contact*58.7:8.0f}")

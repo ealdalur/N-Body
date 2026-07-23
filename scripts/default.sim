@@ -2,7 +2,7 @@
 # Unit system (G=1): 1 distance unit ~ 60 pc,
 # 1 mass unit ~ 10^4 solar masses,
 # 1 velocity unit ~ 1 km/s,
-# 1 time unit ~ 0.06 Myr.
+# 1 time unit ~ 58.7 Myr.
 G               1.0
 FDE             0.0
 dt              0.0005

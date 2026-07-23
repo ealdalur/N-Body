@@ -5,7 +5,7 @@ Converts real astrophysical measurements into the N-Body code unit system:
   1 distance unit = 60 pc = 0.060 kpc
   1 mass unit     = 10^4 solar masses
   1 velocity unit = 1 km/s
-  1 time unit     = 0.06 Myr
+  1 time unit     = 58.7 Myr  (= 60 pc / 1 km/s)
 
 Sources:
   - MW rotation curve: Eilers et al. 2019 (~220 km/s)
@@ -112,7 +112,7 @@ print(f"  Transverse vel:  {v_transverse_kms:.1f} code units ({v_transverse_kms}
 print("\n--- Timing ---")
 # Time to collision (rough): distance / approach speed
 t_collision_myr = distance_kpc / (abs(v_radial_kms) * 1.022)  # 1 km/s ~ 1.022 kpc/Gyr
-t_collision_code = t_collision_myr * 1000 / 0.06  # Myr to code units
+t_collision_code = t_collision_myr * 1000 / 58.7  # Myr to code units
 print(f"  Estimated collision time: ~{t_collision_myr:.0f} Gyr = ~{t_collision_code:.0f} code time units")
 print(f"  (Very long! For faster interaction, reduce initial separation)")
 

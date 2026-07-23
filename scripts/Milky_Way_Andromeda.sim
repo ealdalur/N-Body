@@ -4,7 +4,7 @@
 #   1 distance unit = 60 pc = 0.060 kpc
 #   1 mass unit     = 10^4 solar masses
 #   1 velocity unit = 1 km/s
-#   1 time unit     = 0.06 Myr
+#   1 time unit     = 58.7 Myr
 #
 # Physical parameters:
 #
@@ -31,9 +31,9 @@
 #   Separation:   780 kpc (13000 code units) — current observed distance
 #   Approach vel: 110 km/s radial (toward MW)
 #   Transverse:   17 km/s
-#   Estimated collision: ~4.5 Gyr (75000 time units)
+#   Estimated collision: ~4.5 Gyr (~77 time units)
 #
-# NOTE: At true separation, the collision takes ~75000 time units.
+# NOTE: At true separation, the collision takes ~77 time units.
 # For a faster interaction, reduce the initial separation.
 #
 

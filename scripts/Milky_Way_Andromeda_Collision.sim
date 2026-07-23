@@ -4,11 +4,11 @@
 #   1 distance unit = 60 pc = 0.060 kpc
 #   1 mass unit     = 10^4 solar masses
 #   1 velocity unit = 1 km/s
-#   1 time unit     = 0.06 Myr
+#   1 time unit     = 58.7 Myr
 #
 # This script places the galaxies at 180 kpc separation with their
 # estimated infall velocity (~300 km/s), representing conditions
-# ~500 Myr before first disc overlap. The simulation captures the
+# ~300-400 Myr before first disc overlap. The simulation captures the
 # tidal interaction, first pass, tidal tails, and eventual merger.
 #
 # Physical parameters (same as Milky_Way_Andromeda.sim):
