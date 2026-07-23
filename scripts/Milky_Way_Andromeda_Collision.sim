@@ -1,0 +1,65 @@
+# ── Milky Way – Andromeda Collision (Close Approach) ──
+#
+# Unit system (G=1):
+#   1 distance unit = 60 pc = 0.060 kpc
+#   1 mass unit     = 10^4 solar masses
+#   1 velocity unit = 1 km/s
+#   1 time unit     = 0.06 Myr
+#
+# This script places the galaxies at 180 kpc separation with their
+# estimated infall velocity (~300 km/s), representing conditions
+# ~500 Myr before first disc overlap. The simulation captures the
+# tidal interaction, first pass, tidal tails, and eventual merger.
+#
+# Physical parameters (same as Milky_Way_Andromeda.sim):
+#
+# MILKY WAY
+#   Disc radius:         26.8 kpc (446.7 code units)
+#   Central body mass:   1.5e10 Msun (bulge)
+#   Disc mass:           4.5e10 Msun (Mfrac=3.0)
+#   Rotation curve:      ~220 km/s
+#   DM halo core radius: 10 kpc (166.7 code units)
+#   Disc normal:         (0, 1, 0) — x-z plane
+#
+# ANDROMEDA (M31)
+#   Disc radius:         33.5 kpc (558.3 code units)
+#   Central body mass:   3.0e10 Msun (bulge)
+#   Disc mass:           7.0e10 Msun (Mfrac=2.33)
+#   Rotation curve:      ~225 km/s
+#   DM halo core radius: 12 kpc (200 code units)
+#   Disc normal:         (0.2250, 0.7982, 0.5589) — 77 deg inclination
+#
+# INITIAL CONDITIONS
+#   Separation:   3000 code units = 180 kpc
+#   Approach vel: 300 km/s (energy conservation from 780 kpc at 110 km/s)
+#   Transverse:   50 km/s (slight off-center for grazing encounter)
+#   Disc edges:   ~90 kpc apart at start
+#
+
+G               1.0
+FDE             0.0
+dt              0.0005
+r_soft          0.1
+BH_Opening_Theta  0.5
+
+Solver          LeapFrog
+Gravity         Octree
+
+DataLog         0
+RecordVideo     0
+
+# 40,000 bodies per galaxy = 80,000 total
+N_SystemBodies  40000  40000
+
+# ── Camera ─────────────────────────────────────────
+# Midpoint between galaxies, elevated to see both discs
+Camera          1500.0  2500.0  0.0
+
+# ── Initial Conditions ─────────────────────────────
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Vtol  haloVc  haloRc
+
+# Milky Way at origin, disc in x-z plane
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 0.1  220.0 166.7
+
+# Andromeda approaching from +x at 300 km/s with 50 km/s transverse
+GalaxyDisc  1   3000.0 0.0 0.0   -300.0 50.0 0.0   0.2250 0.7982 0.5589   3000000.0 2.33 558.3 5.0 0.1  225.0 200.0

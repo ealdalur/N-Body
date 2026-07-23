@@ -1,0 +1,70 @@
+# ── Solar System ───────────────────────────────────
+# J2000.0 epoch (January 1, 2000, 12:00 TT)
+#
+# Unit system: AU (distance), solar masses (mass), years (time)
+# G = 4*pi^2 = 39.4784176044 in these units.
+# Earth's orbital period = 1 year exactly.
+#
+# Ecliptic plane aligned with x-z; y is out-of-plane.
+# Coordinate mapping: Rx(-90deg) from ecliptic frame
+# (ecl_x -> sim_x, ecl_z -> sim_y, -ecl_y -> sim_z).
+#
+# Orbital elements from JPL "Approximate Positions of
+# the Major Planets" (Standish, 1992). Cartesian state
+# vectors computed via Kepler's equation at J2000.0.
+#
+# To predict current positions, run the simulation
+# forward for (current_year - 2000.0) time units.
+
+G               39.4784176044
+FDE             0.0
+dt              0.0001
+r_soft          1.0e-6
+BH_Opening_Theta  0.5
+DisplayScale    4.0
+
+Solver          LeapFrog
+Gravity         P2P
+
+DataLog         0
+RecordVideo     0
+
+# Sun + 8 planets + Moon = 10 bodies in 1 system
+N_SystemBodies  10
+
+# ── Camera ─────────────────────────────────────────
+# 80 AU above ecliptic — shows full solar system
+Camera          0.0  280.0  0.0
+
+# ── Initial Conditions ─────────────────────────────
+# Body  system  posX posY posZ  velX velY velZ  mass
+
+# Sun (central body at origin)
+Body  0   0.0 0.0 0.0   0.0 0.0 0.0   1.0
+
+# Mercury
+Body  0   -1.3008862040e-01 -2.4598819715e-02  4.4729233660e-01   7.8041794075e+00 -9.0869944542e-01  2.3551379768e+00   1.6597449872e-07
+
+# Venus
+Body  0   -7.1831635564e-01  4.1015624348e-02  3.2706661636e-02   2.9177799284e-01 -1.1814821271e-01  7.4128335632e+00   2.4473080868e-06
+
+# Earth
+Body  0   -1.7717142365e-01  2.5844928543e-07 -9.6721445286e-01   -6.2835665286e+00 -3.0883283534e-07  1.1557686506e+00   3.0028357098e-06
+
+# Moon
+Body  0   -1.7913657508e-01  2.3798582375e-04 -9.6541832523e-01   -6.1494921869e+00 -1.6906378567e-03  1.3142368688e+00   3.6914506365e-08
+
+# Mars
+Body  0    1.3906677477e+00 -3.4461259223e-02  1.3391064158e-02   2.4566879570e-01  1.1017002726e-01 -5.5474562853e+00   3.2264243911e-07
+
+# Jupiter
+Body  0    3.9983209398e+00 -1.0171781462e-01 -2.9457109111e+00   -1.6699742067e+00  2.7661340391e-02 -2.3507151886e+00   9.5438730567e-04
+
+# Saturn
+Body  0    6.4147844873e+00 -3.6914677285e-01 -6.5456674649e+00   -1.5639036252e+00  3.7408562149e-02 -1.4221827428e+00   2.8575307202e-04
+
+# Uranus
+Body  0    1.4425465883e+01 -2.3803312038e-01  1.3737645726e+01   9.7952670594e-01 -9.0863385823e-03 -9.7291326623e-01   4.3646803290e-05
+
+# Neptune
+Body  0    1.6804762812e+01  1.2740321009e-01  2.4992709860e+01   9.4359733828e-01 -3.5043912872e-02 -6.4592563291e-01   5.1491764375e-05

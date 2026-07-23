@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <string>
 #include <SDL3/SDL.h>
 #include "glad.h"
 #include <vector>
@@ -11,24 +12,7 @@
 #include "BHTree.h"
 #include "ThreadPool.h"
 
-const int N_BODIES = 800000;
-const int N_SYSTEMS = 2;
-const int N_SYSTEM_BODIES[N_SYSTEMS] = {600000, 200000};
-
-// const int N_BODIES = 100000;
-// const int N_SYSTEMS = 1;
-// const int N_SYSTEM_BODIES[N_SYSTEMS] = {N_BODIES};
-
 const int N_STATES = 6;
-
-const bool GRAVITY_P2P = false;
-const bool GRAVITY_OCT = true;
-
-const bool SOLVER_RK4		= false;
-const bool SOLVER_LEAP_FROG = true;
-
-const bool DATA_LOG		= false;
-const bool RECORD_VIDEO	= true;
 
 struct Camera
 {
@@ -38,39 +22,57 @@ struct Camera
 
 class Simulation
 {
+	int N_Bodies;
+	int N_Systems;
+	std::vector<int> N_System_Bodies;
+
 	double G;
 	double FDE;
 	double dt;
+	double t;
 	double r_soft;
 	double BH_Opening_Theta;
+	double DisplayScale;
 
-	double halo_vc[N_SYSTEMS];
-	double halo_rc_sq[N_SYSTEMS];
-	int halo_central[N_SYSTEMS];
-	int body_system[N_BODIES];
+	bool Gravity_P2P;
+	bool Gravity_Oct;
+	bool Solver_RK4;
+	bool Solver_LeapFrog;
+	bool Record_Video;
+	bool Data_Log;
 
-	double mass[N_BODIES];
+	std::vector<double> halo_vc;
+	std::vector<double> halo_rc_sq;
+	std::vector<int> halo_central;
+	std::vector<int> body_system;
+	std::vector<double> halo_center;
 
-	double states[N_BODIES*N_STATES];
-	double states_e[N_BODIES*N_STATES];
-	double states_d[4][N_BODIES*N_STATES];
+	std::vector<double> mass;
 
-	double *pos[N_BODIES];
-	double *pos_t[N_BODIES];
-	double *vel[N_BODIES];
-	double *acc[N_BODIES];
-	double *acc_t[N_BODIES];
-	double *acc_prev[N_BODIES];
+	std::vector<double> states;
+	std::vector<double> states_e;
+	std::vector<double> states_d0;
+	std::vector<double> states_d1;
+	std::vector<double> states_d2;
+	std::vector<double> states_d3;
 
-	bool has_gravity[N_BODIES];
+	std::vector<double*> pos;
+	std::vector<double*> pos_t;
+	std::vector<double*> vel;
+	std::vector<double*> acc;
+	std::vector<double*> acc_t;
+	std::vector<double*> acc_prev;
 
-	double pos_sq[N_BODIES];
-	double vel_sq[N_BODIES];
-	double acc_sq[N_BODIES];
+	std::vector<bool> has_gravity;
 
-	float pos_f[N_BODIES * 3];
-	int sortedIdx[N_BODIES];
-	uint32_t mortonCodes[N_BODIES];
+	std::vector<double> pos_sq;
+	std::vector<double> vel_sq;
+	std::vector<double> acc_sq;
+
+	std::vector<float> pos_f;
+	std::vector<int> sortedIdx;
+	std::vector<int> sortTemp;
+	std::vector<uint32_t> mortonCodes;
 	int numActiveBodies;
 
 	Camera Cam;
@@ -101,12 +103,16 @@ class Simulation
 
 	ThreadPool *pool;
 
+	void Allocate();
+	void LoadScript(const std::string &path);
 	void InitGL();
 	void CreateRecordFBO(int width, int height);
 	GLuint CompileShader(const char *vertSrc, const char *fragSrc);
 	void CalcAccelRangeP2P(int iStart, int iEnd);
 	void CalcAccelRangeOct(int iStart, int iEnd);
 	void PrepareDerivativeDataRange(double *s, double *s_d, int iStart, int iEnd);
+	void PinCentralBodies();
+	void ComputeHaloCenters();
 	void CalcDerivatives(double *s, double *s_d);
 	void CalcRK4StateEstimateRange(double *s_est, double *s_curr, double *s_d, double scalar, double dt, int iStart, int iEnd);
 	void CalcRK4StateEstimate(double *s_est, double *s_curr, double *s_d, double scalar, double dt);
@@ -124,12 +130,11 @@ public:
 	bool multiThreading = true;
 	int numThreads = 4;
 
-	Simulation();
+	Simulation(const std::string &scriptPath);
 	~Simulation();
 
-	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double M, double Mfrac, double R, double Ri, double Vtol, double haloVc, double haloRc);
-	void LoadSphericalUniverseState(double M, double R, double V);
-	void LoadDefaultState();
+	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double Vtol, double haloVc, double haloRc);
+	void LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double V, double haloVc, double haloRc);
 	void BuildOctree();
 	void Step();
 	void CamMove(double d_phi, double d_theta, double d_r);
@@ -139,4 +144,6 @@ public:
 	void ReadFramePixels(uint8_t *rgbOut);
 	void SaveState();
 	bool ReadState();
+
+	bool GetRecordVideo() const { return Record_Video; }
 };

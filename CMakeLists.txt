@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 cmake_policy(SET CMP0091 NEW) # Enforce the modern MSVC runtime policy
+cmake_policy(SET CMP0174 NEW) # Suppress empty-keyword warning in vcpkg FindFFMPEG
 
 project(N-Body C CXX)
 

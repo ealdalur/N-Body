@@ -1,0 +1,66 @@
+# ── Milky Way – Andromeda Collision ───────────────────
+#
+# Unit system (G=1):
+#   1 distance unit = 60 pc = 0.060 kpc
+#   1 mass unit     = 10^4 solar masses
+#   1 velocity unit = 1 km/s
+#   1 time unit     = 0.06 Myr
+#
+# Physical parameters:
+#
+# MILKY WAY
+#   Disc radius:         26.8 kpc (446.7 code units)
+#   Central body mass:   1.5e10 Msun (bulge, includes Sgr A* at 4e6 Msun)
+#   Disc mass:           4.5e10 Msun (Mfrac=3.0, each of 39999 particles ~ 1.1e6 Msun)
+#   Rotation curve:      ~220 km/s (flat, set by dark matter halo)
+#   DM halo core radius: 10 kpc (166.7 code units)
+#   Disc orientation:    x-z plane, normal = (0, 1, 0)
+#   Rotation:            counter-clockwise viewed from +y
+#
+# ANDROMEDA (M31)
+#   Disc radius:         33.5 kpc (558.3 code units)
+#   Central body mass:   3.0e10 Msun (bulge, includes M31* at 1.4e8 Msun)
+#   Disc mass:           7.0e10 Msun (Mfrac=2.33, each of 39999 particles ~ 1.75e6 Msun)
+#   Rotation curve:      ~225 km/s (flat, set by dark matter halo)
+#   DM halo core radius: 12 kpc (200 code units)
+#   Disc orientation:    inclined 77 deg to MW-M31 line of sight, PA=35 deg
+#                        normal = (0.2250, 0.7982, 0.5589)
+#   Rotation:            counter-clockwise relative to disc normal
+#
+# RELATIVE MOTION
+#   Separation:   780 kpc (13000 code units) — current observed distance
+#   Approach vel: 110 km/s radial (toward MW)
+#   Transverse:   17 km/s
+#   Estimated collision: ~4.5 Gyr (75000 time units)
+#
+# NOTE: At true separation, the collision takes ~75000 time units.
+# For a faster interaction, reduce the initial separation.
+#
+
+G               1.0
+FDE             0.0
+dt              0.0005
+r_soft          0.1
+BH_Opening_Theta  0.5
+
+Solver          LeapFrog
+Gravity         Octree
+
+DataLog         0
+RecordVideo     0
+
+# 40,000 bodies per galaxy = 80,000 total
+N_SystemBodies  40000  40000
+
+# ── Camera ─────────────────────────────────────────
+# Positioned to see both galaxies (midpoint elevated)
+Camera          6500.0  3000.0  0.0
+
+# ── Initial Conditions ─────────────────────────────
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Vtol  haloVc  haloRc
+
+# Milky Way at origin, disc in x-z plane
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 0.1  220.0 166.7
+
+# Andromeda at 780 kpc along +x, approaching at 110 km/s
+GalaxyDisc  1   13000.0 0.0 0.0   -110.0 17.0 0.0   0.2250 0.7982 0.5589   3000000.0 2.33 558.3 5.0 0.1  225.0 200.0

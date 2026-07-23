@@ -181,11 +181,15 @@ int fpsFrameCount = 0;
 double fpsCurrent = 0.0;
 Uint64 frameLastTime = 0;
 
-int main()
+int main(int argc, char *argv[])
 {
 	std::cout << "---- N-Body Simulation ----" << std::endl;
 	std::cout << "Developed by Erick Aldalur" << std::endl;
 	std::cout << "2025" << std::endl << std::endl;
+
+	std::string scriptPath = "scripts/default.sim";
+	if (argc > 1)
+		scriptPath = argv[1];
 
 	bool quit = false;
 	SDL_Event e;
@@ -195,10 +199,10 @@ int main()
 
 	init();
 
-	Sim = new Simulation();
+	Sim = new Simulation(scriptPath);
 	Sim->ReSizeGL(Win.width, Win.height);
 
-	if (RECORD_VIDEO)
+	if (Sim->GetRecordVideo())
 		Recorder = new VideoRecorder("output.mp4", Win.width, Win.height, 30);
 
 	fpsLastTime = SDL_GetPerformanceCounter();

@@ -1,0 +1,31 @@
+# ── Simulation Parameters ──────────────────────────
+# Unit system (G=1): 1 distance unit ~ 60 pc,
+# 1 mass unit ~ 10^4 solar masses,
+# 1 velocity unit ~ 1 km/s,
+# 1 time unit ~ 0.06 Myr.
+G               1.0
+FDE             0.0
+dt              0.0005
+r_soft          0.1
+BH_Opening_Theta  0.5
+
+# ── Solver / Method ────────────────────────────────
+Solver          LeapFrog        # LeapFrog | RK4
+Gravity         Octree          # Octree | P2P
+
+# ── Output ─────────────────────────────────────────
+DataLog         0
+RecordVideo     0
+
+# ── Systems ────────────────────────────────────────
+# Number of bodies per system (implies N_Systems and N_Bodies)
+N_SystemBodies  30000  10000
+
+# ── Camera ─────────────────────────────────────────
+# Position (x, y, z) — camera looks toward origin
+Camera          0.0  500.0  500.0
+
+# ── Initial Conditions ─────────────────────────────
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Vtol  haloVc  haloRc
+GalaxyDisc  0   0.0 0.0 0.0       0.0 0.0 0.0       0.0 1.0 0.0    1.0e7 0.5 250.0 25.0 0.1  200.0 50.0
+GalaxyDisc  1   300.0 0.0 -500.0  -150.0 0.0 0.0    0.0 1.0 0.0    6.0e6 0.5 125.0 25.0 0.1  155.0 25.0
