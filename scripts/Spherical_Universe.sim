@@ -64,7 +64,7 @@ Gravity         Octree
 DataLog         0
 RecordVideo     0
 
-N_SystemBodies  100000
+N_SystemBodies  1000000
 
 # ── Camera ─────────────────────────────────────────
 Camera          0.0  0.0  960.0

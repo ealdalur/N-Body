@@ -291,12 +291,27 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	vcopy(sysPos, pos[sysIdx]);
 	vcopy(sysVel, vel[sysIdx]);
 
+	// Exponential disc profile: surface density Sigma(r) ~ exp(-r/h_r)
+	// Scale length h_r = R/4 gives realistic concentration with ~98% of mass within R.
+	// Sampling via inverse CDF: r = -h_r * ln(1 - u*(1 - exp(-R/h_r)))
+	// with rejection of r < Ri.
+	double h_r = R / 4.0;
+	double exp_norm = 1.0 - exp(-R / h_r);
+
+	// Precompute enclosed mass fraction for the exponential profile:
+	// M_enc(r) / M_disc = [1 - (1 + r/h_r)*exp(-r/h_r)] / [1 - (1 + R/h_r)*exp(-R/h_r)]
+	double enc_denom = 1.0 - (1.0 + R/h_r)*exp(-R/h_r);
+
 	for (int i=1; i<N_System_Bodies[system]; i++)
 	{
 		mass[sysIdx+i] = m;
 		has_gravity[sysIdx+i] = true;
 
-		r = (R-Ri)*drand() + Ri;
+		// Sample radius from exponential disc profile (reject if < Ri)
+		do {
+			double u_r = drand();
+			r = -h_r * log(1.0 - u_r * exp_norm);
+		} while (r < Ri);
 		theta = 2*M_PI*drand();
 
 		// In-plane position
@@ -306,13 +321,15 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 		p_plane[1] = r*ct*u[1] + r*st*w[1];
 		p_plane[2] = r*ct*u[2] + r*st*w[2];
 
-		// Height scatter scales with r (~5% of r, matching old spherical coord behavior)
+		// Height scatter scales with r (~5% of r, matching disc flaring)
 		double h = r*(M_PI/64.0)*(2*drand()-1);
 		p[0] = p_plane[0] + h*n[0];
 		p[1] = p_plane[1] + h*n[1];
 		p[2] = p_plane[2] + h*n[2];
 
-		m_orbit = M + m*(N_System_Bodies[system]-1)*(r*r/(R*R));
+		// Enclosed disc mass from exponential profile
+		double enc_frac = (1.0 - (1.0 + r/h_r)*exp(-r/h_r)) / enc_denom;
+		m_orbit = M + Mfrac*M*enc_frac;
 		double vc_sq = G*m_orbit/r + haloVc*haloVc*r*r/(r*r + haloRc*haloRc);
 		vm = sqrt(vc_sq);
 		vm = (-1.0+Vtol*(2*drand()-1))*vm;
