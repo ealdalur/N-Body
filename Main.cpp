@@ -194,8 +194,7 @@ int main(int argc, char *argv[])
 	bool quit = false;
 	SDL_Event e;
 
-	Win.width = 2*1920/3;
-	Win.height = 2*1080/3;
+	Simulation::ParseDisplaySize(scriptPath, Win.width, Win.height);
 
 	init();
 
@@ -231,17 +230,27 @@ int main(int argc, char *argv[])
 		Sim->DrawFPS(fpsCurrent);
 
 		if (Recorder) {
-			uint8_t *pixels = new uint8_t[Win.width * Win.height * 3];
-			Sim->ReadFramePixels(pixels);
-			Recorder->WriteFrame(pixels);
-			delete[] pixels;
+			if (!SimPaused) {
+				uint8_t *pixels = new uint8_t[Win.width * Win.height * 3];
+				Sim->ReadFramePixels(pixels);
+				Recorder->WriteFrame(pixels);
+				delete[] pixels;
+			} else {
+				Sim->BlitToScreen();
+			}
 		}
 
 		SDL_GL_SwapWindow(Win.gWindow);
 
 		if (!SimPaused)
 		{
+			if (Sim->GetCamOrbit())
+				Sim->CamMove(0.0, Sim->GetCamOrbitTheta(), 0.0);
+
 			Sim->Step();
+
+			if (Sim->GetEndTime() >= 0.0 && Sim->GetTime() >= Sim->GetEndTime())
+				quit = true;
 		}
     }
 

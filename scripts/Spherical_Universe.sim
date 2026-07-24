@@ -60,14 +60,17 @@ BH_Opening_Theta  0.7
 
 Solver          LeapFrog
 Gravity         Octree
+End_Time        1.5
 
 DataLog         0
-RecordVideo     0
+RecordVideo     1
+Display         1920  1080
 
-N_SystemBodies  1000000
+N_SystemBodies  100000
 
 # ── Camera ─────────────────────────────────────────
 Camera          0.0  0.0  960.0
+Camera_Orbit    0.001
 
 # SphericalUniverse  system  posX posY posZ  velX velY velZ  M  R  H  haloVc  haloRc
 #

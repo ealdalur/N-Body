@@ -41,6 +41,12 @@ class Simulation
 	bool Record_Video;
 	bool Data_Log;
 
+	bool CamOrbit;
+	double CamOrbitTheta;
+	double EndTime;
+
+	int DisplayWidth, DisplayHeight;
+
 	std::vector<double> halo_vc;
 	std::vector<double> halo_rc_sq;
 	std::vector<int> halo_central;
@@ -130,6 +136,8 @@ public:
 	bool multiThreading = true;
 	int numThreads = 4;
 
+	static void ParseDisplaySize(const std::string &scriptPath, int &width, int &height);
+
 	Simulation(const std::string &scriptPath);
 	~Simulation();
 
@@ -142,8 +150,15 @@ public:
 	void DrawGL();
 	void DrawFPS(double fps);
 	void ReadFramePixels(uint8_t *rgbOut);
+	void BlitToScreen();
 	void SaveState();
 	bool ReadState();
 
 	bool GetRecordVideo() const { return Record_Video; }
+	double GetTime() const { return t; }
+	double GetEndTime() const { return EndTime; }
+	int GetDisplayWidth() const { return DisplayWidth; }
+	int GetDisplayHeight() const { return DisplayHeight; }
+	bool GetCamOrbit() const { return CamOrbit; }
+	double GetCamOrbitTheta() const { return CamOrbitTheta; }
 };

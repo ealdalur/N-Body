@@ -149,6 +149,27 @@ Selects how gravitational forces are computed:
 
 ---
 
+## Display
+
+### `Display` — Render Resolution
+
+```
+Display  <width>  <height>
+```
+
+Sets the resolution of the OpenGL rendering viewport (and video recording output, if enabled). This controls the pixel dimensions of the rendered content, not including any window border or title bar added by the operating system.
+
+**Examples:**
+```
+Display  1920  1080    # Full HD
+Display  1280  720     # HD (default)
+Display  3840  2160    # 4K
+```
+
+**Default:** 1280 720
+
+---
+
 ## Output Options
 
 ### `DataLog` — Binary Data Logging
@@ -169,9 +190,29 @@ When enabled (`1`), writes binary state data (position magnitudes, velocity magn
 RecordVideo  <0 | 1>
 ```
 
-When enabled (`1`), records the simulation output to an MP4 video file (`output.mp4`) using FFmpeg. Each rendered frame is captured and encoded at 30 FPS.
+When enabled (`1`), records the simulation output to an MP4 video file (`output.mp4`) using FFmpeg. Each rendered frame is captured and encoded at 30 FPS. Frames are only recorded while the simulation is running — pausing the simulation pauses recording.
 
 **Default:** 0 (disabled)
+
+---
+
+### `End_Time` — Simulation End Time
+
+```
+End_Time  <value>
+```
+
+Sets a simulation time at which the program will automatically exit. The value is in simulation time units (same units as `dt`). Useful for batch rendering videos of a fixed duration.
+
+If not specified, the simulation runs indefinitely until manually closed (Escape or window close).
+
+**Examples:**
+```
+End_Time  5.0       # Exit when simulation time reaches 5.0
+End_Time  100.0     # Run for 100 time units
+```
+
+**Default:** None (runs indefinitely)
 
 ---
 
@@ -223,6 +264,29 @@ Camera  0.0  500.0  500.0    # Angled view (45 degrees from above)
 - W/S — orbit camera up/down (phi angle)
 - A/D — orbit camera left/right (theta angle)
 - J/L — zoom in/out (radial distance)
+
+---
+
+### `Camera_Orbit` — Automatic Camera Orbiting
+
+```
+Camera_Orbit  <theta_per_frame>
+```
+
+Enables automatic camera orbiting around the Y axis. Each simulation frame, the camera rotates by the specified theta angle (in radians). The orbit only advances when the simulation is running (not when paused).
+
+| Parameter | Description |
+|---|---|
+| `theta_per_frame` | Angle in radians to rotate the camera per simulation frame. Positive values orbit counter-clockwise when viewed from above (+Y). |
+
+**Examples:**
+```
+Camera_Orbit  0.01     # Moderate orbit speed (~6.3 seconds per revolution at 60 fps)
+Camera_Orbit  0.005    # Slow orbit
+Camera_Orbit  -0.01    # Orbit in the opposite direction
+```
+
+**Default:** Disabled (no automatic orbiting)
 
 ---
 
@@ -327,8 +391,10 @@ BH_Opening_Theta  0.5
 Solver          LeapFrog
 Gravity         Octree
 
+Display         1920  1080
 DataLog         0
-RecordVideo     0
+RecordVideo     1
+Camera_Orbit    0.005
 
 N_SystemBodies  30000  10000
 
@@ -349,3 +415,21 @@ When the simulation loads a script, it searches for the file in three locations 
 3. Prefixed with `../../` (e.g., `../../scripts/default.sim`)
 
 This allows the executable to find scripts regardless of whether it is run from the project root, the build directory, or a nested build configuration directory.
+
+---
+
+## Command Line Usage
+
+```
+N-Body [script_file]
+```
+
+| Argument | Description |
+|---|---|
+| `script_file` | Path to a `.sim` script file. Default: `scripts/default.sim` |
+
+**Examples:**
+```bash
+N-Body                                   # Run default script indefinitely
+N-Body scripts/M51.sim                   # Run M51 script
+```

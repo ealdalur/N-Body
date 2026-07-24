@@ -29,6 +29,11 @@ Simulation::Simulation(const std::string &scriptPath)
 	Solver_LeapFrog = true;
 	Record_Video = false;
 	Data_Log = false;
+	CamOrbit = false;
+	CamOrbitTheta = 0.0;
+	EndTime = -1.0;
+	DisplayWidth = 1280;
+	DisplayHeight = 720;
 
 	LoadScript(scriptPath);
 	Allocate();
@@ -120,6 +125,34 @@ void Simulation::Allocate()
 	sortedIdx.resize(N_Bodies, 0);
 	sortTemp.resize(N_Bodies, 0);
 	mortonCodes.resize(N_Bodies, 0);
+}
+
+void Simulation::ParseDisplaySize(const std::string &path, int &width, int &height)
+{
+	width = 1280;
+	height = 720;
+
+	std::string searchPaths[] = { path, "../" + path, "../../" + path };
+	std::ifstream file;
+	for (const auto &p : searchPaths) {
+		file.open(p);
+		if (file.is_open()) break;
+	}
+	if (!file.is_open()) return;
+
+	std::string line;
+	while (std::getline(file, line)) {
+		size_t commentPos = line.find('#');
+		if (commentPos != std::string::npos)
+			line = line.substr(0, commentPos);
+		std::istringstream iss(line);
+		std::string key;
+		if (!(iss >> key)) continue;
+		if (key == "Display") {
+			iss >> width >> height;
+			break;
+		}
+	}
 }
 
 void Simulation::LoadScript(const std::string &path)
@@ -239,6 +272,15 @@ void Simulation::LoadScript(const std::string &path)
 				has_gravity[bi] = true;
 				body_system[bi] = system;
 			}
+		} else if (key == "Display") {
+			iss >> DisplayWidth >> DisplayHeight;
+		} else if (key == "End_Time") {
+			iss >> EndTime;
+		} else if (key == "Camera_Orbit") {
+			double theta;
+			iss >> theta;
+			CamOrbit = true;
+			CamOrbitTheta = theta;
 		} else if (key == "Camera") {
 			double px, py, pz;
 			iss >> px >> py >> pz;
@@ -1348,13 +1390,16 @@ void Simulation::DrawFPS(double fps)
 void Simulation::ReadFramePixels(uint8_t *rgbOut)
 {
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, recordFBO);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	glReadPixels(0, 0, winWidth, winHeight, GL_RGB, GL_UNSIGNED_BYTE, rgbOut);
 
+	// Blit to default framebuffer for on-screen display
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glBlitFramebuffer(0, 0, winWidth, winHeight, 0, 0, winWidth, winHeight,
 					  GL_COLOR_BUFFER_BIT, GL_NEAREST);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+	// Flip vertically (glReadPixels returns bottom-up)
 	int rowBytes = winWidth * 3;
 	for (int y = 0; y < winHeight / 2; y++) {
 		uint8_t *top = rgbOut + y * rowBytes;
@@ -1365,6 +1410,15 @@ void Simulation::ReadFramePixels(uint8_t *rgbOut)
 			bot[x] = tmp;
 		}
 	}
+}
+
+void Simulation::BlitToScreen()
+{
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, recordFBO);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glBlitFramebuffer(0, 0, winWidth, winHeight, 0, 0, winWidth, winHeight,
+					  GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void Simulation::SaveState()

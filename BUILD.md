@@ -180,13 +180,13 @@ cd /path/to/project
 
 ## Video Recording
 
-To enable video recording, set the `RECORD_VIDEO` constant to `true` in `Simulation.h`:
+To enable video recording, set `RecordVideo` to `1` in your `.sim` script file:
 
-```cpp
-const bool RECORD_VIDEO = true;
+```
+RecordVideo  1
 ```
 
-When enabled, the simulation writes `output.mp4` (H.264, 30 fps) to the working directory. The file is finalized when the program exits normally (close the window or press Escape).
+When enabled, the simulation writes `output.mp4` (H.264, 30 fps) to the working directory. The file is finalized when the program exits normally (close the window or press Escape). Frames are only written while the simulation is running — pausing the simulation pauses recording.
 
 ---
 
