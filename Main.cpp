@@ -201,8 +201,17 @@ int main(int argc, char *argv[])
 	Sim = new Simulation(scriptPath);
 	Sim->ReSizeGL(Win.width, Win.height);
 
-	if (Sim->GetRecordVideo())
-		Recorder = new VideoRecorder("output.mp4", Win.width, Win.height, 30);
+	if (Sim->GetRecordVideo()) {
+		std::string videoFile = scriptPath;
+		size_t slash = videoFile.find_last_of("/\\");
+		if (slash != std::string::npos)
+			videoFile = videoFile.substr(slash + 1);
+		size_t dot = videoFile.rfind('.');
+		if (dot != std::string::npos)
+			videoFile = videoFile.substr(0, dot);
+		videoFile += ".mp4";
+		Recorder = new VideoRecorder(videoFile.c_str(), Win.width, Win.height, 30);
+	}
 
 	fpsLastTime = SDL_GetPerformanceCounter();
 	frameLastTime = SDL_GetPerformanceCounter();
@@ -227,7 +236,8 @@ int main(int argc, char *argv[])
 			fpsLastTime = now;
 		}
 
-		Sim->DrawFPS(fpsCurrent);
+		if (!Recorder)
+			Sim->DrawFPS(fpsCurrent);
 
 		if (Recorder) {
 			if (!SimPaused) {
