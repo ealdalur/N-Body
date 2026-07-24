@@ -1,0 +1,82 @@
+# ── Apollo Free-Return Trajectory ─────────────────────────────
+#
+# Unit system (G=1):
+#   1 distance unit = 6,371 km (1 Earth radius)
+#   1 mass unit     = 5.972e24 kg (1 Earth mass)
+#   1 velocity unit = 7.909 km/s (circular orbit speed at Earth's surface)
+#   1 time unit     = 805.5 s = 13.4 min
+#
+# Three-body simulation: Earth, Moon, and an Apollo spacecraft.
+# The spacecraft begins at the instant of Trans-Lunar Injection
+# (TLI) burnout — all propulsion is complete. From this point it
+# coasts on a ballistic free-return trajectory:
+#   1. Climbs away from Earth for ~3 days, decelerating
+#   2. Enters the Moon's sphere of influence
+#   3. Swings around the lunar far side (gravitational slingshot)
+#   4. Returns to Earth without any additional burns
+#
+# The near-stalling behavior at the Moon is physically correct:
+# the spacecraft speed at the Moon's distance is only ~0.75 km/s
+# (near-apogee of a highly eccentric ellipse) while the Moon moves
+# at 1.02 km/s. The slingshot redirects the velocity vector over
+# ~30 hours as the spacecraft traverses the Moon's sphere of
+# influence (~66,000 km radius). The "dramatic acceleration" back
+# to Earth comes from falling back into Earth's gravity well, not
+# from the flyby itself — the spacecraft arrives back at Earth at
+# ~11 km/s, the same speed it departed (energy conservation).
+#
+# EARTH (body 0)
+#   Mass: 1.0 mu (5.972e24 kg)
+#   Position: origin
+#   Velocity: +0.001573 vu in z (COM balance with Moon)
+#
+# MOON (body 1)
+#   Mass: 0.012294 mu (7.342e22 kg, 1/81.3 of Earth)
+#   Distance: 60.34 du (384,400 km)
+#   Orbital velocity: 1.012 km/s in -z direction (CCW viewed from +y)
+#   Orbital period: 27.3 days (2927 tu)
+#   Sphere of influence: 10.4 du (66,170 km)
+#
+# SPACECRAFT (body 2) — Apollo CSM post-TLI
+#   Mass: 1e-20 (test particle — negligible gravitational effect)
+#   TLI burnout altitude: 334 km above Earth's surface (r = 1.052 du)
+#   TLI burnout speed: 10,834 m/s = 1.370 vu (99.4% of escape velocity)
+#   Transfer orbit: eccentricity 0.975, semi-major axis 263,600 km
+#   Aimed to intercept the Moon's position 3 days in the future
+#
+# Parameters derived by: scripts/compute_apollo_free_return.py
+# Sources: Apollo 11 Mission Report (NASA SP-238);
+#          Apollo 13 Mission Report (NASA MSC-02680)
+#
+
+G               1.0
+FDE             0.0
+dt              0.01
+r_soft          0.01
+
+Solver          LeapFrog
+Gravity         P2P
+
+DataLog         0
+RecordVideo     0
+
+N_SystemBodies  3
+
+# ── Camera ─────────────────────────────────────────────────────
+# +y axis (looking down at x-z orbital plane). Distance covers
+# the full Earth-Moon system with margin for the transfer orbit.
+Camera          0.0  150  0.0
+
+# ── Bodies ─────────────────────────────────────────────────────
+# Body  system  posX posY posZ  velX velY velZ  mass
+
+# Earth at origin (tiny +z velocity balances Moon's momentum for COM=0)
+Body  0   0.0 0.0 0.0   0.0 0.0 0.001573   1.0
+
+# Moon along +x axis, velocity in -z (counter-clockwise viewed from +y)
+Body  0   60.3359 0.0 0.0   0.0 0.0 -0.127955   0.012294
+
+# Apollo CSM — post-TLI burnout state
+# Aimed to arrive at Moon's orbital distance when Moon has moved
+# 39.3 degrees CCW from its starting position (+x axis).
+Body  0   -0.70710 0.0 0.77949   1.01451 0.0 0.92030   1.0e-20
