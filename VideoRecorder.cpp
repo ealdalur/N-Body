@@ -32,10 +32,10 @@ VideoRecorder::VideoRecorder(const char *filename, int width, int height, int fp
 	codecCtx->time_base = {1, fps};
 	codecCtx->framerate = {fps, 1};
 	codecCtx->pix_fmt = AV_PIX_FMT_YUV420P;
-	codecCtx->color_range = AVCOL_RANGE_JPEG;
+	codecCtx->color_range = AVCOL_RANGE_MPEG;      // Limited/TV range (16-235) - the H.264 default
 	codecCtx->colorspace = AVCOL_SPC_BT709;
 	codecCtx->color_primaries = AVCOL_PRI_BT709;
-	codecCtx->color_trc = AVCOL_TRC_IEC61966_2_1;
+	codecCtx->color_trc = AVCOL_TRC_BT709;         // Standard video transfer (not sRGB)
 	codecCtx->gop_size = 12;
 	codecCtx->max_b_frames = 2;
 
@@ -45,7 +45,7 @@ VideoRecorder::VideoRecorder(const char *filename, int width, int height, int fp
 	av_opt_set(codecCtx->priv_data, "preset", "fast", 0);
 	av_opt_set(codecCtx->priv_data, "crf", "23", 0);
 	av_opt_set(codecCtx->priv_data, "x264-params",
-		"colorprim=bt709:transfer=iec61966-2-1:colormatrix=bt709:fullrange=on",
+		"colorprim=bt709:transfer=bt709:colormatrix=bt709:fullrange=off",
 		0);
 
 	if (avcodec_open2(codecCtx, codec, nullptr) < 0) {
@@ -59,10 +59,10 @@ VideoRecorder::VideoRecorder(const char *filename, int width, int height, int fp
 	frame->format = codecCtx->pix_fmt;
 	frame->width = width;
 	frame->height = height;
-	frame->color_range = AVCOL_RANGE_JPEG;
+	frame->color_range = AVCOL_RANGE_MPEG;
 	frame->colorspace = AVCOL_SPC_BT709;
 	frame->color_primaries = AVCOL_PRI_BT709;
-	frame->color_trc = AVCOL_TRC_IEC61966_2_1;
+	frame->color_trc = AVCOL_TRC_BT709;
 	av_frame_get_buffer(frame, 0);
 
 	pkt = av_packet_alloc();
@@ -79,8 +79,8 @@ VideoRecorder::VideoRecorder(const char *filename, int width, int height, int fp
 	if (sws_getColorspaceDetails(swsCtx, &inv_table, &srcRange, &table, &dstRange,
 								 &brightness, &contrast, &saturation) >= 0)
 	{
-		srcRange = 1; // PC/Full range for source RGB
-		dstRange = 1; // PC/Full range for output YUV
+		srcRange = 1; // PC/Full range for source RGB (RGB input is always full range)
+		dstRange = 0; // TV/Limited range for output YUV (standard H.264)
 
 		sws_setColorspaceDetails(
 			swsCtx,
