@@ -282,21 +282,28 @@ void Simulation::LoadScript(const std::string &path)
 			iss >> theta;
 			CamOrbit = true;
 			CamOrbitTheta = theta;
+		} else if (key == "Camera_lookAt") {
+			double lx, ly, lz;
+			iss >> lx >> ly >> lz;
+			vset(lx, ly, lz, Cam.lookAt);
 		} else if (key == "Camera") {
 			double px, py, pz;
 			iss >> px >> py >> pz;
 			vset(px, py, pz, Cam.pos);
-			double r = vmag(Cam.pos);
-			double phi = acos(py / r);
-			double theta = atan2(pz, px);
-			if (sin(phi) < 1e-6)
-				theta = M_PI/2;
-			Cam.phi = phi - M_PI/2;
-			Cam.theta = -(theta - M_PI/2);
 		} else {
 			std::cerr << "Warning: Unknown script key: " << key << std::endl;
 		}
 	}
+
+	double rel[3];
+	vsub(Cam.pos, Cam.lookAt, rel);
+	double r = vmag(rel);
+	double phi = acos(rel[1] / r);
+	double theta = atan2(rel[2], rel[0]);
+	if (sin(phi) < 1e-6)
+		theta = M_PI/2;
+	Cam.phi = phi - M_PI/2;
+	Cam.theta = -(theta - M_PI/2);
 
 	std::cout << "N_Bodies: " << N_Bodies << std::endl;
 	std::cout << "N_Systems: " << N_Systems << std::endl;

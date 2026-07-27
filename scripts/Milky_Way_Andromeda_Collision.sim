@@ -45,7 +45,7 @@ BH_Opening_Theta  0.5
 
 Solver          LeapFrog
 Gravity         Octree
-End_Time        12.0
+End_Time        60.0
 
 DataLog         0
 RecordVideo     1
@@ -56,7 +56,8 @@ N_SystemBodies  40000  40000
 
 # ── Camera ─────────────────────────────────────────
 # Midpoint between galaxies, elevated to see both discs
-Camera          1500.0  2500.0  0.0
+Camera          -1000.0  250.0  0.0
+Camera_lookAt   0.0 200.0 0.0
 
 # ── Initial Conditions ─────────────────────────────
 # GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Vtol  haloVc  haloRc

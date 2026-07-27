@@ -247,7 +247,7 @@ This command must appear before any initial condition commands.
 Camera  <x>  <y>  <z>
 ```
 
-Sets the initial 3D position of the camera in **graphical units** (i.e., after `DisplayScale` is applied). The camera always looks toward the origin `(0, 0, 0)`.
+Sets the initial 3D position of the camera in **graphical units** (i.e., after `DisplayScale` is applied). The camera looks toward the look-at point (default: origin `(0, 0, 0)`, configurable via `Camera_lookAt`).
 
 The coordinate system for rendering:
 - **x** — horizontal (positive = right on screen)
@@ -264,6 +264,26 @@ Camera  0.0  500.0  500.0    # Angled view (45 degrees from above)
 - W/S — orbit camera up/down (phi angle)
 - A/D — orbit camera left/right (theta angle)
 - J/L — zoom in/out (radial distance)
+- I/K — shift camera look-at point up/down (Y axis)
+
+---
+
+### `Camera_lookAt` — Camera Look-At Point
+
+```
+Camera_lookAt  <x>  <y>  <z>
+```
+
+Sets the point in space that the camera looks at and orbits around. The camera position (`Camera`) is interpreted as an offset relative to this point for computing spherical orbit angles. Can appear before or after `Camera` in the script.
+
+**Examples:**
+```
+Camera_lookAt  0.0  0.0  0.0        # Look at the origin (default)
+Camera_lookAt  1500.0  0.0  0.0     # Look at a point offset in +x (e.g., midpoint between two galaxies)
+Camera_lookAt  0.0  100.0  0.0      # Look at a point above the orbital plane
+```
+
+**Default:** `0.0  0.0  0.0` (origin)
 
 ---
 
@@ -399,6 +419,7 @@ Camera_Orbit    0.005
 N_SystemBodies  30000  10000
 
 Camera          0.0  500.0  500.0
+Camera_lookAt   150.0  0.0  -250.0
 
 GalaxyDisc  0   0.0 0.0 0.0       0.0 0.0 0.0       0.0 1.0 0.0    1.0e7 0.5 250.0 25.0 0.1  200.0 50.0
 GalaxyDisc  1   300.0 0.0 -500.0  -150.0 0.0 0.0    0.0 1.0 0.0    6.0e6 0.5 125.0 25.0 0.1  155.0 25.0
