@@ -52,7 +52,7 @@ RecordVideo     1
 Display         1920  1080
 
 # 40,000 bodies per galaxy = 80,000 total
-N_SystemBodies  400000  400000
+N_SystemBodies  40000  40000
 
 # ── Camera ─────────────────────────────────────────
 # Midpoint between galaxies, elevated to see both discs

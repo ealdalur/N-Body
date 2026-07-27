@@ -147,6 +147,12 @@ bool handleInput(const bool* keys) {
 	if (keys[SDL_SCANCODE_D]) {
 		Sim->CamMove( 0.0,-1.75*dt, 0.0);
 	}
+	if (keys[SDL_SCANCODE_I]) {
+		Sim->CamShift(0.0, 420.0*dt, 0.0);
+	}
+	if (keys[SDL_SCANCODE_K]) {
+		Sim->CamShift(0.0, -420.0*dt, 0.0);
+	}
 	if (keys[SDL_SCANCODE_J]) {
 		Sim->CamMove( 0.0, 0.0, -420.0*dt);
 	}

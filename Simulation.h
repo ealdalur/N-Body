@@ -17,6 +17,7 @@ const int N_STATES = 6;
 struct Camera
 {
 	double pos[3];
+	double lookAt[3];
 	double phi,theta;
 };
 
@@ -146,6 +147,7 @@ public:
 	void BuildOctree();
 	void Step();
 	void CamMove(double d_phi, double d_theta, double d_r);
+	void CamShift(double dx, double dy, double dz);
 	void ReSizeGL(int width, int height);
 	void DrawGL();
 	void DrawFPS(double fps);

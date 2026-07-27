@@ -31,6 +31,7 @@ Simulation::Simulation(const std::string &scriptPath)
 	Data_Log = false;
 	CamOrbit = false;
 	CamOrbitTheta = 0.0;
+	vset(0.0, 0.0, 0.0, Cam.lookAt);
 	EndTime = -1.0;
 	DisplayWidth = 1280;
 	DisplayHeight = 720;
@@ -899,12 +900,13 @@ void Simulation::Step()
 
 void Simulation::CamMove(double d_phi, double d_theta, double d_r)
 {
+	double rel[3];
+	vsub(Cam.pos, Cam.lookAt, rel);
 
-	double r = vmag(Cam.pos);
-	double phi = acos(Cam.pos[1]/r);
-	double theta = atan2(Cam.pos[2],Cam.pos[0]);
+	double r = vmag(rel);
+	double phi = acos(rel[1]/r);
+	double theta = atan2(rel[2],rel[0]);
 
-	// Near poles, atan2(~0,~0) is degenerate — recover theta from Cam.theta
 	if (sin(phi) < 1e-6)
 		theta = -(Cam.theta) + M_PI/2;
 
@@ -915,15 +917,24 @@ void Simulation::CamMove(double d_phi, double d_theta, double d_r)
 	r += d_r;
 
 	vset(
-			r*sin(phi)*cos(theta),
-			r*cos(phi),
-			r*sin(phi)*sin(theta),
+			Cam.lookAt[0] + r*sin(phi)*cos(theta),
+			Cam.lookAt[1] + r*cos(phi),
+			Cam.lookAt[2] + r*sin(phi)*sin(theta),
 			Cam.pos
 		);
 
 	Cam.phi = phi - M_PI/2;
 	Cam.theta = -(theta - M_PI/2);
+}
 
+void Simulation::CamShift(double dx, double dy, double dz)
+{
+	Cam.lookAt[0] += dx;
+	Cam.lookAt[1] += dy;
+	Cam.lookAt[2] += dz;
+	Cam.pos[0] += dx;
+	Cam.pos[1] += dy;
+	Cam.pos[2] += dz;
 }
 
 GLuint Simulation::CompileShader(const char *vertSrc, const char *fragSrc)
