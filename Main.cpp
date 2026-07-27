@@ -210,12 +210,25 @@ int main(int argc, char *argv[])
 	if (Sim->GetRecordVideo()) {
 		std::string videoFile = scriptPath;
 		size_t slash = videoFile.find_last_of("/\\");
-		if (slash != std::string::npos)
+		std::string scriptDir = "";
+		if (slash != std::string::npos) {
+			scriptDir = videoFile.substr(0, slash);
 			videoFile = videoFile.substr(slash + 1);
+		}
 		size_t dot = videoFile.rfind('.');
 		if (dot != std::string::npos)
 			videoFile = videoFile.substr(0, dot);
 		videoFile += ".mp4";
+
+		std::string outputDir;
+		size_t scriptsPos = scriptDir.find_last_of("/\\");
+		if (scriptsPos != std::string::npos)
+			outputDir = scriptDir.substr(0, scriptsPos + 1) + "output";
+		else
+			outputDir = "output";
+
+		SDL_CreateDirectory(outputDir.c_str());
+		videoFile = outputDir + "/" + videoFile;
 		Recorder = new VideoRecorder(videoFile.c_str(), Win.width, Win.height, 30);
 	}
 
