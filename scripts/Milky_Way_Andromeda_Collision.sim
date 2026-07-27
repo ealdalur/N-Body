@@ -45,12 +45,14 @@ BH_Opening_Theta  0.5
 
 Solver          LeapFrog
 Gravity         Octree
+End_Time        12.0
 
 DataLog         0
 RecordVideo     1
+Display         1920  1080
 
 # 40,000 bodies per galaxy = 80,000 total
-N_SystemBodies  100000  100000
+N_SystemBodies  400000  400000
 
 # ── Camera ─────────────────────────────────────────
 # Midpoint between galaxies, elevated to see both discs

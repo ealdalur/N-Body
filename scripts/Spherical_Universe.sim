@@ -60,7 +60,7 @@ BH_Opening_Theta  0.7
 
 Solver          LeapFrog
 Gravity         Octree
-End_Time        1.5
+End_Time        7.0
 
 DataLog         0
 RecordVideo     1
