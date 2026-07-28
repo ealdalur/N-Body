@@ -56,7 +56,8 @@ m51a_haloRc_kpc = 5.0           # DM halo core radius
 
 # === NGC 5195 (M51b) — Compact lenticular companion ===
 # Source: Mentuch Cooper et al. 2012; Salo & Laurikainen 2000
-m51b_mass_msun = 1.0e10         # total baryonic mass (bulge-dominated)
+# Total baryonic mass is 1.0e10 Msun, of which ~half is bulge, half is disc.
+m51b_bulge_msun = 0.5e10        # bulge mass (central body)
 m51b_disc_msun = 0.5e10         # small "disc" component (disturbed)
 m51b_radius_kpc = 2.1           # optical extent
 m51b_inner_kpc = 0.2            # inner region
@@ -96,15 +97,15 @@ print(f"  Total baryonic:    {m51a_baryonic:.0f} code units ({m51a_baryonic*mu:.
 print("\n--- NGC 5195 (M51b) ---")
 m51b_R = m51b_radius_kpc / du
 m51b_Ri = m51b_inner_kpc / du
-m51b_M = m51b_mass_msun / mu
-m51b_Mfrac = m51b_disc_msun / m51b_mass_msun
+m51b_M = m51b_bulge_msun / mu
+m51b_Mfrac = m51b_disc_msun / m51b_bulge_msun
 m51b_haloVc = m51b_vc_kms / vu
 m51b_haloRc = m51b_haloRc_kpc / du
 m51b_baryonic = m51b_M * (1 + m51b_Mfrac)
 
 print(f"  Radius:            {m51b_R:.1f} code units ({m51b_radius_kpc} kpc)")
 print(f"  Inner radius:      {m51b_Ri:.1f} code units ({m51b_inner_kpc} kpc)")
-print(f"  Central mass (M):  {m51b_M:.0f} code units ({m51b_mass_msun:.1e} Msun)")
+print(f"  Bulge mass (M):    {m51b_M:.0f} code units ({m51b_bulge_msun:.1e} Msun)")
 print(f"  Disc mass:         {m51b_disc_msun/mu:.0f} code units ({m51b_disc_msun:.1e} Msun)")
 print(f"  Mfrac:             {m51b_Mfrac:.2f}")
 print(f"  Halo Vc:           {m51b_haloVc:.1f} ({m51b_vc_kms} km/s)")
@@ -112,9 +113,19 @@ print(f"  Halo Rc:           {m51b_haloRc:.1f} code units ({m51b_haloRc_kpc} kpc
 print(f"  Total baryonic:    {m51b_baryonic:.0f} code units ({m51b_baryonic*mu:.1e} Msun)")
 
 # === Mass ratio ===
-mass_ratio = m51b_baryonic / m51a_baryonic
-print(f"\n--- Mass ratio ---")
-print(f"  M51b / M51a (baryonic): 1:{1/mass_ratio:.1f}")
+# The dynamical mass ratio (including dark matter halos) at the pericenter
+# distance is what matters for the tidal interaction, not the baryonic ratio.
+# Enclosed dynamical mass at pericenter (r_peri = 20 kpc = 333 code units):
+#   M_dyn(r) = M_baryonic + Vc^2 * r  [isothermal halo, G=1]
+r_peri_code = pericenter_kpc / du
+m51a_dyn_peri = m51a_baryonic + m51a_haloVc**2 * r_peri_code
+m51b_dyn_peri = m51b_baryonic + m51b_haloVc**2 * r_peri_code
+dyn_ratio = m51b_dyn_peri / m51a_dyn_peri
+print(f"\n--- Mass ratio (dynamical, at pericenter = {pericenter_kpc} kpc) ---")
+print(f"  M51a enclosed: {m51a_dyn_peri:.0f} code units (baryonic {m51a_baryonic:.0f} + halo {m51a_haloVc**2 * r_peri_code:.0f})")
+print(f"  M51b enclosed: {m51b_dyn_peri:.0f} code units (baryonic {m51b_baryonic:.0f} + halo {m51b_haloVc**2 * r_peri_code:.0f})")
+print(f"  M51b / M51a (dynamical): 1:{1/dyn_ratio:.1f}")
+print(f"  Observational constraint: 1:3 to 1:5 (Querejeta et al. 2015)")
 
 # === Orbital setup ===
 # We want M51b to approach M51a on a prograde, slightly inclined orbit

@@ -67,23 +67,29 @@ This high Mfrac (compared to ~0.5 for a typical compact galaxy) means M51a is st
 |---|---|---|---|
 | Morphological type | SB0-pec | de Vaucouleurs et al. | — |
 | Optical radius | 2.1 kpc | NED | 35.0 |
-| Baryonic mass (total) | 1.0 × 10¹⁰ M☉ | Mentuch Cooper et al. 2012 | 1,000,000 |
+| Baryonic mass (total) | 1.0 × 10¹⁰ M☉ | Mentuch Cooper et al. 2012 | — |
+| Bulge mass (M) | 5.0 × 10⁹ M☉ | Total minus disc | 500,000 |
 | Disc component | 5.0 × 10⁹ M☉ | Estimated | 500,000 |
 | Rotation velocity | ~130 km/s | From mass-Vc scaling | 130.0 |
 | DM halo core radius | ~2.5 kpc | Adopted | 41.7 |
 | Inner hole | 0.2 kpc | — | 3.3 |
 
-M51b is compact and bulge-dominated (Mfrac = 0.50). Its disturbed morphology ("pec" in its classification) is a direct result of the interaction — tidal forces have stripped and heated its outer disc material.
+M51b is compact and bulge-dominated. Its total baryonic mass is 1e10 Msun, split equally between bulge (central body, M = 500,000) and disc (Mfrac = 1.0). Its disturbed morphology ("pec" in its classification) is a direct result of the interaction — tidal forces have stripped and heated its outer disc material.
 
 ### 2.3 Mass Ratio
 
-The baryonic mass ratio is:
+The observational constraint (Querejeta et al. 2015) is a **dynamical** mass ratio of 1:3 to 1:5, which includes dark matter. At the pericenter distance (20 kpc = 333 code units), the enclosed dynamical mass is dominated by the dark matter halos:
 
 ```
-M51b_baryonic / M51a_baryonic = 1.5e10 / 5.9e10 = 1 : 3.9
+M_dyn(r) = M_baryonic + Vc² × r    [isothermal halo, G=1]
+
+M51a at 20 kpc: 5,900,000 + 210² × 333 = 20,590,000
+M51b at 20 kpc: 1,000,000 + 130² × 333 =  6,630,000
+
+Dynamical ratio: 6,630,000 / 20,590,000 = 1 : 3.1
 ```
 
-This is within the observational range (1:3 to 1:5). The effective dynamical mass ratio (including dark matter halos at the interaction distance) is slightly higher since M51a's more massive halo dominates.
+This is within the observational range (1:3 to 1:5). The baryonic ratio alone (1:5.9) is less relevant — the tidal interaction strength is set by the total gravitating mass at the encounter distance, which is halo-dominated.
 
 ---
 
@@ -115,16 +121,16 @@ M_eff(r) = Vc_a² × r + 0.5 × Vc_b² × r + M_baryonic_a + M_baryonic_b
 
 At the initial separation (667 code units = 40 kpc):
 ```
-M_eff = 210² × 667 + 0.5 × 130² × 667 + 5,900,000 + 1,500,000
-      = 29,400,000 + 5,630,000 + 7,400,000
-      = 42,400,000 code mass units
+M_eff = 210² × 667 + 0.5 × 130² × 667 + 5,900,000 + 1,000,000
+      = 29,400,000 + 5,630,000 + 6,900,000
+      = 41,900,000 code mass units
 ```
 
 At pericenter (333 code units = 20 kpc):
 ```
-M_eff = 210² × 333 + 0.5 × 130² × 333 + 7,400,000
-      = 14,700,000 + 2,820,000 + 7,400,000
-      = 24,900,000 code mass units
+M_eff = 210² × 333 + 0.5 × 130² × 333 + 6,900,000
+      = 14,700,000 + 2,820,000 + 6,900,000
+      = 24,400,000 code mass units
 ```
 
 ### 3.3 Energy and Angular Momentum Conservation
@@ -159,9 +165,9 @@ Both numerator and denominator are negative (since r_start > r_peri and M_eff/r 
 |-----------|-------|
 | Initial separation (apocenter) | 667 code units (40 kpc) |
 | Pericenter distance | 333 code units (20 kpc) |
-| Tangential velocity at apocenter | 86 km/s |
-| Velocity at pericenter | 172 km/s |
-| Specific orbital energy | -59,950 (bound) |
+| Tangential velocity at apocenter | 83 km/s |
+| Velocity at pericenter | 166 km/s |
+| Specific orbital energy | -59,450 (bound) |
 | Half-orbit time (to pericenter) | ~7.5 code time units (~440 Myr) |
 | Full orbital period | ~15 code time units (~880 Myr) |
 
@@ -290,7 +296,7 @@ Their best-fit model parameters:
 - Time since first passage: 350-400 Myr
 - Prograde encounter
 
-Our parameters: pericenter 20 kpc, mass ratio 1:3.9, inclination 15°, time-to-pericenter 440 Myr. Excellent agreement.
+Our parameters: pericenter 20 kpc, dynamical mass ratio 1:3.1 (at pericenter), inclination 15°, time-to-pericenter 440 Myr. Excellent agreement.
 
 ### 7.2 Dobbs et al. 2010
 
