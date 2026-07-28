@@ -50,13 +50,15 @@ r_soft          0.3
 BH_Opening_Theta  0.5
 
 Gravity         Octree
+End_Time        6.0
 
 DataLog         0
-RecordVideo     0
+RecordVideo     1
+Display         1920  1080
 
 # ── Systems ────────────────────────────────────────────────────
 # M51a: 40000 bodies (spiral resolution), M51b: 10000 bodies
-N_SystemBodies  40000  10000
+N_SystemBodies  160000  40000
 
 # ── Camera ─────────────────────────────────────────────────────
 # Face-on view of M51a disc (normal along +y), distant enough
