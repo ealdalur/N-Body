@@ -363,7 +363,7 @@ Generates a flattened disc of particles with approximately circular orbits, repr
 | `halo_circular_velocity` | Asymptotic circular velocity of the dark matter halo. Controls how flat the rotation curve is at large radii. Set to `0.0` for no halo |
 | `halo_core_radius` | Core radius of the dark matter halo (cored isothermal sphere). The halo density flattens inside this radius. Irrelevant if `halo_circular_velocity` is 0 |
 
-The dark matter halo applies a cored isothermal sphere potential: `a_halo = v_c^2 * r / (r^2 + r_c^2)` centered on the central body.
+The dark matter halo applies a cored isothermal sphere potential: `a_halo = v_c^2 * r / (r^2 + r_c^2)`, centered on the mass-weighted barycenter of that system's particles (recomputed every derivative evaluation, not fixed to the central body). Every particle feels its own system's halo plus the halo of every other system, so multiple galaxies interact through their halos as well as their particles. The halo is a rigid analytic background — it never deforms, is never tidally stripped, and has no truncation radius; see `docs/dark-matter-halo.md` for what this does and does not model.
 
 **Example (Milky-Way-like galaxy with dark matter halo, disc in x-z plane):**
 ```

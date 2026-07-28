@@ -183,11 +183,13 @@ The inclination ensures M51b passes slightly above/below the disc plane rather t
 
 ### 4.1 Role in the Interaction
 
-The dark matter halos play two critical roles:
+The dark matter halos play one critical role here, and conspicuously fail to play a second one.
 
-1. **Dynamical friction**: As M51b moves through M51a's extended halo, it loses orbital energy via gravitational drag (Chandrasekhar dynamical friction). This is modeled implicitly through the particle interactions and the analytic halo potential (cross-halo gravitational term in the code).
+1. **Tidal mass** (modeled): The effective gravitating mass at the interaction distance is dominated by the halos (Vc² × r >> M_baryonic for r > 100 code units). This sets the orbital velocity and the encounter timescale, and the cross-halo term in the code carries it correctly.
 
-2. **Tidal mass**: The effective gravitating mass at the interaction distance is dominated by the halos (Vc² × r >> M_baryonic for r > 100 code units). This determines the orbital velocity and timescale.
+2. **Dynamical friction** (NOT modeled): In reality, as M51b moves through M51a's extended halo it raises a trailing density wake and loses orbital energy to gravitational drag (Chandrasekhar friction). **The simulation does not reproduce this.** The analytic halos are rigid spherical potentials comoving with their own galaxy's barycenter, and such a potential is symmetric by construction — it exerts no net drag. The cross-halo term is a conservative central force and does no secular work on the orbit. The only friction present comes from the live baryonic particles, which are a minority of the mass.
+
+   Consequence for this script: orbital decay is badly underestimated, so M51b will not sink on a realistic timescale. The *first passage* — which is what this simulation is set up to reproduce — is unaffected, since friction has had no time to act. Do not trust the post-encounter orbit, the return time, or any eventual merger.
 
 ### 4.2 Halo Parameters
 
@@ -303,7 +305,7 @@ Our collisionless (gravity-only) simulation should reproduce the stellar spiral 
 
 1. **No gas physics**: Real M51 has ~25% of its disc mass in gas, which responds more strongly to tidal compression (gas shocks, star formation in arms). Our disc is collisionless.
 
-2. **Simplified dark matter halos**: We use analytic cored-isothermal halos rather than live DM particle halos. This means no self-consistent halo response, tidal stripping, or dynamical friction from halo particles. The halos are rigid backgrounds.
+2. **Simplified dark matter halos**: We use analytic cored-isothermal halos rather than live DM particle halos. The halos are rigid spherical backgrounds whose centers track their own galaxy's particle barycenter. This means no self-consistent halo response, no tidal stripping (M51b keeps `Vc = 130` even after plunging through M51a's disc), and no dynamical friction (§4.1). The halos also have infinite extent — `M_halo(r) ~ Vc²r/G` never stops growing — so long-range attraction is overestimated relative to a truncated halo. Additionally, because each halo center is the mass-weighted centroid of *all* its member particles and system membership is never reassigned, a long tidal tail drags the halo center off the nucleus, and stars stripped by the companion keep pulling their original halo toward it. This is a first-passage simulation, which is the regime where these limitations are least damaging. See `docs/dark-matter-halo.md` for the full accounting.
 
 3. **No second passage history**: The real M51 may have undergone multiple passages. We simulate from the pre-first-encounter state.
 
@@ -323,7 +325,7 @@ Our collisionless (gravity-only) simulation should reproduce the stellar spiral 
 
 ### 8.2 PinCentralBodies
 
-The simulation uses `PinCentralBodies` (enabled by default when `N_Systems > 1`), which pins each galaxy's central body to its system's center of mass. This prevents:
+The simulation uses `PinCentralBodies`, which pins each galaxy's central body to its system's center of mass (both position and velocity). It is applied to every system with `halo_vc > 0`, and it runs **only on the LeapFrog solver path** — `Solver RK4` skips it entirely, in which case the central body is free to drift off the centroid and will feel its own halo as a restoring force. This script uses `Solver LeapFrog`, so pinning is active. It prevents:
 - The central body from wandering away from the galaxy due to N-body noise
 - Unphysical recoil from discrete particle encounters
 
@@ -331,10 +333,14 @@ The central body still feels and transmits the tidal field from the other galaxy
 
 ### 8.3 Cross-Halo Gravity
 
-The code includes cross-system halo-halo gravitational attraction (the cross-halo loop in `CalcAccelRangeOct`). This means:
+The code includes cross-system halo gravity (the cross-halo loop in `CalcAccelRangeOct` and `CalcAccelRangeP2P`). Every body feels its own system's halo plus the halo of every other system. This means:
 - M51a particles feel M51b's dark matter halo potential
 - M51b particles feel M51a's dark matter halo potential
 - This creates the correct tidal field for spiral arm excitation
+
+Each halo is centered on its own system's mass-weighted particle barycenter, recomputed every derivative evaluation by `ComputeHaloCenters()` — not anchored to the central body. Because a halo's field is nearly uniform across the other galaxy at these separations, and because each halo tracks its own galaxy, the pair's relative acceleration comes out correct at `G(M_totA + M_totB)/d²` including halo mass. This is why the analytic orbit derived in §3 is reproduced by the simulation.
+
+What the cross-halo term does **not** do is produce dynamical friction — see §4.1. It is a conservative central force between two rigid symmetric potentials.
 
 ---
 
