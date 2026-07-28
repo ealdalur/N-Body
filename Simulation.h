@@ -37,8 +37,6 @@ class Simulation
 
 	bool Gravity_P2P;
 	bool Gravity_Oct;
-	bool Solver_RK4;
-	bool Solver_LeapFrog;
 	bool Record_Video;
 	bool Data_Log;
 
@@ -57,17 +55,12 @@ class Simulation
 	std::vector<double> mass;
 
 	std::vector<double> states;
-	std::vector<double> states_e;
-	std::vector<double> states_d0;
-	std::vector<double> states_d1;
-	std::vector<double> states_d2;
-	std::vector<double> states_d3;
+	std::vector<double> acc_data;
+	std::vector<double> acc_prev_data;
 
 	std::vector<double*> pos;
-	std::vector<double*> pos_t;
 	std::vector<double*> vel;
 	std::vector<double*> acc;
-	std::vector<double*> acc_t;
 	std::vector<double*> acc_prev;
 
 	std::vector<bool> has_gravity;
@@ -117,12 +110,10 @@ class Simulation
 	GLuint CompileShader(const char *vertSrc, const char *fragSrc);
 	void CalcAccelRangeP2P(int iStart, int iEnd);
 	void CalcAccelRangeOct(int iStart, int iEnd);
-	void PrepareDerivativeDataRange(double *s, double *s_d, int iStart, int iEnd);
+	void ZeroAccelerationRange(int iStart, int iEnd);
 	void PinCentralBodies();
 	void ComputeHaloCenters();
-	void CalcDerivatives(double *s, double *s_d);
-	void CalcRK4StateEstimateRange(double *s_est, double *s_curr, double *s_d, double scalar, double dt, int iStart, int iEnd);
-	void CalcRK4StateEstimate(double *s_est, double *s_curr, double *s_d, double scalar, double dt);
+	void CalcDerivatives();
 	void CalcLeapFrogPositionsRange(int iStart, int iEnd);
 	void CalcLeapFrogPositions();
 	void CalcLeapFrogVelocitiesRange(int iStart, int iEnd);

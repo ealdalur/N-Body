@@ -9,8 +9,7 @@ dt              0.0005
 r_soft          0.1
 BH_Opening_Theta  0.5
 
-# ── Solver / Method ────────────────────────────────
-Solver          LeapFrog        # LeapFrog | RK4
+# ── Gravity Method ─────────────────────────────────
 Gravity         Octree          # Octree | P2P
 
 # ── Output ─────────────────────────────────────────

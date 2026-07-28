@@ -295,7 +295,6 @@ The position is at 334 km altitude (r = 1.0524 du) at the perigee angle computed
 |-----------|-------|-----------|
 | dt | 0.01 tu (8.1 s) | Resolves the lunar flyby (perilune passage takes ~10-50 tu) |
 | r_soft | 0.01 du (64 km) | Prevents singularities; smaller than Moon radius (0.27 du) |
-| Solver | LeapFrog | Symplectic — conserves energy over the multi-day trajectory |
 | Gravity | P2P | Only 3 bodies — exact pairwise force computation |
 | Sim time | 1200 tu (11.2 days) | Covers outbound trip, flyby, and return |
 | Camera | (0, 90.5, 0) | Above orbital plane, covers full Earth-Moon system |

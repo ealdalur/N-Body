@@ -25,8 +25,6 @@ Simulation::Simulation(const std::string &scriptPath)
 	DisplayScale = 1.0;
 	Gravity_P2P = false;
 	Gravity_Oct = true;
-	Solver_RK4 = false;
-	Solver_LeapFrog = true;
 	Record_Video = false;
 	Data_Log = false;
 	CamOrbit = false;
@@ -49,7 +47,7 @@ Simulation::Simulation(const std::string &scriptPath)
 	if (Gravity_Oct)
 		BuildOctree();
 
-	CalcDerivatives(states.data(), states_d0.data());
+	CalcDerivatives();
 	CalcOutputs();
 
 	if (Data_Log)
@@ -95,25 +93,20 @@ void Simulation::Allocate()
 	mass.resize(N_Bodies, 0.0);
 
 	states.resize(N_Bodies * N_STATES, 0.0);
-	states_e.resize(N_Bodies * N_STATES, 0.0);
-	states_d0.resize(N_Bodies * N_STATES, 0.0);
-	states_d1.resize(N_Bodies * N_STATES, 0.0);
-	states_d2.resize(N_Bodies * N_STATES, 0.0);
-	states_d3.resize(N_Bodies * N_STATES, 0.0);
+	acc_data.resize(N_Bodies * 3, 0.0);
+	acc_prev_data.resize(N_Bodies * 3, 0.0);
 
 	pos.resize(N_Bodies, nullptr);
-	pos_t.resize(N_Bodies, nullptr);
 	vel.resize(N_Bodies, nullptr);
 	acc.resize(N_Bodies, nullptr);
-	acc_t.resize(N_Bodies, nullptr);
 	acc_prev.resize(N_Bodies, nullptr);
 
 	for (int i = 0; i < N_Bodies; i++) {
 		int ki = i * N_STATES;
 		pos[i] = states.data() + ki;
 		vel[i] = states.data() + ki + 3;
-		acc[i] = states_d0.data() + ki + 3;
-		acc_prev[i] = states_d1.data() + ki + 3;
+		acc[i] = acc_data.data() + i * 3;
+		acc_prev[i] = acc_prev_data.data() + i * 3;
 	}
 
 	has_gravity.resize(N_Bodies, true);
@@ -200,11 +193,6 @@ void Simulation::LoadScript(const std::string &path)
 			iss >> BH_Opening_Theta;
 		} else if (key == "DisplayScale") {
 			iss >> DisplayScale;
-		} else if (key == "Solver") {
-			std::string val;
-			iss >> val;
-			Solver_RK4 = (val == "RK4");
-			Solver_LeapFrog = (val == "LeapFrog");
 		} else if (key == "Gravity") {
 			std::string val;
 			iss >> val;
@@ -443,39 +431,39 @@ void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
 
 	for (int i=iStart; i<=iEnd; i++)
 	{
-		vscaleadd(pos_t[i],FDE,acc_t[i]);
+		vscaleadd(pos[i],FDE,acc[i]);
 
 		for (int j=0; j<N_Bodies; j++)
 		{
 			if (j != i)
 			{
-				vsub(pos_t[j],pos_t[i],a);
+				vsub(pos[j],pos[i],a);
 				double dsq = vmagsqsoft(a, r_soft);
 				double r3_inv = 1.0 / (dsq * sqrt(dsq));
-				vscaleadd(a, G * mass[j] * r3_inv, acc_t[i]);
+				vscaleadd(a, G * mass[j] * r3_inv, acc[i]);
 			}
 		}
 
 		int sys = body_system[i];
 		double *hc = &halo_center[sys * 3];
-		r_halo[0] = hc[0] - pos_t[i][0];
-		r_halo[1] = hc[1] - pos_t[i][1];
-		r_halo[2] = hc[2] - pos_t[i][2];
+		r_halo[0] = hc[0] - pos[i][0];
+		r_halo[1] = hc[1] - pos[i][1];
+		r_halo[2] = hc[2] - pos[i][2];
 		double rsq = vmagsq(r_halo);
 		if (rsq > 1e-10) {
 			double halo_scale = halo_vc[sys] * halo_vc[sys] / (rsq + halo_rc_sq[sys]);
-			vscaleadd(r_halo, halo_scale, acc_t[i]);
+			vscaleadd(r_halo, halo_scale, acc[i]);
 		}
 
 		for (int s = 0; s < N_Systems; s++) {
 			if (s == sys || halo_vc[s] == 0.0) continue;
 			double *hc2 = &halo_center[s * 3];
-			r_halo[0] = hc2[0] - pos_t[i][0];
-			r_halo[1] = hc2[1] - pos_t[i][1];
-			r_halo[2] = hc2[2] - pos_t[i][2];
+			r_halo[0] = hc2[0] - pos[i][0];
+			r_halo[1] = hc2[1] - pos[i][1];
+			r_halo[2] = hc2[2] - pos[i][2];
 			rsq = vmagsq(r_halo);
 			double halo_scale = halo_vc[s] * halo_vc[s] / (rsq + halo_rc_sq[s]);
-			vscaleadd(r_halo, halo_scale, acc_t[i]);
+			vscaleadd(r_halo, halo_scale, acc[i]);
 		}
 	}
 }
@@ -489,51 +477,43 @@ void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
 	for (int i=iStart; i<=iEnd; i++)
 	{
 		int bi = sortedIdx[i];
-		vscaleadd(pos_t[bi],FDE,acc_t[bi]);
+		vscaleadd(pos[bi],FDE,acc[bi]);
 
-		pf[0] = (float)pos_t[bi][0];
-		pf[1] = (float)pos_t[bi][1];
-		pf[2] = (float)pos_t[bi][2];
+		pf[0] = (float)pos[bi][0];
+		pf[1] = (float)pos[bi][1];
+		pf[2] = (float)pos[bi][2];
 		Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft, (float)(BH_Opening_Theta * BH_Opening_Theta), a);
-		vadd(acc_t[bi],a,acc_t[bi]);
+		vadd(acc[bi],a,acc[bi]);
 
 		int sys = body_system[bi];
 		double *hc = &halo_center[sys * 3];
-		r_halo[0] = hc[0] - pos_t[bi][0];
-		r_halo[1] = hc[1] - pos_t[bi][1];
-		r_halo[2] = hc[2] - pos_t[bi][2];
+		r_halo[0] = hc[0] - pos[bi][0];
+		r_halo[1] = hc[1] - pos[bi][1];
+		r_halo[2] = hc[2] - pos[bi][2];
 		double rsq = vmagsq(r_halo);
 		if (rsq > 1e-10) {
 			double halo_scale = halo_vc[sys] * halo_vc[sys] / (rsq + halo_rc_sq[sys]);
-			vscaleadd(r_halo, halo_scale, acc_t[bi]);
+			vscaleadd(r_halo, halo_scale, acc[bi]);
 		}
 
 		for (int s = 0; s < N_Systems; s++) {
 			if (s == sys || halo_vc[s] == 0.0) continue;
 			double *hc2 = &halo_center[s * 3];
-			r_halo[0] = hc2[0] - pos_t[bi][0];
-			r_halo[1] = hc2[1] - pos_t[bi][1];
-			r_halo[2] = hc2[2] - pos_t[bi][2];
+			r_halo[0] = hc2[0] - pos[bi][0];
+			r_halo[1] = hc2[1] - pos[bi][1];
+			r_halo[2] = hc2[2] - pos[bi][2];
 			rsq = vmagsq(r_halo);
 			double halo_scale = halo_vc[s] * halo_vc[s] / (rsq + halo_rc_sq[s]);
-			vscaleadd(r_halo, halo_scale, acc_t[bi]);
+			vscaleadd(r_halo, halo_scale, acc[bi]);
 		}
 	}
 }
 
-void Simulation::PrepareDerivativeDataRange(double *s, double *s_d, int iStart, int iEnd) {
-
-	int ki;
+void Simulation::ZeroAccelerationRange(int iStart, int iEnd) {
 
 	for (int i=iStart; i<=iEnd; i++)
 	{
-		ki = i*N_STATES;
-
-		pos_t[i] = s+ki;
-		acc_t[i] = s_d+ki+3;
-
-		vcopy(s+ki+3,s_d+ki);
-		vset(0.0,0.0,0.0,acc_t[i]);
+		vset(0.0,0.0,0.0,acc[i]);
 	}
 }
 
@@ -575,9 +555,9 @@ void Simulation::ComputeHaloCenters()
 		double cx = 0.0, cy = 0.0, cz = 0.0, total_m = 0.0;
 		for (int i = 0; i < N_System_Bodies[sys]; i++) {
 			double mi = mass[sysIdx + i];
-			cx += mi * pos_t[sysIdx + i][0];
-			cy += mi * pos_t[sysIdx + i][1];
-			cz += mi * pos_t[sysIdx + i][2];
+			cx += mi * pos[sysIdx + i][0];
+			cy += mi * pos[sysIdx + i][1];
+			cz += mi * pos[sysIdx + i][2];
 			total_m += mi;
 		}
 		double inv_m = 1.0 / total_m;
@@ -588,7 +568,7 @@ void Simulation::ComputeHaloCenters()
 	}
 }
 
-void Simulation::CalcDerivatives(double *s, double *s_d)
+void Simulation::CalcDerivatives()
 {
 	if (multiThreading) {
 		int chunk_size = N_Bodies / numThreads;
@@ -596,7 +576,7 @@ void Simulation::CalcDerivatives(double *s, double *s_d)
 		for (int i = 0; i < numThreads; ++i) {
 			int iStart = i * chunk_size;
 			int iEnd = (i == numThreads - 1) ? (N_Bodies-1) : (iStart + chunk_size - 1);
-			pool->submit([this, s, s_d, iStart, iEnd]() { PrepareDerivativeDataRange(s, s_d, iStart, iEnd); });
+			pool->submit([this, iStart, iEnd]() { ZeroAccelerationRange(iStart, iEnd); });
 		}
 		pool->waitAll();
 
@@ -621,7 +601,7 @@ void Simulation::CalcDerivatives(double *s, double *s_d)
 			pool->waitAll();
 		}
 	} else {
-		PrepareDerivativeDataRange(s, s_d, 0, N_Bodies-1);
+		ZeroAccelerationRange(0, N_Bodies-1);
 		ComputeHaloCenters();
 		if (Gravity_P2P) CalcAccelRangeP2P(0, N_Bodies-1);
 		if (Gravity_Oct) CalcAccelRangeOct(0, numActiveBodies-1);
@@ -749,31 +729,6 @@ void Simulation::CalcOutputs() {
 	}
 }
 
-void Simulation::CalcRK4StateEstimateRange(double *s_est, double *s_curr, double *s_d, double scalar, double dt, int iStart, int iEnd) {
-	for (int i=iStart; i<=iEnd; i++)
-	{
-		s_est[i] = s_curr[i] + scalar * s_d[i] * dt;
-	}
-}
-
-void Simulation::CalcRK4StateEstimate(double *s_est, double *s_curr, double *s_d, double scalar, double dt) {
-
-	if (multiThreading) {
-		int chunk_size = N_Bodies*N_STATES / numThreads;
-
-		for (int i = 0; i < numThreads; ++i) {
-			int iStart = i * chunk_size;
-			int iEnd = (i == numThreads - 1) ? (N_Bodies*N_STATES-1) : (iStart + chunk_size - 1);
-			pool->submit([this, s_est, s_curr, s_d, scalar, dt, iStart, iEnd]() {
-				CalcRK4StateEstimateRange(s_est, s_curr, s_d, scalar, dt, iStart, iEnd);
-			});
-		}
-		pool->waitAll();
-	} else {
-		CalcRK4StateEstimateRange(s_est, s_curr, s_d, scalar, dt, 0, N_Bodies*N_STATES-1);
-	}
-}
-
 void Simulation::CalcLeapFrogPositionsRange(int iStart, int iEnd) {
 	for (int i=iStart; i<=iEnd; i++)
 	{
@@ -858,37 +813,10 @@ void Simulation::CalcLeapFrogVelocities() {
 
 void Simulation::Step()
 {
-	if (Solver_RK4)
-	{
-		const double c[4] = {0.0, 1.0/2.0, 1.0/2.0, 1.0};
-		const double b[4] = {1.0/6.0, 1.0/3.0, 1.0/3.0, 1.0/6.0};
-
-		double *sd[4] = {states_d0.data(), states_d1.data(), states_d2.data(), states_d3.data()};
-
-		CalcDerivatives(states.data(), sd[0]);
-		for (int k=1; k<4; k++)
-		{
-			CalcRK4StateEstimate(states_e.data(), states.data(), sd[k-1], c[k], dt);
-			CalcDerivatives(states_e.data(), sd[k]);
-		}
-
-		for (int k=0; k<4; k++)
-		{
-			CalcRK4StateEstimate(states.data(), states.data(), sd[k], b[k], dt);
-		}
-	}
-
-	if (Solver_LeapFrog)
-	{
-		CalcLeapFrogPositions();
-		PinCentralBodies();
-		CalcDerivatives(states.data(), states_d0.data());
-		CalcLeapFrogVelocitiesAndOutputs();
-	}
-	else
-	{
-		CalcOutputs();
-	}
+	CalcLeapFrogPositions();
+	PinCentralBodies();
+	CalcDerivatives();
+	CalcLeapFrogVelocitiesAndOutputs();
 
 	if (Gravity_Oct)
 	{

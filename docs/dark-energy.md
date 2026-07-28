@@ -171,7 +171,6 @@ FDE        0.0005
 dt         0.01
 r_soft     0.5
 
-Solver     LeapFrog
 Gravity    Octree
 
 N_SystemBodies  10000

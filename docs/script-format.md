@@ -117,22 +117,7 @@ The camera position (set via `Camera`) is specified in graphical units, so adjus
 
 ---
 
-## Solver and Method
-
-### `Solver` — Integration Method
-
-```
-Solver  <LeapFrog | RK4>
-```
-
-Selects the numerical integration scheme:
-
-- **`LeapFrog`** — Velocity Stormer-Verlet (symplectic). Conserves energy over long timescales. Recommended for most simulations, especially those running for many orbital periods.
-- **`RK4`** — Classical 4th-order Runge-Kutta. Higher instantaneous accuracy per step but does not conserve energy — orbits will slowly spiral inward over long runs.
-
-**Default:** LeapFrog
-
----
+## Gravity Method
 
 ### `Gravity` — Force Calculation Method
 
@@ -408,7 +393,6 @@ dt              0.0005
 r_soft          0.1
 BH_Opening_Theta  0.5
 
-Solver          LeapFrog
 Gravity         Octree
 
 Display         1920  1080

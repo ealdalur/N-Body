@@ -169,8 +169,8 @@ Without this correction, particles initialized at Keplerian velocity would be to
 ### Halo Centering (ComputeHaloCenters)
 
 The halo is **not** anchored to the central body. `ComputeHaloCenters()` runs at the top of every
-derivative evaluation — so four times per RK4 step, once per LeapFrog step — and places each
-halo at the mass-weighted centroid of all particles belonging to that system:
+derivative evaluation and places each halo at the mass-weighted centroid of all particles
+belonging to that system:
 
 ```cpp
 halo_center[sys] = Σ mᵢ · pos_t[i] / Σ mᵢ        // i over that system's particle range only
@@ -178,15 +178,14 @@ halo_center[sys] = Σ mᵢ · pos_t[i] / Σ mᵢ        // i over that system's 
 
 Two consequences worth being explicit about:
 
-- The centroid is computed from `pos_t`, the integrator's *current* intermediate state, so the
-  halo position is consistent within each RK4 substage rather than lagging a full step.
+- The centroid is computed from `pos_t`, the integrator's current intermediate state, so the
+  halo position is consistent within the step rather than lagging.
 - The halo has **no state of its own**. It carries no position or velocity variable, no inertia,
-  and no momentum. It is re-derived from the baryons every substep. "How the halo moves" is
+  and no momentum. It is re-derived from the baryons every step. "How the halo moves" is
   entirely a statement about how its member particles move.
 
-Under LeapFrog, `PinCentralBodies()` additionally snaps each central body onto this same centroid
-(position and velocity), so the central body and the halo center coincide. Under RK4,
-`PinCentralBodies()` is **not** called and the central body is free to drift off the centroid.
+`PinCentralBodies()` additionally snaps each central body onto this same centroid
+(position and velocity), so the central body and the halo center coincide.
 
 ### Force Computation (CalcAccelRangeOct / CalcAccelRangeP2P)
 
@@ -232,13 +231,9 @@ That is, the pair's two-body orbit is right even though neither halo is a dynami
 is the main thing the barycenter-tracking design buys over a halo anchored to a single particle.
 
 The central body is **no longer specially excluded**. The old `bi != halo_central[sys]` test has
-been replaced by the `rsq > 1e-10` guard against the halo center. Under LeapFrog these are
-equivalent, since `PinCentralBodies()` puts the central body exactly at the centroid. Under RK4
-they are not: a central body displaced by `δ` from the centroid feels a restoring acceleration
-`v_c² δ / r_c²`, i.e. a harmonic oscillation about the centroid at angular frequency `ω = v_c/r_c`
-(≈ 2.5 per code time unit for M51's primary). This is broadly physical — a nucleus does sit in its
-halo's potential — but note the restoring force points at the *particle centroid*, which includes
-tidal debris, not at the visible nucleus.
+been replaced by the `rsq > 1e-10` guard against the halo center. Since `PinCentralBodies()` puts
+the central body exactly at the centroid, the central body is always at the halo center and
+receives zero halo force (as expected — a nucleus should not accelerate itself via its own halo).
 
 ### Computational Cost
 

@@ -23,7 +23,6 @@ r_soft          1.0e-6
 BH_Opening_Theta  0.5
 DisplayScale    4.0
 
-Solver          LeapFrog
 Gravity         P2P
 
 DataLog         0

@@ -54,7 +54,6 @@ FDE             0.0
 dt              0.01
 r_soft          0.01
 
-Solver          LeapFrog
 Gravity         P2P
 
 DataLog         0

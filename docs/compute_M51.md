@@ -331,7 +331,7 @@ Our collisionless (gravity-only) simulation should reproduce the stellar spiral 
 
 ### 8.2 PinCentralBodies
 
-The simulation uses `PinCentralBodies`, which pins each galaxy's central body to its system's center of mass (both position and velocity). It is applied to every system with `halo_vc > 0`, and it runs **only on the LeapFrog solver path** — `Solver RK4` skips it entirely, in which case the central body is free to drift off the centroid and will feel its own halo as a restoring force. This script uses `Solver LeapFrog`, so pinning is active. It prevents:
+The simulation uses `PinCentralBodies`, which pins each galaxy's central body to its system's center of mass (both position and velocity). It is applied every step to every system with `halo_vc > 0`. It prevents:
 - The central body from wandering away from the galaxy due to N-body noise
 - Unphysical recoil from discrete particle encounters
 

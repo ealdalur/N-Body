@@ -49,7 +49,6 @@ dt              0.0005
 r_soft          0.3
 BH_Opening_Theta  0.5
 
-Solver          LeapFrog
 Gravity         Octree
 
 DataLog         0
