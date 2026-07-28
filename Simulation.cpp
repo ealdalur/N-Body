@@ -42,12 +42,10 @@ Simulation::Simulation(const std::string &scriptPath)
 
 	InitGL();
 
-	CalcOutputs();
-
 	if (Gravity_Oct)
 		BuildOctree();
 
-	CalcDerivatives();
+	CalcAccelerations();
 	CalcOutputs();
 
 	if (Data_Log)
@@ -92,7 +90,8 @@ void Simulation::Allocate()
 
 	mass.resize(N_Bodies, 0.0);
 
-	states.resize(N_Bodies * N_STATES, 0.0);
+	pos_data.resize(N_Bodies * 3, 0.0);
+	vel_data.resize(N_Bodies * 3, 0.0);
 	acc_data.resize(N_Bodies * 3, 0.0);
 	acc_prev_data.resize(N_Bodies * 3, 0.0);
 
@@ -102,9 +101,8 @@ void Simulation::Allocate()
 	acc_prev.resize(N_Bodies, nullptr);
 
 	for (int i = 0; i < N_Bodies; i++) {
-		int ki = i * N_STATES;
-		pos[i] = states.data() + ki;
-		vel[i] = states.data() + ki + 3;
+		pos[i] = pos_data.data() + i * 3;
+		vel[i] = vel_data.data() + i * 3;
 		acc[i] = acc_data.data() + i * 3;
 		acc_prev[i] = acc_prev_data.data() + i * 3;
 	}
@@ -221,7 +219,7 @@ void Simulation::LoadScript(const std::string &path)
 			double M, Mfrac, R, Ri, Vtol, haloVc, haloRc;
 			iss >> system >> px >> py >> pz >> vx >> vy >> vz >> nx >> ny >> nz >> M >> Mfrac >> R >> Ri >> Vtol >> haloVc >> haloRc;
 
-			if (states.empty()) Allocate();
+			if (pos_data.empty()) Allocate();
 
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
@@ -233,7 +231,7 @@ void Simulation::LoadScript(const std::string &path)
 			double M, R, H, haloVc, haloRc;
 			iss >> system >> px >> py >> pz >> vx >> vy >> vz >> M >> R >> H >> haloVc >> haloRc;
 
-			if (states.empty()) Allocate();
+			if (pos_data.empty()) Allocate();
 
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
@@ -243,7 +241,7 @@ void Simulation::LoadScript(const std::string &path)
 			double px, py, pz, vx, vy, vz, m;
 			iss >> system >> px >> py >> pz >> vx >> vy >> vz >> m;
 
-			if (states.empty()) Allocate();
+			if (pos_data.empty()) Allocate();
 
 			// Find the next available slot in this system
 			int sysIdx = 0;
@@ -568,7 +566,7 @@ void Simulation::ComputeHaloCenters()
 	}
 }
 
-void Simulation::CalcDerivatives()
+void Simulation::CalcAccelerations()
 {
 	if (multiThreading) {
 		int chunk_size = N_Bodies / numThreads;
@@ -785,37 +783,11 @@ void Simulation::CalcLeapFrogVelocitiesAndOutputs() {
 	}
 }
 
-void Simulation::CalcLeapFrogVelocitiesRange(int iStart, int iEnd) {
-	double a[3];
-
-	for (int i=iStart; i<=iEnd; i++)
-	{
-		vadd(acc[i],acc_prev[i],a);
-		vscaleadd(a,0.5*dt,vel[i]);
-	}
-}
-
-void Simulation::CalcLeapFrogVelocities() {
-
-	if (multiThreading) {
-		int chunk_size = N_Bodies / numThreads;
-
-		for (int i = 0; i < numThreads; ++i) {
-			int iStart = i * chunk_size;
-			int iEnd = (i == numThreads - 1) ? (N_Bodies-1) : (iStart + chunk_size - 1);
-			pool->submit([this, iStart, iEnd]() { CalcLeapFrogVelocitiesRange(iStart, iEnd); });
-		}
-		pool->waitAll();
-	} else {
-		CalcLeapFrogVelocitiesRange(0, N_Bodies-1);
-	}
-}
-
 void Simulation::Step()
 {
 	CalcLeapFrogPositions();
 	PinCentralBodies();
-	CalcDerivatives();
+	CalcAccelerations();
 	CalcLeapFrogVelocitiesAndOutputs();
 
 	if (Gravity_Oct)
@@ -1382,8 +1354,9 @@ void Simulation::SaveState()
 	fwrite(&Cam.phi,	sizeof(double), 1, StateFile);
 	fwrite(&Cam.theta,	sizeof(double), 1, StateFile);
 
-	fwrite(states.data(),		sizeof(double), N_Bodies*N_STATES,	StateFile);
-	fwrite(mass.data(),			sizeof(double), N_Bodies,			StateFile);
+	fwrite(pos_data.data(),		sizeof(double), N_Bodies*3,	StateFile);
+	fwrite(vel_data.data(),		sizeof(double), N_Bodies*3,	StateFile);
+	fwrite(mass.data(),			sizeof(double), N_Bodies,	StateFile);
 
 	fclose(StateFile);
 }
@@ -1408,8 +1381,9 @@ bool Simulation::ReadState()
 	result = fread(&Cam.phi,	sizeof(double), 1, StateFile);
 	result = fread(&Cam.theta,	sizeof(double), 1, StateFile);
 
-	result = fread(states.data(),		sizeof(double), N_Bodies*N_STATES,	StateFile);
-	result = fread(mass.data(),			sizeof(double), N_Bodies,			StateFile);
+	result = fread(pos_data.data(),		sizeof(double), N_Bodies*3,	StateFile);
+	result = fread(vel_data.data(),		sizeof(double), N_Bodies*3,	StateFile);
+	result = fread(mass.data(),			sizeof(double), N_Bodies,	StateFile);
 	(void)result;
 
 	fclose(StateFile);

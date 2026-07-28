@@ -12,8 +12,6 @@
 #include "BHTree.h"
 #include "ThreadPool.h"
 
-const int N_STATES = 6;
-
 struct Camera
 {
 	double pos[3];
@@ -54,7 +52,8 @@ class Simulation
 
 	std::vector<double> mass;
 
-	std::vector<double> states;
+	std::vector<double> pos_data;
+	std::vector<double> vel_data;
 	std::vector<double> acc_data;
 	std::vector<double> acc_prev_data;
 
@@ -113,11 +112,9 @@ class Simulation
 	void ZeroAccelerationRange(int iStart, int iEnd);
 	void PinCentralBodies();
 	void ComputeHaloCenters();
-	void CalcDerivatives();
+	void CalcAccelerations();
 	void CalcLeapFrogPositionsRange(int iStart, int iEnd);
 	void CalcLeapFrogPositions();
-	void CalcLeapFrogVelocitiesRange(int iStart, int iEnd);
-	void CalcLeapFrogVelocities();
 	void CalcLeapFrogVelocitiesAndOutputsRange(int iStart, int iEnd);
 	void CalcLeapFrogVelocitiesAndOutputs();
 	void CalcOutputsRange(int iStart, int iEnd);
