@@ -99,6 +99,21 @@ Force error scales approximately as theta^2. Only relevant when `Gravity` is set
 
 ---
 
+### `accel_sq_color_thresh` — Acceleration Color Threshold
+
+```
+accel_sq_color_thresh  <value>
+```
+
+Threshold in acceleration-squared units used to determine the red channel color intensity of particles. The color mapping uses `cbrt(acc_sq / threshold)` to compute the red intensity, producing a blue-to-red gradient based on how strongly each particle is being accelerated relative to this threshold.
+
+- Higher values shift more particles toward blue (cold/low acceleration appearance)
+- Lower values shift more particles toward red (hot/high acceleration appearance)
+
+**Default:** 1000000.0
+
+---
+
 ### `DisplayScale` — Rendering Scale Factor
 
 ```

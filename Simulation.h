@@ -32,6 +32,7 @@ class Simulation
 	double r_soft;
 	double BH_Opening_Theta;
 	double DisplayScale;
+	double accel_sq_color_thresh;
 
 	bool Gravity_P2P;
 	bool Gravity_Oct;

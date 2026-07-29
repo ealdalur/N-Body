@@ -23,6 +23,7 @@ Simulation::Simulation(const std::string &scriptPath)
 	r_soft = 0.1;
 	BH_Opening_Theta = 0.5;
 	DisplayScale = 1.0;
+	accel_sq_color_thresh = 1000000.0;
 	Gravity_P2P = false;
 	Gravity_Oct = true;
 	Record_Video = false;
@@ -191,6 +192,8 @@ void Simulation::LoadScript(const std::string &path)
 			iss >> BH_Opening_Theta;
 		} else if (key == "DisplayScale") {
 			iss >> DisplayScale;
+		} else if (key == "accel_sq_color_thresh") {
+			iss >> accel_sq_color_thresh;
 		} else if (key == "Gravity") {
 			std::string val;
 			iss >> val;
@@ -1139,7 +1142,7 @@ void Simulation::DrawGL()
 		if (sysBody) {
 			clrBuf[i*4+0] = 0.0f; clrBuf[i*4+1] = 1.0f; clrBuf[i*4+2] = 0.0f; clrBuf[i*4+3] = 1.0f;
 		} else {
-			float r = (float)cbrt(acc_sq[i] / 1000000.0);
+			float r = (float)cbrt(acc_sq[i] / accel_sq_color_thresh);
 			float b = 1.0f - r;
 			r = (r < 0.3f) ? 0.3f : r;
 			b = (b < 0.3f) ? 0.3f : b;

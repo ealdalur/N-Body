@@ -55,6 +55,7 @@ End_Time        6.0
 DataLog         0
 RecordVideo     1
 Display         1920  1080
+accel_sq_color_thresh 10000000.0
 
 # ── Systems ────────────────────────────────────────────────────
 # M51a: 40000 bodies (spiral resolution), M51b: 10000 bodies
