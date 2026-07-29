@@ -78,15 +78,15 @@ M51b is compact and bulge-dominated. Its total baryonic mass is 1e10 Msun, split
 
 ### 2.3 Mass Ratio
 
-The observational constraint (Querejeta et al. 2015) is a **dynamical** mass ratio of 1:3 to 1:5, which includes dark matter. At the pericenter distance (20 kpc = 333 code units), the enclosed dynamical mass is dominated by the dark matter halos:
+The observational constraint (Querejeta et al. 2015) is a **dynamical** mass ratio of 1:3 to 1:5, which includes dark matter. At the pericenter distance (15 kpc = 250 code units), the enclosed dynamical mass is dominated by the dark matter halos:
 
 ```
 M_dyn(r) = M_baryonic + Vc² × r    [isothermal halo, G=1]
 
-M51a at 20 kpc: 5,900,000 + 210² × 333 = 20,590,000
-M51b at 20 kpc: 1,000,000 + 130² × 333 =  6,630,000
+M51a at 15 kpc: 5,900,000 + 210² × 250 = 16,925,000
+M51b at 15 kpc: 1,000,000 + 130² × 250 =  5,225,000
 
-Dynamical ratio: 6,630,000 / 20,590,000 = 1 : 3.1
+Dynamical ratio: 5,225,000 / 16,925,000 = 1 : 3.2
 ```
 
 This is within the observational range (1:3 to 1:5). The baryonic ratio alone (1:5.9) is less relevant — the tidal interaction strength is set by the total gravitating mass at the encounter distance, which is halo-dominated.
@@ -126,11 +126,11 @@ M_eff = 210² × 667 + 0.5 × 130² × 667 + 5,900,000 + 1,000,000
       = 41,900,000 code mass units
 ```
 
-At pericenter (333 code units = 20 kpc):
+At pericenter (250 code units = 15 kpc):
 ```
-M_eff = 210² × 333 + 0.5 × 130² × 333 + 6,900,000
-      = 14,700,000 + 2,820,000 + 6,900,000
-      = 24,400,000 code mass units
+M_eff = 210² × 250 + 0.5 × 130² × 250 + 6,900,000
+      = 11,025,000 + 2,112,500 + 6,900,000
+      = 20,037,500 code mass units
 ```
 
 ### 3.3 Energy and Angular Momentum Conservation
@@ -164,14 +164,14 @@ Both numerator and denominator are negative (since r_start > r_peri and M_eff/r 
 | Parameter | Value |
 |-----------|-------|
 | Initial separation (apocenter) | 667 code units (40 kpc) |
-| Pericenter distance | 333 code units (20 kpc) |
-| Tangential velocity at apocenter | 83 km/s |
-| Velocity at pericenter | 166 km/s |
-| Specific orbital energy | -59,450 (bound) |
-| Half-orbit time (to pericenter) | ~7.5 code time units (~440 Myr) |
-| Full orbital period | ~15 code time units (~880 Myr) |
+| Pericenter distance | 250 code units (15 kpc) |
+| Tangential velocity at apocenter | 75 km/s |
+| Velocity at pericenter | 200 km/s |
+| Specific orbital energy | -60,077 (bound) |
+| Half-orbit time (to pericenter) | ~7 code time units (~400 Myr) |
+| Full orbital period | ~14 code time units (~800 Myr) |
 
-The ~440 Myr half-orbit time is consistent with Salo & Laurikainen (2000), who find the first passage occurred 300-400 Myr ago with M51b on a moderately eccentric orbit.
+The ~400 Myr half-orbit time is consistent with Salo & Laurikainen (2000), who find the first passage occurred 300-400 Myr ago with M51b on a moderately eccentric orbit.
 
 ### 3.5 Coordinate System and Orbital Inclination
 
@@ -253,9 +253,9 @@ normal = (sin(15°), cos(15°), 0) = (0.2588, 0.9659, 0.0)
 | Phase | Sim time | Physical time | What happens |
 |-------|----------|---------------|--------------|
 | Approach | t = 0-4 | 0-230 Myr | M51b falls inward. Tidal perturbation of M51a's outer disc begins. Weak arm-like features start to develop. |
-| Pericenter | t ~ 7 | ~440 Myr | Closest approach (20 kpc). Strong tidal torque on disc material. Two-arm spiral pattern is strongly excited. |
-| Recession | t = 7-11 | 440-650 Myr | M51b recedes. Grand-design spiral arms are fully developed. Tidal bridge/tail connects the galaxies. |
-| Second passage | t ~ 15 | ~880 Myr | M51b returns. Arms may be reinforced or disrupted depending on phase alignment. |
+| Pericenter | t ~ 7 | ~400 Myr | Closest approach (15 kpc). Strong tidal torque on disc material. Two-arm spiral pattern is strongly excited. |
+| Recession | t = 7-11 | 400-650 Myr | M51b recedes. Grand-design spiral arms are fully developed. Tidal bridge/tail connects the galaxies. |
+| Second passage | t ~ 14 | ~800 Myr | M51b returns. Arms may be reinforced or disrupted depending on phase alignment. |
 
 ### 6.2 What to Look For
 
@@ -296,7 +296,7 @@ Their best-fit model parameters:
 - Time since first passage: 350-400 Myr
 - Prograde encounter
 
-Our parameters: pericenter 20 kpc, dynamical mass ratio 1:3.1 (at pericenter), inclination 15°, time-to-pericenter 440 Myr. Excellent agreement.
+Our parameters: pericenter 15 kpc, dynamical mass ratio 1:3.2 (at pericenter), inclination 15°, time-to-pericenter ~400 Myr. Excellent agreement.
 
 ### 7.2 Dobbs et al. 2010
 

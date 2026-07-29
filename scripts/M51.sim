@@ -16,21 +16,21 @@
 #   - Bulge mass: 5e9 Msun, Disc: 5e9 Msun (total baryonic: 1e10 Msun)
 #   - Radius: 2.1 kpc (35 code units)
 #   - Vc: 130 km/s, Halo core: 2.5 kpc
-#   - Dynamical mass ratio M51b:M51a ~ 1:3 (at pericenter, including halos)
+#   - Dynamical mass ratio M51b:M51a ~ 1:3.2 (at pericenter, including halos)
 #
 # Interaction: PROGRADE tidal encounter
 #   - M51b starts at apocenter (40 kpc, 667 code units)
-#   - Orbit computed for pericenter at 20 kpc (333 code units)
+#   - Orbit computed for pericenter at 15 kpc (250 code units)
 #   - Orbital inclination: 15 deg to M51a disc plane
-#   - v_tangential at apocenter: 83 km/s
-#   - v_pericenter: 166 km/s
+#   - v_tangential at apocenter: 75 km/s
+#   - v_pericenter: 200 km/s
 #
 # Expected timeline:
 #   t ~ 0-4:   M51b approaches, tidal perturbation grows
 #   t ~ 4-7:   Spiral arms develop as M51b nears pericenter
-#   t ~ 7:     First pericenter passage (closest approach 20 kpc)
+#   t ~ 7:     First pericenter passage (closest approach 15 kpc)
 #   t ~ 7-11:  Strong tidal tails and grand-design spiral arms
-#   t ~ 15:    Second passage
+#   t ~ 14:    Second passage
 #
 # The prograde orbit (M51b co-rotating with M51a's disc) is
 # critical: it produces strong, long-lasting two-arm spiral
@@ -55,7 +55,7 @@ End_Time        6.0
 DataLog         0
 RecordVideo     1
 Display         1920  1080
-accel_sq_color_thresh 10000000.0
+accel_sq_color_thresh 2000000.0
 
 # ── Systems ────────────────────────────────────────────────────
 # M51a: 40000 bodies (spiral resolution), M51b: 10000 bodies
@@ -75,4 +75,4 @@ GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1000000.0 4.90 186.7 5
 # M51b (NGC 5195) at apocenter along +x, prograde orbit velocity in +z
 # with 15-deg orbital inclination (small +y velocity component)
 # M = 5e9 Msun (bulge), Mfrac = 1.0 (disc = 5e9 Msun), total baryonic = 1e10 Msun
-GalaxyDisc  1   644.0 0.0 0.0   0.0 21.5 80.2   0.2588 0.9659 0.0000   500000.0 1.0 35.0 3.3 0.1  130.0 41.7
+GalaxyDisc  1   644.0 0.0 0.0   0.0 19.4 72.6   0.2588 0.9659 0.0000   500000.0 1.0 35.0 3.3 0.1  130.0 41.7

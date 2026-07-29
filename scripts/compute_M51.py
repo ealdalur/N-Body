@@ -66,7 +66,7 @@ m51b_haloRc_kpc = 2.5           # DM halo core radius
 
 # === Interaction geometry ===
 # Source: Salo & Laurikainen 2000; Dobbs et al. 2010
-pericenter_kpc = 20.0           # closest approach distance
+pericenter_kpc = 15.0           # closest approach distance
 orbital_inclination_deg = 15.0  # M51b orbit tilted slightly from disc plane
 distance_mpc = 8.0              # adopted distance (McQuinn et al. 2016: 8.58)
 
