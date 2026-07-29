@@ -1162,18 +1162,20 @@ void Simulation::DrawGL()
 
 	// --- Draw octree wireframe ---
 	if (DrawOctree) {
-		octreeVerts.clear();
-		BuildOctreeVerts(0);
+		if (Gravity_Oct) {
+			octreeVerts.clear();
+			BuildOctreeVerts(0);
 
-		glUseProgram(octreeShader);
-		glUniformMatrix4fv(glGetUniformLocation(octreeShader, "uVP"), 1, GL_FALSE, vp);
-		glUniform4f(glGetUniformLocation(octreeShader, "uColor"), 0.0f, 0.0f, 1.0f, 0.5f);
+			glUseProgram(octreeShader);
+			glUniformMatrix4fv(glGetUniformLocation(octreeShader, "uVP"), 1, GL_FALSE, vp);
+			glUniform4f(glGetUniformLocation(octreeShader, "uColor"), 0.0f, 0.0f, 1.0f, 0.5f);
 
-		glBindVertexArray(octreeVAO);
-		glBindBuffer(GL_ARRAY_BUFFER, octreeVBO);
-		glBufferData(GL_ARRAY_BUFFER, octreeVerts.size() * sizeof(float), octreeVerts.data(), GL_DYNAMIC_DRAW);
-		glDrawArrays(GL_LINES, 0, (GLsizei)(octreeVerts.size() / 3));
-		glBindVertexArray(0);
+			glBindVertexArray(octreeVAO);
+			glBindBuffer(GL_ARRAY_BUFFER, octreeVBO);
+			glBufferData(GL_ARRAY_BUFFER, octreeVerts.size() * sizeof(float), octreeVerts.data(), GL_DYNAMIC_DRAW);
+			glDrawArrays(GL_LINES, 0, (GLsizei)(octreeVerts.size() / 3));
+			glBindVertexArray(0);
+		}
 	}
 
 	glUseProgram(0);
