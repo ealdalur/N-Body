@@ -120,9 +120,9 @@ print("\n--- Script lines ---")
 print(f"N_SystemBodies  40000  40000")
 print(f"Camera          0.0  8000.0  8000.0")
 print(f"# Milky Way at origin, disc in x-z plane")
-print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {mw_M_central:.1f} {mw_Mfrac:.2f} {mw_R:.1f} {mw_Ri:.1f} 0.1  {mw_haloVc:.1f} {mw_haloRc:.1f}")
+print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {mw_M_central:.1f} {mw_Mfrac:.2f} {mw_R:.1f} {mw_Ri:.1f} 1.2  {mw_haloVc:.1f} {mw_haloRc:.1f}")
 print(f"# Andromeda along +x axis")
-print(f"GalaxyDisc  1   {sep:.1f} 0.0 0.0   {v_radial_kms:.1f} {v_transverse_kms:.1f} 0.0   {nx:.4f} {ny:.4f} {nz:.4f}   {and_M_central:.1f} {and_Mfrac:.2f} {and_R:.1f} {and_Ri:.1f} 0.1  {and_haloVc:.1f} {and_haloRc:.1f}")
+print(f"GalaxyDisc  1   {sep:.1f} 0.0 0.0   {v_radial_kms:.1f} {v_transverse_kms:.1f} 0.0   {nx:.4f} {ny:.4f} {nz:.4f}   {and_M_central:.1f} {and_Mfrac:.2f} {and_R:.1f} {and_Ri:.1f} 1.2  {and_haloVc:.1f} {and_haloRc:.1f}")
 
 # Rotation directions:
 print("\n--- Rotation directions ---")

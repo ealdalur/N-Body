@@ -131,7 +131,7 @@ public:
 	Simulation(const std::string &scriptPath);
 	~Simulation();
 
-	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double Vtol, double haloVc, double haloRc);
+	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double Q, double haloVc, double haloRc);
 	void LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc);
 	void BuildOctree();
 	void Step();

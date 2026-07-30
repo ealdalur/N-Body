@@ -344,7 +344,7 @@ Body  0   1.0 0.0 0.0   0.0 0.0 -6.28  3.0e-6      # Earth
 ### `GalaxyDisc` — Procedural Galaxy Disc
 
 ```
-GalaxyDisc  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <normalX> <normalY> <normalZ>  <total_mass> <mass_fraction> <outer_radius> <inner_radius> <velocity_tolerance>  <halo_circular_velocity> <halo_core_radius>
+GalaxyDisc  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <normalX> <normalY> <normalZ>  <total_mass> <mass_fraction> <outer_radius> <inner_radius> <toomre_Q>  <halo_circular_velocity> <halo_core_radius>
 ```
 
 Generates a flattened disc of particles with approximately circular orbits, representing a spiral galaxy. The disc plane is defined by the normal vector; particles orbit counter-clockwise when viewed from the direction the normal points.
@@ -359,15 +359,17 @@ Generates a flattened disc of particles with approximately circular orbits, repr
 | `mass_fraction` | Fraction of the total mass distributed among disc particles. `0.5` means disc particles collectively have half the central body's mass |
 | `outer_radius` | Maximum radius of the disc |
 | `inner_radius` | Minimum radius of the disc (creates a central hole) |
-| `velocity_tolerance` | Random perturbation applied to orbital velocities. `0.0` = perfectly circular orbits, `0.1` = 10% random deviation |
+| `toomre_Q` | Target Toomre stability parameter. Controls the radial and tangential velocity dispersion via the Jeans equations. `Q = 1.0` is the stability threshold (disc will fragment); `Q = 1.2` gives a responsive disc with strong spiral structure; `Q = 1.5` gives a stable disc that responds only to external tidal perturbations; `Q = 2.0+` gives a hot, stable disc with weak spiral response. See `docs/toomre-q-velocity-dispersion.md` for the full derivation |
 | `halo_circular_velocity` | Asymptotic circular velocity of the dark matter halo. Controls how flat the rotation curve is at large radii. Set to `0.0` for no halo |
 | `halo_core_radius` | Core radius of the dark matter halo (cored isothermal sphere). The halo density flattens inside this radius. Irrelevant if `halo_circular_velocity` is 0 |
+
+The velocity dispersion at each radius is computed from the Toomre criterion: `sigma_r = Q * 3.36 * G * Sigma(r) / kappa(r)`, where `Sigma(r)` is the local surface density (exponential disc) and `kappa(r)` is the epicyclic frequency derived from the full rotation curve (baryons + halo). The tangential dispersion follows from epicyclic theory: `sigma_phi = sigma_r * kappa / (2*Omega)`. This produces a self-consistent equilibrium that suppresses particle-noise-driven instabilities while allowing the desired level of spiral response.
 
 The dark matter halo applies a cored isothermal sphere potential: `a_halo = v_c^2 * r / (r^2 + r_c^2)`, centered on the mass-weighted barycenter of that system's particles (recomputed every derivative evaluation, not fixed to the central body). Every particle feels its own system's halo plus the halo of every other system, so multiple galaxies interact through their halos as well as their particles. The halo is a rigid analytic background — it never deforms, is never tidally stripped, and has no truncation radius; see `docs/dark-matter-halo.md` for what this does and does not model.
 
 **Example (Milky-Way-like galaxy with dark matter halo, disc in x-z plane):**
 ```
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1.0e7 0.5 250.0 25.0 0.1  200.0 50.0
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1.0e7 0.5 250.0 25.0 1.2  200.0 50.0
 ```
 
 ---
@@ -420,8 +422,8 @@ N_SystemBodies  30000  10000
 Camera          0.0  500.0  500.0
 Camera_lookAt   150.0  0.0  -250.0
 
-GalaxyDisc  0   0.0 0.0 0.0       0.0 0.0 0.0       0.0 1.0 0.0    1.0e7 0.5 250.0 25.0 0.1  200.0 50.0
-GalaxyDisc  1   300.0 0.0 -500.0  -150.0 0.0 0.0    0.0 1.0 0.0    6.0e6 0.5 125.0 25.0 0.1  155.0 25.0
+GalaxyDisc  0   0.0 0.0 0.0       0.0 0.0 0.0       0.0 1.0 0.0    1.0e7 0.5 250.0 25.0 1.2  200.0 50.0
+GalaxyDisc  1   300.0 0.0 -500.0  -150.0 0.0 0.0    0.0 1.0 0.0    6.0e6 0.5 125.0 25.0 1.2  155.0 25.0
 ```
 
 ---

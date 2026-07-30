@@ -7,23 +7,31 @@
 #   1 time unit     = 58.7 Myr
 #
 # NGC 5194 (M51a): Grand-design Sbc spiral galaxy
-#   - Bulge mass: 1e10 Msun, Disc+gas: 4.9e10 Msun
+#   - Baryonic mass: 2.74e10 Msun (rotation-curve-decomposed)
+#   - Bulge: 4.7e9 Msun, Disc: 2.27e10 Msun
 #   - Disc radius: 11.2 kpc (186.7 code units)
-#   - Flat rotation curve: 210 km/s
-#   - DM halo core: 5.0 kpc
+#   - Flat rotation curve: 210 km/s (baryon 121 + halo 172)
+#   - DM halo: Vc=172 km/s, Rc=1.0 kpc, M_halo/M_baryon=2.0
 #
 # NGC 5195 (M51b): Compact SB0-pec lenticular companion
-#   - Bulge mass: 5e9 Msun, Disc: 5e9 Msun (total baryonic: 1e10 Msun)
+#   - Baryonic mass: 1.97e9 Msun (rotation-curve-decomposed)
+#   - Bulge: 8.0e8 Msun, Disc: 1.17e9 Msun
 #   - Radius: 2.1 kpc (35 code units)
-#   - Vc: 130 km/s, Halo core: 2.5 kpc
-#   - Dynamical mass ratio M51b:M51a ~ 1:3.2 (at pericenter, including halos)
+#   - Rotation curve: 130 km/s (baryon 75 + halo 106)
+#   - DM halo: Vc=110 km/s, Rc=0.6 kpc, M_halo/M_baryon=2.0
+#   - Dynamical mass ratio M51b:M51a ~ 1:3.1 (at pericenter)
+#
+# Mass decomposition: Salo & Laurikainen (2000) methodology
+#   V_baryon = V_total/sqrt(3), V_halo = V_total*sqrt(2/3)
+#   This gives M_halo/M_disc ~ 2 within the disc radius.
+#   Baryonic masses are the dynamically cold component only.
 #
 # Interaction: PROGRADE tidal encounter
 #   - M51b starts at apocenter (40 kpc, 667 code units)
 #   - Orbit computed for pericenter at 15 kpc (250 code units)
 #   - Orbital inclination: 15 deg to M51a disc plane
-#   - v_tangential at apocenter: 75 km/s
-#   - v_pericenter: 200 km/s
+#   - v_tangential at apocenter: 126 km/s (v_t/v_circ = 0.59)
+#   - v_pericenter: 335 km/s
 #
 # Expected timeline:
 #   t ~ 0-4:   M51b approaches, tidal perturbation grows
@@ -50,7 +58,7 @@ r_soft          0.3
 BH_Opening_Theta  0.5
 
 Gravity         Octree
-End_Time        6.0
+End_Time        40.0
 
 DataLog         0
 RecordVideo     1
@@ -58,7 +66,7 @@ Display         1920  1080
 accel_sq_color_thresh 2000000.0
 
 # ── Systems ────────────────────────────────────────────────────
-# M51a: 40000 bodies (spiral resolution), M51b: 10000 bodies
+# M51a: 160000 bodies (spiral resolution), M51b: 40000 bodies
 N_SystemBodies  160000  40000
 
 # ── Camera ─────────────────────────────────────────────────────
@@ -67,12 +75,11 @@ N_SystemBodies  160000  40000
 Camera          0.0  1000.0  0.0
 
 # ── Initial Conditions ─────────────────────────────────────────
-# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Vtol  haloVc  haloRc
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Q  haloVc  haloRc
 
 # M51a (NGC 5194) at origin, disc in x-z plane (normal +y)
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1000000.0 4.90 186.7 5.0 0.1  210.0 83.3
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   470000.0 4.84 186.7 5.0 1.5  172.1 16.7
 
 # M51b (NGC 5195) at apocenter along +x, prograde orbit velocity in +z
 # with 15-deg orbital inclination (small +y velocity component)
-# M = 5e9 Msun (bulge), Mfrac = 1.0 (disc = 5e9 Msun), total baryonic = 1e10 Msun
-GalaxyDisc  1   644.0 0.0 0.0   0.0 19.4 72.6   0.2588 0.9659 0.0000   500000.0 1.0 35.0 3.3 0.1  130.0 41.7
+GalaxyDisc  1   644.0 0.0 0.0   0.0 -32.5 -121.5   0.2588 0.9659 0.0000   80000.0 1.46 35.0 3.3 1.5  110.4 10.0

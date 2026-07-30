@@ -56,10 +56,10 @@ N_SystemBodies  40000  40000
 Camera          6500.0  3000.0  0.0
 
 # ── Initial Conditions ─────────────────────────────
-# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Vtol  haloVc  haloRc
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Q  haloVc  haloRc
 
 # Milky Way at origin, disc in x-z plane
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 0.1  220.0 166.7
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 1.2  220.0 166.7
 
 # Andromeda at 780 kpc along +x, approaching at 110 km/s
-GalaxyDisc  1   13000.0 0.0 0.0   -110.0 17.0 0.0   0.2250 0.7982 0.5589   3000000.0 2.33 558.3 5.0 0.1  225.0 200.0
+GalaxyDisc  1   13000.0 0.0 0.0   -110.0 17.0 0.0   0.2250 0.7982 0.5589   3000000.0 2.33 558.3 5.0 1.2  225.0 200.0

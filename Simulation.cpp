@@ -219,15 +219,15 @@ void Simulation::LoadScript(const std::string &path)
 			int system;
 			double px, py, pz, vx, vy, vz;
 			double nx, ny, nz;
-			double M, Mfrac, R, Ri, Vtol, haloVc, haloRc;
-			iss >> system >> px >> py >> pz >> vx >> vy >> vz >> nx >> ny >> nz >> M >> Mfrac >> R >> Ri >> Vtol >> haloVc >> haloRc;
+			double M, Mfrac, R, Ri, Q, haloVc, haloRc;
+			iss >> system >> px >> py >> pz >> vx >> vy >> vz >> nx >> ny >> nz >> M >> Mfrac >> R >> Ri >> Q >> haloVc >> haloRc;
 
 			if (pos_data.empty()) Allocate();
 
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
 			double discNormal[3] = {nx, ny, nz};
-			LoadGalaxyDiscState(system, sysPos, sysVel, discNormal, M, Mfrac, R, Ri, Vtol, haloVc, haloRc);
+			LoadGalaxyDiscState(system, sysPos, sysVel, discNormal, M, Mfrac, R, Ri, Q, haloVc, haloRc);
 		} else if (key == "SphericalUniverse") {
 			int system;
 			double px, py, pz, vx, vy, vz;
@@ -300,7 +300,7 @@ void Simulation::LoadScript(const std::string &path)
 		std::cout << "  System " << i << ": " << N_System_Bodies[i] << " bodies" << std::endl;
 }
 
-void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double Vtol, double haloVc, double haloRc){
+void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double Q, double haloVc, double haloRc){
 
 	double m,r,theta,vm,m_orbit;
 	double p[3],v[3];
@@ -341,6 +341,13 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	// M_enc(r) / M_disc = [1 - (1 + r/h_r)*exp(-r/h_r)] / [1 - (1 + R/h_r)*exp(-R/h_r)]
 	double enc_denom = 1.0 - (1.0 + R/h_r)*exp(-R/h_r);
 
+	// Total disc mass for surface density computation
+	double M_disc = Mfrac * M;
+
+	// Gaussian RNG for velocity dispersion
+	std::mt19937 gen(42 + system);
+	std::normal_distribution<double> normal(0.0, 1.0);
+
 	for (int i=1; i<N_System_Bodies[system]; i++)
 	{
 		mass[sysIdx+i] = m;
@@ -368,17 +375,55 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 
 		// Enclosed disc mass from exponential profile
 		double enc_frac = (1.0 - (1.0 + r/h_r)*exp(-r/h_r)) / enc_denom;
-		m_orbit = M + Mfrac*M*enc_frac;
-		double vc_sq = G*m_orbit/r + haloVc*haloVc*r*r/(r*r + haloRc*haloRc);
+		m_orbit = M + M_disc*enc_frac;
+		double haloRc_sq = haloRc * haloRc;
+		double vc_sq = G*m_orbit/r + haloVc*haloVc*r*r/(r*r + haloRc_sq);
 		vm = sqrt(vc_sq);
-		vm = (-1.0+Vtol*(2*drand()-1))*vm;
 
-		// Orbital velocity: perpendicular to radial (in-plane), within disc plane
-		vcopy(p_plane,v); vnorm(v);
-		vcross(v,n,v); vnorm(v);
-		vscale(v,1.0*vm,v);
-		vadd(p,pos[sysIdx],pos[sysIdx+i]);
-		vadd(v,vel[sysIdx],vel[sysIdx+i]);
+		// Toomre Q velocity dispersion:
+		// sigma_r = Q * 3.36 * G * Sigma(r) / kappa(r)
+		// where Sigma(r) = (M_disc / (2*pi*h_r^2)) * exp(-r/h_r)
+		//       kappa^2 = (2*Omega/r) * d(r^2*Omega)/dr  (epicyclic frequency)
+		//       Omega = v_c / r
+		// sigma_phi = sigma_r * kappa / (2*Omega)
+
+		double Omega = vm / r;
+		double Sigma = (M_disc / (2.0 * M_PI * h_r * h_r)) * exp(-r / h_r);
+
+		// kappa from the full rotation curve:
+		// kappa^2 = R_d * (d/dR)(Omega^2) + 4*Omega^2
+		// For vc_sq = G*M_enc(r)/r + Vc^2*r^2/(r^2+Rc^2):
+		//   d(vc_sq)/dr = -G*M_enc/r^2 + G*(dM_enc/dr)/r + Vc^2*2*r*Rc^2/(r^2+Rc^2)^2
+		// where dM_enc/dr = Mfrac*M * (r/h_r^2)*exp(-r/h_r) / enc_denom  (exponential disc)
+		double dMenc_dr = M_disc * (r / (h_r * h_r)) * exp(-r / h_r) / enc_denom;
+		double dvc_sq_dr = -G*m_orbit/(r*r) + G*dMenc_dr/r
+		                   + haloVc*haloVc * 2.0*r*haloRc_sq / ((r*r + haloRc_sq)*(r*r + haloRc_sq));
+
+		// kappa^2 = r * d(Omega^2)/dr + 4*Omega^2
+		// Omega^2 = vc_sq / r^2, so d(Omega^2)/dr = (dvc_sq_dr * r^2 - vc_sq * 2*r) / r^4 = (dvc_sq_dr - 2*vc_sq/r) / r^2
+		// kappa^2 = r * (dvc_sq_dr - 2*vc_sq/r) / r^2 + 4*vc_sq/r^2 = dvc_sq_dr/r + 2*vc_sq/r^2
+		double kappa_sq = dvc_sq_dr / r + 2.0 * vc_sq / (r * r);
+		if (kappa_sq < 0.0) kappa_sq = 4.0 * Omega * Omega;
+		double kappa = sqrt(kappa_sq);
+
+		double sigma_r = Q * 3.36 * G * Sigma / kappa;
+		double sigma_phi = sigma_r * kappa / (2.0 * Omega);
+
+		// Apply velocity dispersion: tangential = -(vc + sigma_phi*gauss), radial = sigma_r*gauss
+		double v_tan = -(vm + sigma_phi * normal(gen));
+		double v_rad = sigma_r * normal(gen);
+
+		// Tangential direction: perpendicular to radial, in disc plane
+		double t_hat[3], r_hat[3];
+		vcopy(p_plane, r_hat); vnorm(r_hat);
+		vcross(r_hat, n, t_hat); vnorm(t_hat);
+
+		v[0] = v_tan * t_hat[0] + v_rad * r_hat[0];
+		v[1] = v_tan * t_hat[1] + v_rad * r_hat[1];
+		v[2] = v_tan * t_hat[2] + v_rad * r_hat[2];
+
+		vadd(p, pos[sysIdx], pos[sysIdx+i]);
+		vadd(v, vel[sysIdx], vel[sysIdx+i]);
 	}
 }
 
