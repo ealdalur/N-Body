@@ -38,6 +38,7 @@ class Simulation
 	bool Gravity_Oct;
 	bool Record_Video;
 	bool Data_Log;
+	bool Info_Display;
 
 	bool CamOrbit;
 	double CamOrbitTheta;
@@ -152,4 +153,5 @@ public:
 	int GetDisplayHeight() const { return DisplayHeight; }
 	bool GetCamOrbit() const { return CamOrbit; }
 	double GetCamOrbitTheta() const { return CamOrbitTheta; }
+	bool GetInfoDisplay() const { return Info_Display; }
 };

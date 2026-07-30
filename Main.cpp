@@ -255,7 +255,7 @@ int main(int argc, char *argv[])
 			fpsLastTime = now;
 		}
 
-		if (!Recorder)
+		if (Sim->GetInfoDisplay())
 			Sim->DrawFPS(fpsCurrent);
 
 		if (Recorder) {

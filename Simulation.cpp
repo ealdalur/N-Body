@@ -28,6 +28,7 @@ Simulation::Simulation(const std::string &scriptPath)
 	Gravity_Oct = true;
 	Record_Video = false;
 	Data_Log = false;
+	Info_Display = true;
 	CamOrbit = false;
 	CamOrbitTheta = 0.0;
 	vset(0.0, 0.0, 0.0, Cam.lookAt);
@@ -205,6 +206,9 @@ void Simulation::LoadScript(const std::string &path)
 		} else if (key == "RecordVideo") {
 			int val; iss >> val;
 			Record_Video = (val != 0);
+		} else if (key == "Info_Display") {
+			int val; iss >> val;
+			Info_Display = (val != 0);
 		} else if (key == "N_SystemBodies") {
 			N_System_Bodies.clear();
 			int n;
