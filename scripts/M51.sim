@@ -28,15 +28,15 @@
 #
 # Interaction: PROGRADE tidal encounter
 #   - M51b starts at apocenter (40 kpc, 667 code units)
-#   - Orbit computed for pericenter at 15 kpc (250 code units)
+#   - Orbit computed for pericenter at 12 kpc (200 code units)
 #   - Orbital inclination: 15 deg to M51a disc plane
-#   - v_tangential at apocenter: 126 km/s (v_t/v_circ = 0.59)
-#   - v_pericenter: 335 km/s
+#   - v_tangential at apocenter: 109 km/s (v_t/v_circ = 0.51)
+#   - v_pericenter: 365 km/s
 #
 # Expected timeline:
 #   t ~ 0-4:   M51b approaches, tidal perturbation grows
 #   t ~ 4-7:   Spiral arms develop as M51b nears pericenter
-#   t ~ 7:     First pericenter passage (closest approach 15 kpc)
+#   t ~ 7:     First pericenter passage (closest approach 12 kpc)
 #   t ~ 7-11:  Strong tidal tails and grand-design spiral arms
 #   t ~ 14:    Second passage
 #
@@ -67,7 +67,7 @@ accel_sq_color_thresh 2000000.0
 
 # ── Systems ────────────────────────────────────────────────────
 # M51a: 160000 bodies (spiral resolution), M51b: 40000 bodies
-N_SystemBodies  160000  40000
+N_SystemBodies  640000  160000
 
 # ── Camera ─────────────────────────────────────────────────────
 # Face-on view of M51a disc (normal along +y), distant enough
@@ -82,4 +82,4 @@ GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   470000.0 4.84 186.7 5.
 
 # M51b (NGC 5195) at apocenter along +x, prograde orbit velocity in +z
 # with 15-deg orbital inclination (small +y velocity component)
-GalaxyDisc  1   644.0 0.0 0.0   0.0 -32.5 -121.5   0.2588 0.9659 0.0000   80000.0 1.46 35.0 3.3 1.5  110.4 10.0
+GalaxyDisc  1   644.0 0.0 0.0   0.0 -28.3 -105.7   0.2588 0.9659 0.0000   80000.0 1.46 35.0 3.3 1.5  110.4 10.0

@@ -20,12 +20,17 @@ From N-body modeling (Salo & Laurikainen 2000; Dobbs et al. 2010) and observatio
 | Parameter | Value | Source |
 |-----------|-------|--------|
 | Encounter type | Prograde | Salo & Laurikainen 2000 |
-| Pericenter distance | 15-25 kpc | Salo & Laurikainen 2000 |
+| Pericenter distance (3D) | 15-25 kpc | Salo & Laurikainen 2000 |
+| Projected separation (current) | 10-12 kpc | Observed on sky |
 | Time since first passage | 300-400 Myr | Salo & Laurikainen 2000 |
 | M51b position | Behind M51a disc (farther from Earth) | Dobbs et al. 2010 |
 | Orbital inclination to disc | 10-20 degrees | Salo & Laurikainen 2000 |
 | Mass ratio (dynamical) | 1:3 to 1:5 | Salo & Laurikainen 2000 |
 | Distance to system | 8.0-8.6 Mpc | McQuinn et al. 2016 |
+
+Note: The Salo & Laurikainen range of 15-25 kpc is the **3D pericenter distance** (closest approach in the orbit). The 10-12 kpc **projected separation** observed today is the sky-plane distance at the *current* orbital phase (post-pericenter, M51b has moved to a different position). These are not contradictory — the current projected separation can be smaller than the 3D pericenter because (a) projection removes one spatial dimension and (b) M51b's post-pericenter position differs from the pericenter point.
+
+Our simulation uses 12 kpc pericenter, at the low end of the Salo & Laurikainen range, which produces the best visual match to the observed bridge morphology.
 
 ### 1.3 Why Prograde?
 
@@ -45,23 +50,23 @@ This is analogous to pushing a swing: pushing in phase with the motion (prograde
 Following Salo & Laurikainen (2000) and standard practice for N-body tidal interaction studies, the total observed rotation velocity is decomposed into baryonic and halo contributions:
 
 ```
-V_total² = V_baryon² + V_halo²
+V_total^2 = V_baryon^2 + V_halo^2
 ```
 
-The key constraint from Salo & Laurikainen (2000) and Dobbs et al. (2010) is that the dark matter halo encloses approximately **twice** the baryonic mass within the disc radius (M_halo/M_baryon ≈ 2). This means:
+The key constraint from Salo & Laurikainen (2000) and Dobbs et al. (2010) is that the dark matter halo encloses approximately **twice** the baryonic mass within the disc radius (M_halo/M_baryon ~ 2). This means:
 
 ```
-V_halo² / V_total² ≈ 2/3    (halo provides 2/3 of centripetal support)
-V_baryon² / V_total² ≈ 1/3   (baryons provide 1/3)
+V_halo^2 / V_total^2 ~ 2/3    (halo provides 2/3 of centripetal support)
+V_baryon^2 / V_total^2 ~ 1/3   (baryons provide 1/3)
 
 Therefore:
 V_baryon = V_total / sqrt(3)
-V_halo   = V_total × sqrt(2/3)
+V_halo   = V_total * sqrt(2/3)
 ```
 
 ### 2.2 Baryonic Mass vs Photometric Stellar Mass
 
-The baryonic masses used here are **rotation-curve-decomposed** values — the dynamically cold disc mass that participates in spiral arm formation. These are deliberately lower than photometric stellar masses (e.g., Querejeta et al. 2015 gives M_stellar ~ 5×10¹⁰ M☉ for M51a):
+The baryonic masses used here are **rotation-curve-decomposed** values — the dynamically cold disc mass that participates in spiral arm formation. These are deliberately lower than photometric stellar masses (e.g., Querejeta et al. 2015 gives M_stellar ~ 5x10^10 Msun for M51a):
 
 - Photometric mass includes the dynamically hot thick disc, which acts more like a bulge/halo (doesn't respond to tidal perturbation as a cold thin disc)
 - The "disc mass" for tidal interaction modeling is the cold, thin, responsive component
@@ -71,21 +76,21 @@ The baryonic masses used here are **rotation-curve-decomposed** values — the d
 
 The simulator uses a **cored isothermal** halo:
 ```
-V_halo(r) = haloVc × r / sqrt(r² + Rc²)
+V_halo(r) = haloVc * r / sqrt(r^2 + Rc^2)
 ```
 
 At the disc edge (r = R), the circular velocity of the halo is:
 ```
-V_halo(R) = haloVc × R / sqrt(R² + Rc²)
+V_halo(R) = haloVc * R / sqrt(R^2 + Rc^2)
 ```
 
-We want V_halo(R) to equal V_total × sqrt(2/3), so:
+We want V_halo(R) to equal V_total * sqrt(2/3), so:
 ```
-haloVc = V_total × sqrt(2/3) / (R / sqrt(R² + Rc²))
-       = V_total × sqrt(2/3) × sqrt(1 + (Rc/R)²)
+haloVc = V_total * sqrt(2/3) / (R / sqrt(R^2 + Rc^2))
+       = V_total * sqrt(2/3) * sqrt(1 + (Rc/R)^2)
 ```
 
-For small Rc/R (which is the case here — Rc << R), haloVc ≈ V_total × sqrt(2/3).
+For small Rc/R (which is the case here — Rc << R), haloVc ~ V_total * sqrt(2/3).
 
 ---
 
@@ -99,16 +104,17 @@ For small Rc/R (which is the case here — Rc << R), haloVc ≈ V_total × sqrt(
 | Stellar disc radius (R25) | 11.2 kpc | NED | 186.7 |
 | Observed flat V_rotation | 210 km/s | Sofue et al. 1999; Meidt et al. 2013 | — |
 | V_baryon (at disc edge) | 121 km/s | = 210/sqrt(3) | — |
-| V_halo (at disc edge) | 172 km/s | = 210×sqrt(2/3) | — |
-| Total baryonic mass | 2.74 × 10¹⁰ M☉ | = V_b² × R / G | 2,744,000 |
-| Bulge mass (M) | 4.7 × 10⁹ M☉ | 17% of baryonic (Sbc) | 470,000 |
-| Disc mass | 2.27 × 10¹⁰ M☉ | baryonic − bulge | 2,274,000 |
+| V_halo (at disc edge) | 172 km/s | = 210*sqrt(2/3) | — |
+| Total baryonic mass | 2.74 x 10^10 Msun | = V_b^2 * R / G | 2,744,000 |
+| Bulge mass (M) | 4.7 x 10^9 Msun | 17% of baryonic (Sbc) | 470,000 |
+| Disc mass | 2.27 x 10^10 Msun | baryonic - bulge | 2,274,000 |
 | Mfrac (disc/bulge) | 4.84 | = disc/bulge | — |
 | DM halo Vc (haloVc) | 172.1 km/s | corrected for core | — |
 | DM halo core radius (haloRc) | 1.0 kpc | Salo: ~0.5-1 kpc | 16.7 |
-| M_halo within disc | 5.49 × 10¹⁰ M☉ | cored isothermal | 5,488,000 |
+| M_halo within disc | 5.49 x 10^10 Msun | cored isothermal | 5,488,000 |
 | M_halo / M_baryon | 2.00 | Target: ~2 | — |
 | Inner hole (bulge region) | 0.3 kpc | — | 5.0 |
+| Toomre Q | 1.5 | Warm disc (tidal response) | — |
 
 ### 3.2 NGC 5195 (M51b)
 
@@ -118,33 +124,34 @@ For small Rc/R (which is the case here — Rc << R), haloVc ≈ V_total × sqrt(
 | Optical radius | 2.1 kpc | NED | 35.0 |
 | Observed V_rotation | 130 km/s | mass-Vc scaling | — |
 | V_baryon (at disc edge) | 75.1 km/s | = 130/sqrt(3) | — |
-| V_halo (at disc edge) | 106.1 km/s | = 130×sqrt(2/3) | — |
-| Total baryonic mass | 1.97 × 10⁹ M☉ | = V_b² × R / G | 197,167 |
-| Bulge mass (M) | 8.0 × 10⁸ M☉ | 40% of baryonic (SB0) | 80,000 |
-| Disc mass | 1.17 × 10⁹ M☉ | baryonic − bulge | 117,167 |
+| V_halo (at disc edge) | 106.1 km/s | = 130*sqrt(2/3) | — |
+| Total baryonic mass | 1.97 x 10^9 Msun | = V_b^2 * R / G | 197,167 |
+| Bulge mass (M) | 8.0 x 10^8 Msun | 40% of baryonic (SB0) | 80,000 |
+| Disc mass | 1.17 x 10^9 Msun | baryonic - bulge | 117,167 |
 | Mfrac (disc/bulge) | 1.46 | = disc/bulge | — |
 | DM halo Vc (haloVc) | 110.4 km/s | corrected for core | — |
 | DM halo core radius (haloRc) | 0.6 kpc | compact galaxy | 10.0 |
-| M_halo within disc | 3.94 × 10⁹ M☉ | cored isothermal | 394,333 |
+| M_halo within disc | 3.94 x 10^9 Msun | cored isothermal | 394,333 |
 | M_halo / M_baryon | 2.00 | Target: ~2 | — |
 | Inner hole | 0.2 kpc | — | 3.3 |
+| Toomre Q | 1.5 | Warm disc (tidal response) | — |
 
 ### 3.3 Mass Ratio
 
-The dynamical mass ratio at the encounter distance determines the tidal interaction strength. At the pericenter distance (15 kpc = 250 code units), using the cored isothermal formula M_halo(r) = Vc² × r³ / (r² + Rc²):
+The dynamical mass ratio at the encounter distance determines the tidal interaction strength. At the pericenter distance (12 kpc = 200 code units), using the cored isothermal formula M_halo(r) = Vc^2 * r^3 / (r^2 + Rc^2):
 
 ```
-M51a at 15 kpc:
+M51a at 12 kpc:
   baryonic:     2,744,000
-  halo:         172.1² × 250³ / (250² + 16.7²) = 7,376,000
-  total:        10,120,000
+  halo:         172.1^2 * 200^3 / (200^2 + 16.7^2) = 5,886,000
+  total:        8,630,000
 
-M51b at 15 kpc:
+M51b at 12 kpc:
   baryonic:     197,000
-  halo:         110.4² × 250³ / (250² + 10.0²) = 3,042,000
-  total:        3,239,000
+  halo:         110.4^2 * 200^3 / (200^2 + 10.0^2) = 2,431,000
+  total:        2,628,000
 
-Dynamical ratio: 3,239,000 / 10,120,000 = 1 : 3.1
+Dynamical ratio: 2,628,000 / 8,630,000 = 1 : 3.3
 ```
 
 This is within the observational range (1:3 to 1:5 from Salo & Laurikainen 2000).
@@ -161,85 +168,97 @@ This approach has two advantages:
 1. Starting at apocenter means the initial velocity is purely tangential — no radial component to specify.
 2. The spiral arm excitation happens gradually during infall, producing a realistic build-up of arm strength.
 
-### 4.2 Effective Mass
+### 4.2 Gravitational Potential
 
-In a system with dark matter halos, the gravitating mass depends on the separation. For the **cored isothermal** halo, the enclosed mass within radius r is:
-
+The simulation applies cored isothermal halo accelerations:
 ```
-M_halo(r) = Vc² × r³ / (r² + Rc²)     [G=1]
-```
-
-The effective mass determining the orbit at separation r is the sum of both halos' enclosed masses plus all baryonic mass:
-
-```
-M_eff(r) = Vc_a² × r³/(r² + Rc_a²) + 0.5 × Vc_b² × r³/(r² + Rc_b²) + M_baryon_a + M_baryon_b
+a_halo = Vc^2 * r / (r^2 + Rc^2)    (attractive, directed inward)
 ```
 
-(The factor 0.5 on M51b's halo accounts for the fact that at large separations, only the inner portion of M51b's less extended halo contributes.)
-
-At the initial separation (667 code units = 40 kpc):
+The corresponding gravitational potential (with a_r = -dPhi/dr):
 ```
-M_eff = 172.1² × 667³/(667² + 16.7²) + 0.5 × 110.4² × 667³/(667² + 10.0²) + 2,744,000 + 197,000
-      ≈ 19,745,000 + 4,065,000 + 2,941,000
-      ≈ 26,700,000 code mass units
+Phi_halo(r) = +0.5 * Vc^2 * ln(r^2 + Rc^2)
 ```
 
-At pericenter (250 code units = 15 kpc):
+This INCREASES outward (a particle at larger r has higher potential energy and falls inward — gravity is attractive). For baryonic point masses:
 ```
-M_eff = 172.1² × 250³/(250² + 16.7²) + 0.5 × 110.4² × 250³/(250² + 10.0²) + 2,941,000
-      ≈ 7,376,000 + 1,521,000 + 2,941,000
-      ≈ 11,838,000 code mass units
+Phi_baryon(r) = -G*M/r
 ```
+
+The total potential for the mutual orbit includes both halos plus the baryonic masses:
+```
+Phi(r) = +0.5*Vc_a^2*ln(r^2 + Rc_a^2) + 0.5*Vc_b^2*ln(r^2 + Rc_b^2) - M_baryon/r
+```
+
+where M_baryon = M_baryon_a + M_baryon_b = 2,744,000 + 197,167 = 2,941,167.
+
+**Important**: Using a simpler -M_eff/r (Keplerian) potential is incorrect for logarithmic halos. The potential is NOT -M/r; it is a sum of logarithmic terms. The Keplerian approximation significantly underestimates the orbital velocity (by a factor of ~2 for these parameters) because it doesn't account for the potential's slower radial variation.
 
 ### 4.3 Energy and Angular Momentum Conservation
 
 At apocenter (r = r_start, v_r = 0):
 ```
-E = (1/2) × v_t² - M_eff(r_start) / r_start
-L = r_start × v_t
+E = (1/2) * v_t^2 + Phi(r_start)
+L = r_start * v_t
 ```
 
-At pericenter (r = r_peri, all velocity is tangential):
+At pericenter (r = r_peri, v_r = 0):
 ```
-E = (1/2) × v_p² - M_eff(r_peri) / r_peri
-L = r_peri × v_p
-```
-
-From angular momentum conservation:
-```
-v_p = r_start × v_t / r_peri
+E = (1/2) * v_p^2 + Phi(r_peri)
+L = r_peri * v_p
 ```
 
-Substituting into the energy equation and solving for v_t:
+From angular momentum conservation: `v_p = r_start * v_t / r_peri`
+
+Substituting and solving for v_t:
 ```
-v_t² = 2 × (M_eff(r_start)/r_start - M_eff(r_peri)/r_peri) / (1 - (r_start/r_peri)²)
+v_t^2 = 2 * (Phi_peri - Phi_start) / (1 - (r_start/r_peri)^2)
 ```
 
-Both numerator and denominator are negative (since r_start > r_peri and M_eff/r increases toward smaller r for halo-dominated potentials), so v_t² is positive.
+Both numerator and denominator are negative:
+- Phi_peri < Phi_start (pericenter is deeper in the potential well)
+- 1 - (r_start/r_peri)^2 < 0 (since r_start > r_peri)
+
+So v_t^2 is positive (negative / negative = positive).
 
 ### 4.4 Computed Orbital Parameters
 
 | Parameter | Value |
 |-----------|-------|
 | Initial separation (apocenter) | 667 code units (40 kpc) |
-| Pericenter distance | 250 code units (15 kpc) |
-| Tangential velocity at apocenter | 48.6 km/s |
-| Velocity at pericenter | 130 km/s |
-| Specific orbital energy | −38,936 (bound) |
-| Half-orbit time (to pericenter) | ~8 code time units (~490 Myr) |
-| Full orbital period | ~17 code time units (~980 Myr) |
+| Pericenter distance | 200 code units (12 kpc) |
+| Phi(r_start) | 267,530 |
+| Phi(r_peri) | 206,992 |
+| Delta Phi | -60,538 |
+| Tangential velocity at apocenter | 109.4 km/s |
+| Velocity at pericenter | 364.8 km/s |
+| Specific orbital energy | 273,517 |
+| Angular momentum L | 72,952 |
+| v_circular at apocenter | 215.0 km/s |
+| v_t / v_circ | 0.509 |
+| Half-orbit time (to pericenter) | ~6 code time units (~363 Myr) |
+| Full orbital period | ~12 code time units (~725 Myr) |
 
-The ~490 Myr half-orbit time is slightly longer than Salo & Laurikainen's (2000) 300-400 Myr, consistent with the fact that our analytic halos are not truncated and extend to infinity — the effective mass at large radius is slightly overestimated, producing a wider orbit. The first-passage morphology is insensitive to this (it depends on pericenter distance and encounter velocity, not the approach timescale).
+The ~363 Myr half-orbit time is consistent with Salo & Laurikainen's (2000) 300-400 Myr between passages.
 
 ### 4.5 Coordinate System and Orbital Inclination
 
 - M51a disc lies in the **x-z plane** with disc normal along **+y**
-- M51a rotates counter-clockwise when viewed from +y
-- M51b starts along the **+x axis** at 644 code units (40 kpc × cos 15°)
-- Prograde orbit: M51b's tangential velocity is in the **+z direction** (matching disc rotation sense)
-- Orbital inclination: 15° tilt from the disc plane, giving a small **+y velocity** component (12.6 km/s)
+- M51a disc rotates **clockwise** when viewed from +y (because `LoadGalaxyDiscState` uses `v_tan = -vm`, and the tangential direction `t_hat = cross(r_hat, n_hat)` is +z at the +x position, so particles at +x move in -z = CW from +y)
+- M51b starts along the **+x axis** at 644 code units (40 kpc * cos(15deg))
+- For a **prograde** encounter, M51b must orbit in the same sense as M51a's disc (CW from +y), so its tangential velocity at +x is in the **-z direction**
+- Orbital inclination: 15 deg tilt from the disc plane, giving a small **-y velocity** component
 
-The inclination ensures M51b passes slightly above/below the disc plane rather than exactly through it — consistent with observations showing M51b is currently behind M51a's disc.
+Final initial conditions:
+```
+M51b position: (644.0, 0.0, 0.0)
+M51b velocity: (0.0, -28.3, -105.7) km/s
+  vel_y = -v_t * sin(15deg) = -109.4 * 0.2588 = -28.3
+  vel_z = -v_t * cos(15deg) = -109.4 * 0.9659 = -105.7
+|velocity| = 109.4 km/s
+```
+
+The negative signs ensure the orbit is prograde (same sense as M51a's disc rotation).
 
 ---
 
@@ -249,7 +268,7 @@ The inclination ensures M51b passes slightly above/below the disc plane rather t
 
 The dark matter halos play one critical role here, and conspicuously fail to play a second one.
 
-1. **Tidal mass** (modeled): The effective gravitating mass at the interaction distance is dominated by the halos (Vc² × r³/(r²+Rc²) >> M_baryonic for r > 100 code units). This sets the orbital velocity and the encounter timescale, and the cross-halo term in the code carries it correctly.
+1. **Tidal mass** (modeled): The effective gravitating mass at the interaction distance is dominated by the halos (Vc^2 * r^3/(r^2+Rc^2) >> M_baryonic for r > 100 code units). This sets the orbital velocity and the encounter timescale, and the cross-halo term in the code carries it correctly.
 
 2. **Dynamical friction** (NOT modeled): In reality, as M51b moves through M51a's extended halo it raises a trailing density wake and loses orbital energy to gravitational drag (Chandrasekhar friction). **The simulation does not reproduce this.** The analytic halos are rigid spherical potentials comoving with their own galaxy's barycenter, and such a potential is symmetric by construction — it exerts no net drag. The cross-halo term is a conservative central force and does no secular work on the orbit. The only friction present comes from the live baryonic particles, which are a minority of the mass.
 
@@ -259,12 +278,12 @@ The dark matter halos play one critical role here, and conspicuously fail to pla
 
 The simulator uses a **cored isothermal** halo profile:
 ```
-a_halo = Vc² × r / (r² + Rc²)
+a_halo = Vc^2 * r / (r^2 + Rc^2)
 ```
 
 This gives:
 - At r >> Rc: flat rotation curve with V = Vc
-- At r << Rc: linear rotation (solid body), V = Vc × r / Rc
+- At r << Rc: linear rotation (solid body), V = Vc * r / Rc
 - Core radius Rc prevents singular density at the center
 
 | Galaxy | haloVc (km/s) | haloRc (code units) | haloRc (kpc) | M_halo/M_baryon |
@@ -272,68 +291,93 @@ This gives:
 | M51a | 172.1 | 16.7 | 1.0 | 2.00 |
 | M51b | 110.4 | 10.0 | 0.6 | 2.00 |
 
-Note: haloVc is NOT the total observed rotation velocity. It is the halo-only contribution, corrected for the core radius so that V_halo(R_disc) = V_total × sqrt(2/3). The total rotation curve results from the quadrature sum of baryonic and halo contributions.
+Note: haloVc is NOT the total observed rotation velocity. It is the halo-only contribution, corrected for the core radius so that V_halo(R_disc) = V_total * sqrt(2/3). The total rotation curve results from the quadrature sum of baryonic and halo contributions.
 
 ---
 
-## 6. Particle Distribution
+## 6. Velocity Dispersion and Disc Stability
 
-### 6.1 Counts and Resolution
+### 6.1 Toomre Q Parameter
+
+Both galaxies use a target Toomre Q = 1.5. This controls the radial and tangential velocity dispersion of disc particles via the Toomre stability criterion:
+
+```
+sigma_r(r) = Q * 3.36 * G * Sigma(r) / kappa(r)
+sigma_phi(r) = sigma_r * kappa / (2 * Omega)
+```
+
+where Sigma(r) is the local exponential surface density and kappa(r) is the epicyclic frequency computed from the full rotation curve (baryons + halo).
+
+Q = 1.5 produces a "warm" disc that:
+- Is stable against spontaneous fragmentation and particle-noise-driven multi-arm spirals
+- Remains responsive to the strong m=2 tidal perturbation from the companion
+
+See `docs/toomre-q-velocity-dispersion.md` for the full derivation and implementation details.
+
+### 6.2 Why Not Lower Q?
+
+At Q < 1.2, particle noise drives incoherent modes (m=2, 3, 4 all comparable) that create spurious multi-arm spiral structure before the encounter even begins. At Q = 1.5, these noise-driven modes are suppressed while the coherent tidal forcing (which is much stronger than noise) still produces clear two-arm spirals.
+
+---
+
+## 7. Particle Distribution
+
+### 7.1 Counts and Resolution
 
 | Galaxy | Particles | Purpose |
 |--------|-----------|---------|
-| M51a | 160,000 (159,999 disc + 1 central) | High resolution for spiral arm structure |
-| M51b | 40,000 (39,999 disc + 1 central) | Adequate for compact companion |
-| Total | 200,000 | |
+| M51a | 640,000 (639,999 disc + 1 central) | High resolution for spiral arm structure |
+| M51b | 160,000 (159,999 disc + 1 central) | Adequate for compact companion |
+| Total | 800,000 | |
 
-M51a gets 4× more particles because:
+M51a gets 4x more particles because:
 - It is the galaxy where spiral arms must be resolved
-- Its disc is ~5× larger in radius (much larger area to sample)
+- Its disc is ~5x larger in radius (much larger area to sample)
 - Spiral arm contrast requires adequate particle density to be visible
 
-### 6.2 Softening and Particle Count
+### 7.2 Softening and Particle Count
 
 The gravitational softening length should scale as 1/sqrt(N) to maintain consistent two-body relaxation:
 
 | N_M51a | r_soft | Motivation |
 |--------|--------|------------|
 | 40,000 | 0.3 | Low resolution |
-| 100,000 | 0.2 | Medium resolution |
-| 160,000 | 0.15 | High resolution |
+| 160,000 | 0.15 | Medium resolution |
+| 640,000 | 0.075 | High resolution |
 
-The M51.sim script uses r_soft = 0.3, appropriate for N=40,000. When increasing particle count, reduce r_soft accordingly.
+The M51.sim script uses r_soft = 0.3. When tuning for quality, reducing r_soft in proportion to 1/sqrt(N) improves force resolution.
 
-### 6.3 Disc Generation
+### 7.3 Disc Generation
 
 The `GalaxyDisc` generator creates particles in a disc with:
-- Surface density ∝ 1/r (from radius Ri to R)
+- Surface density proportional to 1/r (from radius Ri to R)
 - Circular orbital velocity from enclosed mass + halo contribution:
-  `v_c² = G × M_enclosed/r + haloVc² × r²/(r² + haloRc²)`
-- Small velocity tolerance (Vtol = 0.1 = 10% scatter around circular velocity)
+  `v_c^2 = G * M_enclosed/r + haloVc^2 * r^2/(r^2 + haloRc^2)`
+- Velocity dispersion set by Toomre Q (radial and tangential, varying with radius)
 - Disc orientation set by the normal vector
 
-For M51b, the disc normal is tilted 15° from +y to align roughly with its orbital plane:
+For M51b, the disc normal is tilted 15 deg from +y to align roughly with its orbital plane:
 ```
-normal = (sin(15°), cos(15°), 0) = (0.2588, 0.9659, 0.0)
+normal = (sin(15deg), cos(15deg), 0) = (0.2588, 0.9659, 0.0)
 ```
 
 ---
 
-## 7. Expected Simulation Behavior
+## 8. Expected Simulation Behavior
 
-### 7.1 Timeline
+### 8.1 Timeline
 
 | Phase | Sim time | Physical time | What happens |
 |-------|----------|---------------|--------------|
-| Approach | t = 0-4 | 0-230 Myr | M51b falls inward. Tidal perturbation of M51a's outer disc begins. Weak arm-like features start to develop. |
-| Pre-pericenter | t = 4-8 | 230-470 Myr | Spiral arms grow stronger as M51b accelerates inward. |
-| Pericenter | t ~ 8 | ~490 Myr | Closest approach (15 kpc). Strong tidal torque on disc material. Two-arm spiral pattern is strongly excited. |
-| Recession | t = 8-13 | 490-760 Myr | M51b recedes. Grand-design spiral arms are fully developed. Tidal bridge/tail connects the galaxies. |
-| Second passage | t ~ 17 | ~980 Myr | M51b returns. Arms may be reinforced or disrupted depending on phase alignment. |
+| Approach | t = 0-3 | 0-175 Myr | M51b falls inward. Tidal perturbation of M51a's outer disc begins. |
+| Pre-pericenter | t = 3-6 | 175-350 Myr | Spiral arms grow stronger as M51b accelerates inward. |
+| Pericenter | t ~ 6 | ~360 Myr | Closest approach (12 kpc). Strong tidal torque on disc material. Two-arm spiral pattern is strongly excited. |
+| Recession | t = 6-10 | 360-590 Myr | M51b recedes. Grand-design spiral arms are fully developed. Tidal bridge/tail connects the galaxies. |
+| Second passage | t ~ 12 | ~725 Myr | M51b returns. Arms may be reinforced or disrupted depending on phase alignment. |
 
-### 7.2 What to Look For
+### 8.2 What to Look For
 
-1. **Two-arm spiral arms**: Coherent, symmetric spiral arms extending from M51a's inner disc to its outer edge. These should be visible from t ~ 6 onward.
+1. **Two-arm spiral arms**: Coherent, symmetric spiral arms extending from M51a's inner disc to its outer edge. These should be visible from t ~ 5 onward.
 
 2. **Tidal bridge**: A stream of particles connecting M51a and M51b, pulled out of M51a's disc by M51b's gravity during closest approach.
 
@@ -343,7 +387,7 @@ normal = (sin(15°), cos(15°), 0) = (0.2588, 0.9659, 0.0)
 
 5. **Arm winding**: After pericenter, the inner parts of the spiral arms rotate faster than the outer parts (differential rotation), causing progressive winding. The pattern should remain open for ~2-3 code time units after pericenter before winding significantly.
 
-### 7.3 Why the Arms Form
+### 8.3 Why the Arms Form
 
 The physics of tidal spiral arm formation:
 
@@ -359,21 +403,21 @@ The physics of tidal spiral arm formation:
 
 ---
 
-## 8. Comparison to Published Models
+## 9. Comparison to Published Models
 
-### 8.1 Salo & Laurikainen 2000
+### 9.1 Salo & Laurikainen 2000
 
 Their best-fit model parameters:
 - Pericenter: 20-25 kpc
 - Mass ratio: 1:3
 - M_halo/M_disc: ~2
-- Orbital inclination: 10-20°
+- Orbital inclination: 10-20 deg
 - Time since first passage: 350-400 Myr
 - Prograde encounter
 
-Our parameters: pericenter 15 kpc, dynamical mass ratio 1:3.1 (at pericenter), M_halo/M_baryon = 2.0, inclination 15°, time-to-pericenter ~490 Myr. Good agreement on mass decomposition and encounter geometry; our slightly closer pericenter and longer approach time reflect the choice to use a bound orbit starting from 40 kpc apocenter rather than a parabolic flyby.
+Our parameters: pericenter 12 kpc, dynamical mass ratio 1:3.3 (at pericenter), M_halo/M_baryon = 2.0, inclination 15 deg, time-to-pericenter ~363 Myr. Good agreement on mass decomposition, encounter geometry, and timescale. Our closer pericenter (below their published range) was chosen empirically to reproduce the observed bridge morphology at 800k particles — the tidal bridge connecting M51b to M51a's arm tip requires M51b to pass close enough to pull material from M51a's outer disc.
 
-### 8.2 Dobbs et al. 2010
+### 9.2 Dobbs et al. 2010
 
 Their SPH + N-body model adds gas physics (ISM, star formation) on top of the gravitational interaction. They find:
 - M_halo/M_disc: ~2.46 (lowered Evans model)
@@ -381,13 +425,13 @@ Their SPH + N-body model adds gas physics (ISM, star formation) on top of the gr
 - Strongest arm-interarm contrast at ~100-200 Myr after pericenter
 - Pericenter 25 kpc, mass ratio 1:3
 
-Our collisionless (gravity-only) simulation should reproduce the stellar spiral arm morphology but not gas features (HII regions, dust lanes). Our M_halo/M_baryon = 2.0 is consistent with both papers' range of 2–2.5.
+Our collisionless (gravity-only) simulation should reproduce the stellar spiral arm morphology but not gas features (HII regions, dust lanes). Our M_halo/M_baryon = 2.0 is consistent with both papers' range of 2-2.5.
 
-### 8.3 Limitations of This Simulation
+### 9.3 Limitations of This Simulation
 
 1. **No gas physics**: Real M51 has ~25% of its disc mass in gas, which responds more strongly to tidal compression (gas shocks, star formation in arms). Our disc is collisionless.
 
-2. **Simplified dark matter halos**: We use analytic cored-isothermal halos rather than live DM particle halos. The halos are rigid spherical backgrounds whose centers track their own galaxy's particle barycenter. This means no self-consistent halo response, no tidal stripping (M51b keeps its halo Vc even after plunging through M51a's disc), and no dynamical friction (§5.1). The halos also have infinite extent — `M_halo(r) ~ Vc²r` never stops growing — so long-range attraction is overestimated relative to a truncated halo. Additionally, because each halo center is the mass-weighted centroid of *all* its member particles and system membership is never reassigned, a long tidal tail drags the halo center off the nucleus, and stars stripped by the companion keep pulling their original halo toward it. This is a first-passage simulation, which is the regime where these limitations are least damaging. See `docs/dark-matter-halo.md` for the full accounting.
+2. **Simplified dark matter halos**: We use analytic cored-isothermal halos rather than live DM particle halos. The halos are rigid spherical backgrounds whose centers track their own galaxy's particle barycenter. This means no self-consistent halo response, no tidal stripping (M51b keeps its halo Vc even after plunging through M51a's disc), and no dynamical friction (section 5.1). The halos also have infinite extent — `M_halo(r) ~ Vc^2*r` never stops growing — so long-range attraction is overestimated relative to a truncated halo. Additionally, because each halo center is the mass-weighted centroid of *all* its member particles and system membership is never reassigned, a long tidal tail drags the halo center off the nucleus, and stars stripped by the companion keep pulling their original halo toward it. This is a first-passage simulation, which is the regime where these limitations are least damaging. See `docs/dark-matter-halo.md` for the full accounting.
 
 3. **No second passage history**: The real M51 may have undergone multiple passages. We simulate from the pre-first-encounter state.
 
@@ -395,17 +439,17 @@ Our collisionless (gravity-only) simulation should reproduce the stellar spiral 
 
 ---
 
-## 9. Simulation Parameters
+## 10. Simulation Parameters
 
-### 9.1 Time Step and Softening
+### 10.1 Time Step and Softening
 
-- **dt = 0.0005**: Required for the fast orbital velocities near M51a's center (v_circular ~ 210 km/s at ~83 code units). At r=83, orbital period ~ 2π×83/210 ~ 2.5 code time units, so dt/T ~ 0.0002 (well-resolved).
+- **dt = 0.0005**: Required for the fast orbital velocities near M51a's center (v_circular ~ 210 km/s at ~83 code units). At r=83, orbital period ~ 2*pi*83/210 ~ 2.5 code time units, so dt/T ~ 0.0002 (well-resolved).
 
-- **r_soft = 0.3**: Gravitational softening (18 pc). Prevents close-encounter singularities. The minimum physical scale resolved is ~2×r_soft = 36 pc.
+- **r_soft = 0.3**: Gravitational softening (18 pc). Prevents close-encounter singularities. The minimum physical scale resolved is ~2*r_soft = 36 pc.
 
 - **BH_Opening_Theta = 0.5**: Barnes-Hut opening angle. A value of 0.5 gives good accuracy for the tidal interaction (force errors < 1%).
 
-### 9.2 PinCentralBodies
+### 10.2 PinCentralBodies
 
 The simulation uses `PinCentralBodies`, which pins each galaxy's central body to its system's center of mass (both position and velocity). It is applied every step to every system with `halo_vc > 0`. It prevents:
 - The central body from wandering away from the galaxy due to N-body noise
@@ -413,46 +457,47 @@ The simulation uses `PinCentralBodies`, which pins each galaxy's central body to
 
 The central body still feels and transmits the tidal field from the other galaxy.
 
-### 9.3 Cross-Halo Gravity
+### 10.3 Cross-Halo Gravity
 
 The code includes cross-system halo gravity (the cross-halo loop in `CalcAccelRangeOct` and `CalcAccelRangeP2P`). Every body feels its own system's halo plus the halo of every other system. This means:
 - M51a particles feel M51b's dark matter halo potential
 - M51b particles feel M51a's dark matter halo potential
 - This creates the correct tidal field for spiral arm excitation
 
-Each halo is centered on its own system's mass-weighted particle barycenter, recomputed every derivative evaluation by `ComputeHaloCenters()` — not anchored to the central body. Because a halo's field is nearly uniform across the other galaxy at these separations, and because each halo tracks its own galaxy, the pair's relative acceleration comes out correct at `G(M_totA + M_totB)/d²` including halo mass. This is why the analytic orbit derived in §4 is reproduced by the simulation.
+Each halo is centered on its own system's mass-weighted particle barycenter, recomputed every derivative evaluation by `ComputeHaloCenters()` — not anchored to the central body. Because a halo's field is nearly uniform across the other galaxy at these separations, and because each halo tracks its own galaxy, the pair's relative acceleration comes out correct at `G(M_totA + M_totB)/d^2` including halo mass. This is why the analytic orbit derived in section 4 is reproduced by the simulation.
 
-What the cross-halo term does **not** do is produce dynamical friction — see §5.1. It is a conservative central force between two rigid symmetric potentials.
+What the cross-halo term does **not** do is produce dynamical friction — see section 5.1. It is a conservative central force between two rigid symmetric potentials.
 
 ---
 
-## 10. Data Sources
+## 11. Data Sources
 
 | Source | Used For |
 |--------|----------|
-| Salo & Laurikainen 2000, MNRAS 319, 377 | Orbital parameters, pericenter distance, mass ratio, M_halo/M_disc ≈ 2 |
-| Dobbs et al. 2010, MNRAS 403, 625 | Spiral arm evolution timeline, M_halo/M_disc ≈ 2.5, gas response |
-| Querejeta et al. 2015, ApJS 219, 5 | M51a photometric mass decomposition (Spitzer 3.6μm) |
+| Salo & Laurikainen 2000, MNRAS 319, 377 | Orbital parameters, pericenter distance, mass ratio, M_halo/M_disc ~ 2 |
+| Dobbs et al. 2010, MNRAS 403, 625 | Spiral arm evolution timeline, M_halo/M_disc ~ 2.5, gas response |
+| Querejeta et al. 2015, ApJS 219, 5 | M51a photometric mass decomposition (Spitzer 3.6um) |
 | Mentuch Cooper et al. 2012, ApJ 755, 165 | Stellar masses for both galaxies |
-| McQuinn et al. 2016, ApJ 826, 21 | TRGB distance (8.58 ± 0.10 Mpc) |
+| McQuinn et al. 2016, ApJ 826, 21 | TRGB distance (8.58 +/- 0.10 Mpc) |
 | Sofue et al. 1999, ApJ 523, 136 | M51a rotation curve |
 | Meidt et al. 2013, ApJ 779, 45 | M51a mass distribution from CO kinematics |
-| Schuster et al. 2007, A&A 461, 143 | M51 gas content (HI + H₂) |
+| Schuster et al. 2007, A&A 461, 143 | M51 gas content (HI + H2) |
 | Toomre & Toomre 1972, ApJ 178, 623 | Original tidal tail theory |
+| Toomre 1964, ApJ 139, 1217 | Disc stability criterion (Q parameter) |
 | de Vaucouleurs et al. 1991 (RC3) | Galaxy classifications and sizes |
 
 ---
 
-## 11. Running the Simulation
+## 12. Running the Simulation
 
 Load `M51.sim` in the simulator. The camera is positioned along +y (face-on to M51a's disc). Key viewing notes:
 
 - At t=0: Two galaxies visible. M51a (large, center) with M51b (compact, to the right at +x).
-- Run forward to t ~ 6-8: Watch for spiral arm development in M51a.
-- At t ~ 8 (pericenter): Maximum tidal interaction. M51b closest to M51a.
-- At t ~ 9-10: Best M51-like morphology — two strong arms with tidal bridge.
+- Run forward to t ~ 5-6: Watch for spiral arm development in M51a.
+- At t ~ 6 (pericenter): Maximum tidal interaction. M51b closest to M51a.
+- At t ~ 7-9: Best M51-like morphology — two strong arms with tidal bridge.
 
-For the best visual match to real M51, look at the system around t = 9-10 (shortly after first pericenter passage). The arm pattern should show:
-- Two trailing arms opening counter-clockwise (viewed from +y)
+For the best visual match to real M51, look at the system around t = 7-9 (shortly after first pericenter passage). The arm pattern should show:
+- Two trailing arms opening clockwise (viewed from +y)
 - A bridge of particles connecting toward M51b's position
 - An opposing tidal tail on the far side of M51a

@@ -115,7 +115,7 @@ m51b_haloVc = m51b_Vhalo / math.sqrt(m51b_R_code**2 / (m51b_R_code**2 + m51b_hal
 
 # === Interaction geometry ===
 # Source: Salo & Laurikainen 2000; Dobbs et al. 2010
-pericenter_kpc = 15.0               # closest approach distance
+pericenter_kpc = 12.0               # closest approach distance
 orbital_inclination_deg = 15.0      # M51b orbit tilted slightly from disc plane
 
 # ============================================================
