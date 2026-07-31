@@ -190,7 +190,7 @@ When enabled (`1`), writes binary state data (position magnitudes, velocity magn
 Info_Display  <0 | 1>
 ```
 
-When enabled (`1`), displays FPS counter and simulation time as an overlay on the rendered output. When disabled (`0`), the overlay is hidden (useful for clean video recording).
+When enabled (`1`), displays an information overlay on the rendered output showing FPS, simulation time (T), kinetic energy (KE), potential energy (PE), and total energy (E). When disabled (`0`), the overlay is hidden (useful for clean video recording).
 
 **Default:** 1 (enabled)
 

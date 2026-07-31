@@ -192,9 +192,10 @@ void BHTree::CalcMassesNode(int idx)
 	(void)idx;
 }
 
-void BHTree::CalcAcceleration(float *p, int BodyIdxIn, float G, float r_soft, float theta_sq, double *a)
+void BHTree::CalcAcceleration(float *p, int BodyIdxIn, float G, float r_soft, float theta_sq, double *a, double *pot)
 {
 	vset(0.0, 0.0, 0.0, a);
+	if (pot) *pot = 0.0;
 
 	int stack[512];
 	int top = 0;
@@ -210,8 +211,10 @@ void BHTree::CalcAcceleration(float *p, int BodyIdxIn, float G, float r_soft, fl
 			if (n.BodyIdx != BodyIdxIn) {
 				vsubf(n.p_cm, p, v);
 				float dsq = vmagsqsoftf(v, r_soft);
-				float r3_inv = fast_r3_inv(dsq);
+				float r_inv = fast_rsqrtf(dsq);
+				float r3_inv = r_inv * r_inv * r_inv;
 				vscaleaddf(v, G * n.Mass * r3_inv, a);
+				if (pot) *pot += (double)(-G * n.Mass * r_inv);
 			}
 		} else {
 			vsubf(n.p_cm, p, v);
@@ -219,8 +222,10 @@ void BHTree::CalcAcceleration(float *p, int BodyIdxIn, float G, float r_soft, fl
 			float d = n.p_max[0] - n.p_min[0];
 			if (d * d <= theta_sq * dsq) {
 				float dsq_soft = dsq + r_soft;
-				float r3_inv = fast_r3_inv(dsq_soft);
+				float r_inv = fast_rsqrtf(dsq_soft);
+				float r3_inv = r_inv * r_inv * r_inv;
 				vscaleaddf(v, G * n.Mass * r3_inv, a);
+				if (pot) *pot += (double)(-G * n.Mass * r_inv);
 			} else {
 				for (int i = 0; i < 8; i++) {
 					if (n.Octants[i] != -1 && top < 510) {

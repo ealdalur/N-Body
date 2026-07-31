@@ -29,6 +29,9 @@ Simulation::Simulation(const std::string &scriptPath)
 	Record_Video = false;
 	Data_Log = false;
 	Info_Display = true;
+	totalKE = 0.0;
+	totalPE = 0.0;
+	totalE = 0.0;
 	CamOrbit = false;
 	CamOrbitTheta = 0.0;
 	vset(0.0, 0.0, 0.0, Cam.lookAt);
@@ -119,6 +122,7 @@ void Simulation::Allocate()
 	sortedIdx.resize(N_Bodies, 0);
 	sortTemp.resize(N_Bodies, 0);
 	mortonCodes.resize(N_Bodies, 0);
+	body_pot.resize(N_Bodies, 0.0);
 }
 
 void Simulation::ParseDisplaySize(const std::string &path, int &width, int &height)
@@ -483,16 +487,20 @@ void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
 	{
 		vscaleadd(pos[i],FDE,acc[i]);
 
+		double pot = 0.0;
 		for (int j=0; j<N_Bodies; j++)
 		{
 			if (j != i)
 			{
 				vsub(pos[j],pos[i],a);
 				double dsq = vmagsqsoft(a, r_soft);
-				double r3_inv = 1.0 / (dsq * sqrt(dsq));
+				double r_inv = 1.0 / sqrt(dsq);
+				double r3_inv = r_inv / dsq;
 				vscaleadd(a, G * mass[j] * r3_inv, acc[i]);
+				pot += -G * mass[j] * r_inv;
 			}
 		}
+		body_pot[i] = pot * mass[i];
 
 		int sys = body_system[i];
 		double *hc = &halo_center[sys * 3];
@@ -532,8 +540,10 @@ void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
 		pf[0] = (float)pos[bi][0];
 		pf[1] = (float)pos[bi][1];
 		pf[2] = (float)pos[bi][2];
-		Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft, (float)(BH_Opening_Theta * BH_Opening_Theta), a);
+		double pot;
+		Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft, (float)(BH_Opening_Theta * BH_Opening_Theta), a, &pot);
 		vadd(acc[bi],a,acc[bi]);
+		body_pot[bi] = pot * mass[bi];
 
 		int sys = body_system[bi];
 		double *hc = &halo_center[sys * 3];
@@ -779,6 +789,17 @@ void Simulation::CalcOutputs() {
 	}
 }
 
+void Simulation::CalcEnergy() {
+	totalKE = 0.0;
+	totalPE = 0.0;
+	for (int i = 0; i < N_Bodies; i++) {
+		totalKE += 0.5 * mass[i] * vel_sq[i];
+		totalPE += body_pot[i];
+	}
+	totalPE *= 0.5;
+	totalE = totalKE + totalPE;
+}
+
 void Simulation::CalcLeapFrogPositionsRange(int iStart, int iEnd) {
 	for (int i=iStart; i<=iEnd; i++)
 	{
@@ -846,6 +867,8 @@ void Simulation::Step()
 	{
 		BuildOctree();
 	}
+
+	CalcEnergy();
 
 	if (Data_Log)
 	{
@@ -1234,7 +1257,7 @@ void Simulation::DrawGL()
 	glFlush();
 }
 
-void Simulation::DrawFPS(double fps)
+void Simulation::DrawInfo(double fps)
 {
 	static const GLubyte font5x7[][7] = {
 		{0x00,0x00,0x00,0x00,0x00,0x00,0x00}, // ' ' 32
@@ -1298,12 +1321,16 @@ void Simulation::DrawFPS(double fps)
 		{0x1F,0x01,0x02,0x04,0x08,0x10,0x1F}, // 'Z' 90
 	};
 
-	char lines[2][32];
-	snprintf(lines[0], sizeof(lines[0]), "T=%.4F", t);
-	snprintf(lines[1], sizeof(lines[1]), "FPS:%d", (int)(fps + 0.5));
+	const int NUM_LINES = 5;
+	char lines[NUM_LINES][32];
+	snprintf(lines[0], sizeof(lines[0]), "FPS:%d", (int)(fps + 0.5));
+	snprintf(lines[1], sizeof(lines[1]), "T=%.4F", t);
+	snprintf(lines[2], sizeof(lines[2]), "KE=%.4E", totalKE);
+	snprintf(lines[3], sizeof(lines[3]), "PE=%.4E", totalPE);
+	snprintf(lines[4], sizeof(lines[4]), "E=%.4E", totalE);
 
 	int maxLen = 0;
-	for (int l = 0; l < 2; l++) {
+	for (int l = 0; l < NUM_LINES; l++) {
 		int len = (int)strlen(lines[l]);
 		if (len > maxLen) maxLen = len;
 	}
@@ -1312,7 +1339,7 @@ void Simulation::DrawFPS(double fps)
 	float lineHeight = 10.0f;
 	int scale = 1;
 
-	for (int l = 0; l < 2; l++) {
+	for (int l = 0; l < NUM_LINES; l++) {
 		float x = (float)winWidth - (float)maxLen * 6.0f - 4.0f;
 		float y = (float)winHeight - 12.0f - l * lineHeight;
 

@@ -256,7 +256,7 @@ int main(int argc, char *argv[])
 		}
 
 		if (Sim->GetInfoDisplay())
-			Sim->DrawFPS(fpsCurrent);
+			Sim->DrawInfo(fpsCurrent);
 
 		if (Recorder) {
 			if (!SimPaused) {

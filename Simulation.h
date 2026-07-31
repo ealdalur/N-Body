@@ -76,6 +76,9 @@ class Simulation
 	std::vector<uint32_t> mortonCodes;
 	int numActiveBodies;
 
+	double totalKE, totalPE, totalE;
+	std::vector<double> body_pot;
+
 	Camera Cam;
 
 	// Particle rendering (modern GL, instanced)
@@ -121,6 +124,7 @@ class Simulation
 	void CalcLeapFrogVelocitiesAndOutputs();
 	void CalcOutputsRange(int iStart, int iEnd);
 	void CalcOutputs();
+	void CalcEnergy();
 	void BuildOctreeVerts(int nodeIdx);
 public:
 	bool DrawOctree = false;
@@ -140,7 +144,7 @@ public:
 	void CamShift(double dx, double dy, double dz);
 	void ReSizeGL(int width, int height);
 	void DrawGL();
-	void DrawFPS(double fps);
+	void DrawInfo(double fps);
 	void ReadFramePixels(uint8_t *rgbOut);
 	void BlitToScreen();
 	void SaveState();
