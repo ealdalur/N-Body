@@ -58,7 +58,7 @@ r_soft          0.3
 BH_Opening_Theta  0.5
 
 Gravity         Octree
-End_Time        40.0
+End_Time        20.0
 
 DataLog         0
 RecordVideo     1
@@ -68,11 +68,12 @@ accel_sq_color_thresh 2000000.0
 # ── Systems ────────────────────────────────────────────────────
 # M51a: 160000 bodies (spiral resolution), M51b: 40000 bodies
 N_SystemBodies  640000  160000
+#N_SystemBodies  256000  64000
 
 # ── Camera ─────────────────────────────────────────────────────
 # Face-on view of M51a disc (normal along +y), distant enough
 # to see both galaxies throughout interaction
-Camera          0.0  1000.0  0.0
+Camera          -1.0  1500.0  0.0
 
 # ── Initial Conditions ─────────────────────────────────────────
 # GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Q  haloVc  haloRc
