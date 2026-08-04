@@ -196,6 +196,50 @@ When enabled (`1`), displays an information overlay on the rendered output showi
 
 ---
 
+### `ZeroNetMomentum` — Remove Net Momentum at Startup
+
+```
+ZeroNetMomentum  <0 | 1>
+```
+
+When enabled (`1`), subtracts the mass-weighted mean velocity from every particle immediately after initial conditions are loaded, placing the simulation in its center-of-mass rest frame.
+
+Procedural generators (`GalaxyDisc`, `SphericalUniverse`) sample particle azimuths randomly and do not correct the sum, so they leave a residual net momentum of order `v_c / sqrt(N)`. Nothing damps it, so the entire system drifts off the origin at constant velocity. Measured on `Milky_Way.sim` (100k particles, 220 km/s) this residual was ~0.94 code units per time unit.
+
+Subtracting a uniform velocity from all particles changes no relative motion, so it changes no physics — it only selects which inertial frame the simulation is viewed in.
+
+**Enable this only for single-system scripts.** For a multi-galaxy script the net momentum is dominated by the companion's *intended* bulk motion rather than by sampling noise, so zeroing it boosts every galaxy into the COM frame: the relative orbit is identical, but the primary galaxy no longer sits at the origin and camera framing tuned around it breaks. That is why the default is off.
+
+Worth noting on priority: this residual is a constant velocity rather than a force, so it grows linearly while other drift sources random-walk as `sqrt(t)`. Over short runs it is a minor contributor — for `Milky_Way.sim` it was roughly 3% of the total drift, with the analytic halo monopole (see `RemoveHaloMonopole`) accounting for nearly all the rest. Over long runs the linear term eventually dominates, which is when enabling this matters most.
+
+**Default:** 0 (disabled)
+
+---
+
+### `RemoveHaloMonopole` — Restore Momentum Conservation for Analytic Halos
+
+```
+RemoveHaloMonopole  <0 | 1>
+```
+
+When enabled (`1`), subtracts the net halo force (divided by total mass) uniformly from every particle's acceleration each step.
+
+The analytic dark matter halos are rigid potentials with no inertia, so they cannot obey Newton's third law — a particle is pulled toward the halo center, but nothing pulls back. For a perfectly axisymmetric disc the per-particle forces cancel in the sum, but any asymmetry leaves a net force that accelerates the entire system with nothing to oppose it. The dominant offender is the **m=1 lopsided mode**; a two-armed (m=2) bar is symmetric under 180° rotation and largely cancels. Outer material dragging the halo centroid off the nucleus has the same effect, since the halo center is the mass-weighted centroid of *all* the system's particles.
+
+Measured on `Milky_Way.sim` (100k particles, Vc=220, Rc=166.7), this produced a net acceleration of 15–25 code units, accounting for essentially all observed center-of-mass drift once other sources were fixed.
+
+Subtracting a **uniform** vector from every particle leaves every difference `a_i - a_j` unchanged, so all relative motion is preserved exactly — including the mutual orbit of two interacting galaxies. Only the spurious bulk acceleration is cancelled. Physically this lets the rigid halo recoil along with its system instead of being anchored to absolute space, which is closer to what a live particle halo would do.
+
+The correction is applied globally rather than per-system. Subtracting each system's own halo net force separately would also cancel the genuine mutual attraction between galaxies and destroy the orbit.
+
+`FDE` is deliberately excluded from the correction, since it is a real external force whose net contribution is meant to be nonzero.
+
+Set to `0` to reproduce the older (non-conserving) behavior. Note that enabling this changes trajectories slightly compared to runs tuned without it.
+
+**Default:** 1 (enabled)
+
+---
+
 ### `RecordVideo` — Video Recording
 
 ```

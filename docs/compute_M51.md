@@ -468,6 +468,14 @@ Each halo is centered on its own system's mass-weighted particle barycenter, rec
 
 What the cross-halo term does **not** do is produce dynamical friction — see section 5.1. It is a conservative central force between two rigid symmetric potentials.
 
+### 10.4 Halo Monopole Removal
+
+A rigid analytic halo has no inertia, so it cannot obey Newton's third law: particles are pulled toward the halo center and nothing pulls back. For an axisymmetric disc the per-particle forces cancel in the sum, but any asymmetry — above all an m=1 lopsided mode, or a tidal tail dragging the halo centroid off the nucleus — leaves a net force that accelerates the whole system off the origin.
+
+The simulation removes this by subtracting the net halo force (divided by total mass) uniformly from every particle each step (`RemoveHaloMonopole`, enabled by default). Because the subtraction is uniform, every difference `a_i - a_j` is unchanged, so the M51a/M51b relative orbit derived in section 4 is preserved exactly — only the spurious bulk drift is cancelled. The correction is global, not per-system; a per-system correction would cancel the real mutual attraction between the two galaxies.
+
+Note this is a fix for the *drift* symptom, not for the underlying halo-center definition. The halo center remains the mass-weighted centroid of all of that system's particles, so a long tidal tail still pulls it off the nucleus and distorts the halo field the disc feels (section 9.3). Momentum is now conserved regardless.
+
 ---
 
 ## 11. Data Sources

@@ -32,6 +32,8 @@ Simulation::Simulation(const std::string &scriptPath)
 	totalKE = 0.0;
 	totalPE = 0.0;
 	totalE = 0.0;
+	Zero_Net_Momentum = false;
+	Remove_Halo_Monopole = true;
 	CamOrbit = false;
 	CamOrbitTheta = 0.0;
 	vset(0.0, 0.0, 0.0, Cam.lookAt);
@@ -41,6 +43,9 @@ Simulation::Simulation(const std::string &scriptPath)
 
 	LoadScript(scriptPath);
 	Allocate();
+
+	if (Zero_Net_Momentum)
+		ZeroNetMomentum();
 
 	posBuf = new float[N_Bodies * 3];
 	clrBuf = new float[N_Bodies * 4];
@@ -213,6 +218,12 @@ void Simulation::LoadScript(const std::string &path)
 		} else if (key == "Info_Display") {
 			int val; iss >> val;
 			Info_Display = (val != 0);
+		} else if (key == "ZeroNetMomentum") {
+			int val; iss >> val;
+			Zero_Net_Momentum = (val != 0);
+		} else if (key == "RemoveHaloMonopole") {
+			int val; iss >> val;
+			Remove_Halo_Monopole = (val != 0);
 		} else if (key == "N_SystemBodies") {
 			N_System_Bodies.clear();
 			int n;
@@ -597,12 +608,42 @@ void Simulation::PinCentralBodies()
 				total_m += mi;
 			}
 			double inv_m = 1.0 / total_m;
-			pos[ci][0] = cx * inv_m;
-			pos[ci][1] = cy * inv_m;
-			pos[ci][2] = cz * inv_m;
-			vel[ci][0] = cvx * inv_m;
-			vel[ci][1] = cvy * inv_m;
-			vel[ci][2] = cvz * inv_m;
+
+			double comP[3] = {cx * inv_m, cy * inv_m, cz * inv_m};
+			double comV[3] = {cvx * inv_m, cvy * inv_m, cvz * inv_m};
+
+			// Change forced onto the central body by the pin.
+			double dP[3], dV[3];
+			vsub(comP, pos[ci], dP);
+			vsub(comV, vel[ci], dV);
+
+			vcopy(comP, pos[ci]);
+			vcopy(comV, vel[ci]);
+
+			// Momentum-conserving compensation. Overwriting the central body's
+			// state injects mass-weighted position M_c*dP and momentum M_c*dV
+			// out of nowhere; with M_c = 25% of the system mass and this running
+			// every step, that injection was the dominant cause of COM drift.
+			// Applying the equal and opposite shift, spread over the remaining
+			// particles, makes the pin exactly conservative:
+			//   sum_i m_i * (M_c/M_rest) * dV = M_c * dV
+			// so the system (and hence global) COM position and velocity are
+			// unchanged. Uniform per-particle shifts are correct here regardless
+			// of whether the particles share a common mass.
+			double M_rest = total_m - mass[ci];
+			if (M_rest > 0.0) {
+				double f = mass[ci] / M_rest;
+				for (int i = 0; i < N_System_Bodies[sys]; i++) {
+					int bi = sysIdx + i;
+					if (bi == ci) continue;
+					pos[bi][0] -= f * dP[0];
+					pos[bi][1] -= f * dP[1];
+					pos[bi][2] -= f * dP[2];
+					vel[bi][0] -= f * dV[0];
+					vel[bi][1] -= f * dV[1];
+					vel[bi][2] -= f * dV[2];
+				}
+			}
 		}
 		sysIdx += N_System_Bodies[sys];
 	}
@@ -666,6 +707,11 @@ void Simulation::CalcAccelerations()
 		if (Gravity_P2P) CalcAccelRangeP2P(0, N_Bodies-1);
 		if (Gravity_Oct) CalcAccelRangeOct(0, numActiveBodies-1);
 	}
+
+	// Applied after every acceleration contribution is summed, so the correction
+	// reflects the halo forces actually in acc[] this step.
+	if (Remove_Halo_Monopole)
+		RemoveHaloMonopole();
 }
 
 static uint32_t expandBits(uint32_t v)
@@ -800,6 +846,117 @@ void Simulation::CalcEnergy() {
 	totalE = totalKE + totalPE;
 }
 
+void Simulation::ZeroNetMomentum() {
+	// Random-phase disc sampling leaves a residual net momentum of order
+	// v_c/sqrt(N) that nothing damps, so the system drifts off the origin at
+	// constant velocity. Subtracting the mass-weighted mean velocity just picks
+	// the COM rest frame -- it changes no relative motion and so no physics,
+	// only the (arbitrary) inertial frame the simulation is viewed in.
+	//
+	// Off by default, and only appropriate for a single system: with a moving
+	// companion the net momentum is mostly the INTENDED bulk motion, so zeroing
+	// it boosts every galaxy into the COM frame and the primary no longer sits at
+	// the origin. On Milky_Way.sim this residual was ~0.94 code units/time, about
+	// 3% of the observed drift -- the halo monopole was the rest. It still earns
+	// its place on long runs, since a constant velocity grows linearly while the
+	// remaining (force-error) sources random-walk as sqrt(t).
+	double cvx = 0.0, cvy = 0.0, cvz = 0.0;
+	double total_m = 0.0;
+	for (int i = 0; i < N_Bodies; i++) {
+		double mi = mass[i];
+		cvx += mi * vel[i][0];
+		cvy += mi * vel[i][1];
+		cvz += mi * vel[i][2];
+		total_m += mi;
+	}
+	if (total_m <= 0.0) return;
+
+	double inv_m = 1.0 / total_m;
+	double v0[3] = {cvx * inv_m, cvy * inv_m, cvz * inv_m};
+
+	for (int i = 0; i < N_Bodies; i++) {
+		vel[i][0] -= v0[0];
+		vel[i][1] -= v0[1];
+		vel[i][2] -= v0[2];
+	}
+}
+
+void Simulation::RemoveHaloMonopole() {
+	// The analytic halos are rigid potentials with no inertia, so they cannot
+	// obey Newton's third law: a particle is pulled toward the halo center but
+	// nothing pulls back. For a perfectly axisymmetric disc the per-particle
+	// forces cancel in the sum, but any asymmetry -- above all the m=1 lopsided
+	// mode, and outer material dragging the centroid off the nucleus -- leaves a
+	// net force that accelerates the entire system. Measured on Milky_Way.sim
+	// this was the dominant remaining drift source (a_halo ~ 15-25, matching the
+	// observed COM velocity growth almost exactly).
+	//
+	// Removing the monopole restores momentum conservation. Subtracting a UNIFORM
+	// vector from every particle leaves every difference a_i - a_j unchanged, so
+	// all relative motion -- including the mutual orbit of two galaxies -- is
+	// preserved exactly; only the spurious bulk acceleration is cancelled.
+	// Physically this lets the rigid halo recoil with its system instead of being
+	// anchored to absolute space, which is what a live halo would do.
+	//
+	// This MUST be global, not per-system: subtracting each system's own halo net
+	// force separately would also cancel the real mutual attraction between
+	// galaxies and destroy the orbit.
+	//
+	// FDE is deliberately excluded. It is a genuine external force (radial from
+	// the origin), so its net contribution is physically meant to be nonzero;
+	// folding it in would break Spherical_Universe.sim.
+	double fh[3] = {0.0, 0.0, 0.0};
+	double total_m = 0.0;
+	double r_halo[3];
+
+	int nAcc = Gravity_Oct ? numActiveBodies : N_Bodies;
+	for (int k = 0; k < nAcc; k++) {
+		int i = Gravity_Oct ? sortedIdx[k] : k;
+		double mi = mass[i];
+		total_m += mi;
+
+		int sys = body_system[i];
+		if (halo_vc[sys] > 0.0) {
+			double *hc = &halo_center[sys * 3];
+			r_halo[0] = hc[0] - pos[i][0];
+			r_halo[1] = hc[1] - pos[i][1];
+			r_halo[2] = hc[2] - pos[i][2];
+			double rsq = vmagsq(r_halo);
+			if (rsq > 1e-10) {
+				double s = halo_vc[sys] * halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+				fh[0] += mi * s * r_halo[0];
+				fh[1] += mi * s * r_halo[1];
+				fh[2] += mi * s * r_halo[2];
+			}
+		}
+		for (int s = 0; s < N_Systems; s++) {
+			if (s == sys || halo_vc[s] == 0.0) continue;
+			double *hc2 = &halo_center[s * 3];
+			r_halo[0] = hc2[0] - pos[i][0];
+			r_halo[1] = hc2[1] - pos[i][1];
+			r_halo[2] = hc2[2] - pos[i][2];
+			double rsq = vmagsq(r_halo);
+			double s2 = halo_vc[s] * halo_vc[s] / (rsq + halo_rc_sq[s]);
+			fh[0] += mi * s2 * r_halo[0];
+			fh[1] += mi * s2 * r_halo[1];
+			fh[2] += mi * s2 * r_halo[2];
+		}
+	}
+
+	if (total_m <= 0.0) return;
+
+	double inv_m = 1.0 / total_m;
+	double aCorr[3];
+	vscale(fh, inv_m, aCorr);
+
+	for (int k = 0; k < nAcc; k++) {
+		int i = Gravity_Oct ? sortedIdx[k] : k;
+		acc[i][0] -= aCorr[0];
+		acc[i][1] -= aCorr[1];
+		acc[i][2] -= aCorr[2];
+	}
+}
+
 void Simulation::CalcLeapFrogPositionsRange(int iStart, int iEnd) {
 	for (int i=iStart; i<=iEnd; i++)
 	{
@@ -860,13 +1017,22 @@ void Simulation::Step()
 {
 	CalcLeapFrogPositions();
 	PinCentralBodies();
-	CalcAccelerations();
-	CalcLeapFrogVelocitiesAndOutputs();
 
+	// The octree must be rebuilt from the current positions before forces are
+	// evaluated against it, otherwise every step computes forces from the
+	// previous step's tree -- a body is attracted toward where mass used to be.
+	// The constructor already initialized in this order; Step() did not, so this
+	// aligns the two. Correctness fix rather than a drift fix: it cut the net
+	// spurious gravity force ~30x when measured, but that error is largely
+	// direction-randomizing and cancels in the sum, so its contribution to
+	// center-of-mass drift was small (a ~12% change in COM velocity growth).
 	if (Gravity_Oct)
 	{
 		BuildOctree();
 	}
+
+	CalcAccelerations();
+	CalcLeapFrogVelocitiesAndOutputs();
 
 	CalcEnergy();
 

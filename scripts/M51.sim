@@ -69,6 +69,7 @@ accel_sq_color_thresh 2000000.0
 # M51a: 160000 bodies (spiral resolution), M51b: 40000 bodies
 N_SystemBodies  640000  160000
 #N_SystemBodies  256000  64000
+#N_SystemBodies  64000  16000
 
 # ── Camera ─────────────────────────────────────────────────────
 # Face-on view of M51a disc (normal along +y), distant enough

@@ -79,6 +79,9 @@ class Simulation
 	double totalKE, totalPE, totalE;
 	std::vector<double> body_pot;
 
+	bool Zero_Net_Momentum;          // subtract net COM velocity at t=0
+	bool Remove_Halo_Monopole;       // cancel net force of the rigid analytic halos
+
 	Camera Cam;
 
 	// Particle rendering (modern GL, instanced)
@@ -125,6 +128,8 @@ class Simulation
 	void CalcOutputsRange(int iStart, int iEnd);
 	void CalcOutputs();
 	void CalcEnergy();
+	void ZeroNetMomentum();
+	void RemoveHaloMonopole();
 	void BuildOctreeVerts(int nodeIdx);
 public:
 	bool DrawOctree = false;
