@@ -42,6 +42,14 @@ class Simulation
 
 	bool CamOrbit;
 	double CamOrbitTheta;
+
+	// Camera_lookAt_System: when >= 0 the camera's look-at point is retargeted
+	// every frame onto that system's central body, so a moving galaxy stays
+	// centred in frame. Only the look-at point moves; the camera's spherical
+	// offset (phi, theta, r) is preserved, so the viewing angle and zoom are
+	// unchanged and remain under user control. -1 disables the feature, leaving
+	// the fixed Camera_lookAt point in effect.
+	int CamFollowSystem;
 	double EndTime;
 
 	int DisplayWidth, DisplayHeight;
@@ -150,6 +158,7 @@ class Simulation
 	void ZeroNetMomentum(int system);
 	void ApplyBulkVelocity(int system);
 	void ApplyBulkVelocities();
+	void UpdateCameraFollow();
 	void BuildOctreeForSystem(int sys, int &outFirst, int &outCount);
 	void CalcAccelIsolated();
 	void BuildOctreeVerts(int nodeIdx);

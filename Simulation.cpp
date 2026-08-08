@@ -38,6 +38,7 @@ Simulation::Simulation(const std::string &scriptPath)
 	bulkVelocityApplied = true;   // nothing withheld unless warmup is enabled
 	CamOrbit = false;
 	CamOrbitTheta = 0.0;
+	CamFollowSystem = -1;         // -1 = feature off, fixed Camera_lookAt
 	vset(0.0, 0.0, 0.0, Cam.lookAt);
 	EndTime = -1.0;
 	DisplayWidth = 1280;
@@ -65,6 +66,9 @@ Simulation::Simulation(const std::string &scriptPath)
 		CalcAccelerations();
 	}
 	CalcOutputs();
+
+	// Centre on the followed system before the first frame is drawn.
+	UpdateCameraFollow();
 
 	if (Data_Log)
 	{
@@ -324,6 +328,22 @@ void Simulation::LoadScript(const std::string &path)
 			iss >> theta;
 			CamOrbit = true;
 			CamOrbitTheta = theta;
+		} else if (key == "Camera_lookAt_System") {
+			int sys;
+			if (!(iss >> sys)) {
+				std::cerr << "Error: Camera_lookAt_System requires a system index."
+				          << std::endl;
+				std::cerr << "  got: " << line << std::endl;
+				exit(1);
+			}
+			if (sys < 0) {
+				std::cerr << "Error: Camera_lookAt_System index must be >= 0, got "
+				          << sys << std::endl;
+				exit(1);
+			}
+			// N_Systems is not known until N_SystemBodies is parsed, so the upper
+			// bound is checked after the script is fully read.
+			CamFollowSystem = sys;
 		} else if (key == "Camera_lookAt") {
 			double lx, ly, lz;
 			iss >> lx >> ly >> lz;
@@ -351,6 +371,21 @@ void Simulation::LoadScript(const std::string &path)
 	std::cout << "N_Systems: " << N_Systems << std::endl;
 	for (int i = 0; i < N_Systems; i++)
 		std::cout << "  System " << i << ": " << N_System_Bodies[i] << " bodies" << std::endl;
+
+	// Camera_lookAt_System can appear before N_SystemBodies, so the upper bound
+	// is only knowable here.
+	if (CamFollowSystem >= 0) {
+		if (CamFollowSystem >= N_Systems) {
+			std::cerr << "Error: Camera_lookAt_System index " << CamFollowSystem
+			          << " is out of range; there are " << N_Systems
+			          << " system(s) (valid indices 0.." << N_Systems - 1 << ")"
+			          << std::endl;
+			exit(1);
+		}
+		std::cout << "Camera following system " << CamFollowSystem
+		          << " (look-at retargeted to its central body each frame)"
+		          << std::endl;
+	}
 }
 
 void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double h_r, double Q, double haloVc, double haloRc){
@@ -1371,6 +1406,32 @@ void Simulation::Step()
 	}
 
 	t += dt;
+
+	// Retarget the camera after positions have advanced, so the followed body is
+	// centred using its current position rather than last frame's.
+	UpdateCameraFollow();
+}
+
+void Simulation::UpdateCameraFollow()
+{
+	// Retarget the look-at point onto the followed system's central body.
+	//
+	// The camera position is moved by the SAME delta as the look-at point, which
+	// keeps the relative offset vector (Cam.pos - Cam.lookAt) exactly unchanged.
+	// That offset is what defines the spherical coordinates phi, theta and r, so
+	// the viewing angle and zoom are untouched and the W/A/S/D/J/L controls and
+	// Camera_Orbit continue to work against the moving target.
+	//
+	// Recomputing the position from stored angles instead would fight the user's
+	// input and accumulate drift through the acos/atan2 round trip.
+	if (CamFollowSystem < 0) return;
+
+	int ci = halo_central[CamFollowSystem];
+	double delta[3];
+	vsub(pos[ci], Cam.lookAt, delta);
+
+	vadd(Cam.lookAt, delta, Cam.lookAt);
+	vadd(Cam.pos, delta, Cam.pos);
 }
 
 void Simulation::CamMove(double d_phi, double d_theta, double d_r)

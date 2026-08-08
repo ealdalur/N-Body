@@ -451,6 +451,56 @@ Camera_lookAt  0.0  100.0  0.0      # Look at a point above the orbital plane
 
 ---
 
+### `Camera_lookAt_System` — Follow a System
+
+```
+Camera_lookAt_System  <system_index>
+```
+
+Retargets the camera's look-at point onto the given system's **central body**
+every frame, so a moving galaxy stays centred in view. `system_index` is 0-based
+and must be a valid index into `N_SystemBodies`.
+
+Only the look-at point moves. The camera's spherical offset from it — `phi`,
+`theta` and radius — is preserved exactly, so:
+
+- the viewing angle and zoom are unchanged as the target moves
+- the runtime controls (W/A/S/D to orbit, J/L to zoom) keep working, now relative
+  to the moving target
+- `Camera_Orbit` composes with it: the camera orbits the followed body
+
+The camera position is translated by the same delta as the look-at point, rather
+than recomputed from stored angles, so following introduces no drift and does not
+fight user input.
+
+When this command is absent the feature is inactive and the fixed
+`Camera_lookAt` point is used, exactly as before.
+
+If both `Camera_lookAt` and `Camera_lookAt_System` are given, the system follow
+wins — the fixed point is overwritten on the first frame.
+
+**Errors.** The script is rejected with a message if the index is missing,
+negative, or `>= N_Systems`. The upper bound is checked after the whole script is
+read, so `Camera_lookAt_System` may appear before `N_SystemBodies`.
+
+**Examples:**
+```
+Camera_lookAt_System  0     # follow the primary galaxy
+Camera_lookAt_System  1     # follow the companion
+```
+
+Useful for an interaction where one galaxy has significant bulk motion: with a
+fixed look-at the companion drifts out of frame, whereas following keeps it
+centred for the whole run.
+
+Note the target is the system's central body specifically, not its centre of mass.
+For a galaxy these nearly coincide, since `PinCentralBodies` holds the central
+body at the system's centre of mass each step.
+
+**Default:** inactive (uses `Camera_lookAt`)
+
+---
+
 ### `Camera_Orbit` — Automatic Camera Orbiting
 
 ```
