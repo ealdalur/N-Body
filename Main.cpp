@@ -259,7 +259,12 @@ int main(int argc, char *argv[])
 			Sim->DrawInfo(fpsCurrent);
 
 		if (Recorder) {
-			if (!SimPaused) {
+			// Warmup frames (t < 0) are deliberately not recorded: the systems are
+			// isolated and held at rest there, so the footage is setup rather than
+			// simulation output. Recording begins with the t = 0 frame.
+			// Rendering still went to the record FBO, so blit it to the screen in
+			// every case that does not write a frame, or the window stays blank.
+			if (!SimPaused && Sim->ShouldRecordFrame()) {
 				uint8_t *pixels = new uint8_t[Win.width * Win.height * 3];
 				Sim->ReadFramePixels(pixels);
 				Recorder->WriteFrame(pixels);

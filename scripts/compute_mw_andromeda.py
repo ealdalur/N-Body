@@ -16,6 +16,8 @@ Sources:
   - MW-M31 distance: Riess et al. 2012 (~780 kpc)
   - M31 approach velocity: van der Marel et al. 2012 (~110 km/s radial)
   - M31 inclination: de Vaucouleurs 1958 (~77 deg)
+  - MW disc scalelength: Bland-Hawthorn & Gerhard 2016 (2.6 kpc)
+  - M31 disc scalelength: Courteau et al. 2011 (5.3 kpc)
 """
 
 import math
@@ -26,7 +28,10 @@ mu = 1.0e4   # 1 code mass unit = 10^4 solar masses
 vu = 1.0     # 1 code velocity unit = 1 km/s
 
 # === Milky Way parameters ===
-mw_radius_kpc = 26.8        # stellar disc radius
+mw_radius_kpc = 26.8        # stellar disc radius (truncation)
+mw_h_r_kpc = 2.6            # exponential disc scalelength
+                            #   Bland-Hawthorn & Gerhard 2016, ARA&A 54, 529
+                            #   (recommended thin-disc value, 2.6 +/- 0.5 kpc)
 mw_inner_kpc = 1.0          # inner hole (bulge region)
 mw_bulge_msun = 1.5e10      # bulge + central mass
 mw_disc_msun = 4.5e10       # disc mass (stars + gas)
@@ -35,7 +40,10 @@ mw_vc_kms = 220             # flat rotation curve velocity
 mw_haloRc_kpc = 10.0        # dark matter halo core radius
 
 # === Andromeda parameters ===
-and_radius_kpc = 33.5        # stellar disc radius
+and_radius_kpc = 33.5        # stellar disc radius (truncation)
+and_h_r_kpc = 5.3            # exponential disc scalelength
+                             #   Courteau et al. 2011, ApJ 739, 20
+                             #   (3.6um exponential disc scalelength for M31)
 and_inner_kpc = 1.5          # inner hole
 and_bulge_msun = 3.0e10      # bulge + central mass
 and_disc_msun = 7.0e10       # disc mass
@@ -61,6 +69,7 @@ print("=" * 60)
 
 print("\n--- Milky Way ---")
 mw_R = mw_radius_kpc / du
+mw_h_r = mw_h_r_kpc / du
 mw_Ri = mw_inner_kpc / du
 mw_M_central = mw_bulge_msun / mu
 mw_Mfrac = mw_disc_msun / mw_bulge_msun
@@ -69,6 +78,7 @@ mw_haloRc = mw_haloRc_kpc / du
 mw_particle_msun = mw_disc_msun / 39999
 
 print(f"  Disc radius:     {mw_R:.1f} code units ({mw_radius_kpc} kpc)")
+print(f"  Scale length:    {mw_h_r:.1f} code units ({mw_h_r_kpc} kpc), R/h_r = {mw_R/mw_h_r:.2f}")
 print(f"  Inner radius:    {mw_Ri:.1f} code units ({mw_inner_kpc} kpc)")
 print(f"  Central mass:    {mw_M_central:.1f} code units ({mw_bulge_msun:.1e} Msun)")
 print(f"  Mass fraction:   {mw_Mfrac:.2f}")
@@ -79,6 +89,7 @@ print(f"  Disc normal:     (0, 1, 0)")
 
 print("\n--- Andromeda ---")
 and_R = and_radius_kpc / du
+and_h_r = and_h_r_kpc / du
 and_Ri = and_inner_kpc / du
 and_M_central = and_bulge_msun / mu
 and_Mfrac = and_disc_msun / and_bulge_msun
@@ -87,6 +98,7 @@ and_haloRc = and_haloRc_kpc / du
 and_particle_msun = and_disc_msun / 39999
 
 print(f"  Disc radius:     {and_R:.1f} code units ({and_radius_kpc} kpc)")
+print(f"  Scale length:    {and_h_r:.1f} code units ({and_h_r_kpc} kpc), R/h_r = {and_R/and_h_r:.2f}")
 print(f"  Inner radius:    {and_Ri:.1f} code units ({and_inner_kpc} kpc)")
 print(f"  Central mass:    {and_M_central:.1f} code units ({and_bulge_msun:.1e} Msun)")
 print(f"  Mass fraction:   {and_Mfrac:.2f}")
@@ -120,9 +132,9 @@ print("\n--- Script lines ---")
 print(f"N_SystemBodies  40000  40000")
 print(f"Camera          0.0  8000.0  8000.0")
 print(f"# Milky Way at origin, disc in x-z plane")
-print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {mw_M_central:.1f} {mw_Mfrac:.2f} {mw_R:.1f} {mw_Ri:.1f} 1.2  {mw_haloVc:.1f} {mw_haloRc:.1f}")
+print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {mw_M_central:.1f} {mw_Mfrac:.2f} {mw_R:.1f} {mw_Ri:.1f} {mw_h_r:.1f} 1.2  {mw_haloVc:.1f} {mw_haloRc:.1f}")
 print(f"# Andromeda along +x axis")
-print(f"GalaxyDisc  1   {sep:.1f} 0.0 0.0   {v_radial_kms:.1f} {v_transverse_kms:.1f} 0.0   {nx:.4f} {ny:.4f} {nz:.4f}   {and_M_central:.1f} {and_Mfrac:.2f} {and_R:.1f} {and_Ri:.1f} 1.2  {and_haloVc:.1f} {and_haloRc:.1f}")
+print(f"GalaxyDisc  1   {sep:.1f} 0.0 0.0   {v_radial_kms:.1f} {v_transverse_kms:.1f} 0.0   {nx:.4f} {ny:.4f} {nz:.4f}   {and_M_central:.1f} {and_Mfrac:.2f} {and_R:.1f} {and_Ri:.1f} {and_h_r:.1f} 1.2  {and_haloVc:.1f} {and_haloRc:.1f}")
 
 # Rotation directions:
 print("\n--- Rotation directions ---")

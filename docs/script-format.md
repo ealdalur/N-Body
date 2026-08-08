@@ -196,23 +196,125 @@ When enabled (`1`), displays an information overlay on the rendered output showi
 
 ---
 
-### `ZeroNetMomentum` — Remove Net Momentum at Startup
+### `InitializationTime` — Warmup / Settling Phase
 
 ```
-ZeroNetMomentum  <0 | 1>
+InitializationTime  <value>
 ```
 
-When enabled (`1`), subtracts the mass-weighted mean velocity from every particle immediately after initial conditions are loaded, placing the simulation in its center-of-mass rest frame.
+When greater than zero, the simulation starts at `t = -InitializationTime` with
+the systems **dynamically isolated**, then transitions to normal coupled evolution
+at `t = 0`. A value of `0` (the default) disables the feature entirely: the run
+starts at `t = 0` and behaves exactly as it did before this was added.
 
-Procedural generators (`GalaxyDisc`, `SphericalUniverse`) sample particle azimuths randomly and do not correct the sum, so they leave a residual net momentum of order `v_c / sqrt(N)`. Nothing damps it, so the entire system drifts off the origin at constant velocity. Measured on `Milky_Way.sim` (100k particles, 220 km/s) this residual was ~0.94 code units per time unit.
+Procedurally generated discs are placed in Jeans/Toomre equilibrium but still
+carry particle-noise transients that produce odd, unphysical-looking structure for
+the first fraction of a dynamical time. The warmup lets each system settle before
+the interaction begins, so the encounter acts on a clean disc.
 
-Subtracting a uniform velocity from all particles changes no relative motion, so it changes no physics — it only selects which inertial frame the simulation is viewed in.
+**During warmup (`t < 0`):**
 
-**Enable this only for single-system scripts.** For a multi-galaxy script the net momentum is dominated by the companion's *intended* bulk motion rather than by sampling noise, so zeroing it boosts every galaxy into the COM frame: the relative orbit is identical, but the primary galaxy no longer sits at the origin and camera framing tuned around it breaks. That is why the default is off.
+| | Behaviour |
+|---|---|
+| Gravity | Only *within* each system. No cross-system particle forces. |
+| Halo | Each system feels only its **own** halo; cross-halo terms are off. |
+| Bulk velocity | **Withheld.** Each system is loaded at rest so it stays at its specified position. |
+| Bulk position | Applied normally — the systems must be spatially separated. |
+| Net momentum | Zeroed **per system** (this happens on every run, see below). |
+| Halo monopole removal | Applied per system rather than globally. |
 
-Worth noting on priority: this residual is a constant velocity rather than a force, so it grows linearly while other drift sources random-walk as `sqrt(t)`. Over short runs it is a minor contributor — for `Milky_Way.sim` it was roughly 3% of the total drift, with the analytic halo monopole (see `RemoveHaloMonopole`) accounting for nearly all the rest. Over long runs the linear term eventually dominates, which is when enabling this matters most.
+**Video recording** is suppressed during warmup. Because the systems are isolated
+and held at rest there, those frames are setup rather than simulation output, and
+recording them would prepend a stretch of non-physical footage to every video. The
+first frame written is the one at `t = 0`. For a 2.0-unit warmup at dt = 0.0005
+that skips 4000 frames.
+
+**At `t = 0`:** each system's stored bulk velocity is added to all of its
+particles, and full N-body coupling resumes. Adding a uniform velocity leaves all
+internal relative motion untouched, so the relaxed disc structure is preserved
+exactly — only the system as a whole starts moving.
+
+Because the bulk velocities are applied at `t = 0`, every orbital parameter in the
+script still refers to `t = 0`. The warmup is prepended, not inserted.
+
+#### How isolation is enforced under Octree gravity
+
+Spatial separation alone does **not** isolate systems in a Barnes-Hut tree, and it
+is worth being explicit about why:
+
+1. The root node's bounding box spans every body, so it always encloses all
+   systems regardless of their separation.
+2. The multipole acceptance test (`d*d <= theta_sq * dsq`) gets *easier* to
+   satisfy as distance grows — a distant system is **more** likely to be accepted
+   as a single lump, not less. Greater separation makes the leak more efficient.
+3. `BHNode` carries no system id, so the tree cannot filter by system.
+
+Instead, the warmup builds a **separate tree per system**, containing only that
+system's bodies, and evaluates only those bodies against it. Cross-system force is
+then identically zero by construction, with no dependence on separation or on
+`BH_Opening_Theta`.
+
+This was verified numerically. Two systems loaded at rest and held through a
+2-unit warmup drift by the same amount whether separated by 600, 3000, or 20000
+code units (~3 units in every case), whereas genuine leakage would fall off as
+1/r² (37 → 1.5 → 0.03 units over that range). A single system run alone wanders by
+an identical 2.21 units, confirming the residual is each system's own
+centre-of-mass wander from internal N-body noise, not cross-system coupling.
+
+**Cost:** the tree is rebuilt once per system per step during warmup. With a
+handful of systems this is comparable to the single-tree cost, since each tree
+holds proportionally fewer bodies.
+
+#### Choosing a value
+
+`2.0` is a reasonable default — roughly 1.5 disc dynamical times for a galaxy with
+a 210 km/s rotation curve, enough to damp the initial transients.
+
+Be aware of a countervailing effect: an isolated disc **heats** through two-body
+relaxation, so a long warmup raises the effective Toomre Q and leaves the disc
+*less* responsive to the tidal perturbation. If you are chasing strong spiral-arm
+contrast, prefer shorter warmups and treat long ones with suspicion.
 
 **Default:** 0 (disabled)
+
+---
+
+## Automatic Corrections
+
+Two corrections are applied unconditionally and have no script parameter. They are
+documented here because they affect initial conditions.
+
+### Per-System Net Momentum Removal
+
+The procedural generators (`GalaxyDisc`, `SphericalUniverse`) zero their own
+system's net momentum as part of building it, before applying any bulk velocity.
+
+These generators sample particle azimuths randomly and never correct the sum,
+leaving a residual net momentum of order `v_c / sqrt(N)`. Nothing damps it, so it
+carries the system off the origin at constant velocity — for a 100k-particle disc
+at 220 km/s that is ~1 code unit per time unit, enough to drift out of frame.
+
+The correction lives in the generators themselves, so it applies exactly to the
+systems that need it. A system assembled from explicit `Body` commands never
+invokes it, which is correct: there the net momentum is physical (real
+solar-system ephemerides, where the Sun's recoil balances the planets) and zeroing
+it would corrupt the trajectories.
+
+Ordering inside the generator matters and is deliberate:
+
+1. Place particles with their internal motion only — no bulk velocity yet.
+2. Zero the net momentum, so only sampling noise is removed.
+3. Apply the bulk velocity (or, under `InitializationTime`, withhold it to `t = 0`).
+
+Because step 2 precedes step 3, the intended bulk motion is never touched.
+
+Applied per system rather than globally: a global correction cancels only the
+*total*, leaving each individual system with its own residual drift, and under
+warmup the isolated systems would wander away from their specified separation
+before `t = 0`.
+
+Subtracting a uniform velocity from a system changes no internal relative motion,
+so it changes no physics — only which inertial frame that system starts in.
 
 ---
 
@@ -246,7 +348,13 @@ Set to `0` to reproduce the older (non-conserving) behavior. Note that enabling 
 RecordVideo  <0 | 1>
 ```
 
-When enabled (`1`), records the simulation output to an MP4 video file (`output.mp4`) using FFmpeg. Each rendered frame is captured and encoded at 30 FPS. Frames are only recorded while the simulation is running — pausing the simulation pauses recording.
+When enabled (`1`), records the simulation output to an MP4 video file using
+FFmpeg, named after the script and written to an `output/` directory alongside it.
+Each rendered frame is captured and encoded at 30 FPS.
+
+Frames are recorded only while the simulation is running — pausing pauses
+recording. If `InitializationTime` is set, the warmup frames (`t < 0`) are also
+skipped, so the video begins at `t = 0`.
 
 **Default:** 0 (disabled)
 
@@ -400,7 +508,7 @@ Body  0   1.0 0.0 0.0   0.0 0.0 -6.28  3.0e-6      # Earth
 ### `GalaxyDisc` — Procedural Galaxy Disc
 
 ```
-GalaxyDisc  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <normalX> <normalY> <normalZ>  <total_mass> <mass_fraction> <outer_radius> <inner_radius> <toomre_Q>  <halo_circular_velocity> <halo_core_radius>
+GalaxyDisc  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <normalX> <normalY> <normalZ>  <total_mass> <mass_fraction> <outer_radius> <inner_radius> <disc_scale_length> <toomre_Q>  <halo_circular_velocity> <halo_core_radius>
 ```
 
 Generates a flattened disc of particles with approximately circular orbits, representing a spiral galaxy. The disc plane is defined by the normal vector; particles orbit counter-clockwise when viewed from the direction the normal points.
@@ -415,17 +523,68 @@ Generates a flattened disc of particles with approximately circular orbits, repr
 | `mass_fraction` | Fraction of the total mass distributed among disc particles. `0.5` means disc particles collectively have half the central body's mass |
 | `outer_radius` | Maximum radius of the disc |
 | `inner_radius` | Minimum radius of the disc (creates a central hole) |
+| `disc_scale_length` | Exponential scale length of the disc, `h_r`. **Required**, and must satisfy `0 < h_r < outer_radius`. See below |
 | `toomre_Q` | Target Toomre stability parameter. Controls the radial and tangential velocity dispersion via the Jeans equations. `Q = 1.0` is the stability threshold (disc will fragment); `Q = 1.2` gives a responsive disc with strong spiral structure; `Q = 1.5` gives a stable disc that responds only to external tidal perturbations; `Q = 2.0+` gives a hot, stable disc with weak spiral response. See `docs/toomre-q-velocity-dispersion.md` for the full derivation |
 | `halo_circular_velocity` | Asymptotic circular velocity of the dark matter halo. Controls how flat the rotation curve is at large radii. Set to `0.0` for no halo |
 | `halo_core_radius` | Core radius of the dark matter halo (cored isothermal sphere). The halo density flattens inside this radius. Irrelevant if `halo_circular_velocity` is 0 |
+
+#### Radial profile: scale length vs outer radius
+
+Two radii describe the disc and they are independent:
+
+| Quantity | Role |
+|---|---|
+| `disc_scale_length` (`h_r`) | How fast surface density falls: `Sigma(r) = Sigma_0 * exp(-r / h_r)`. Sets central concentration. |
+| `outer_radius` (`R`) | Hard truncation. No particles are placed beyond it. |
+
+`h_r` is the **e-folding distance** of the surface density: at `r = h_r` density is 37% of central, at `2 h_r` it is 13.5%, at `3 h_r` it is 5%. It governs more than appearance — it sets the rotation curve shape through the enclosed-mass profile, and the velocity dispersion through the Toomre criterion.
+
+Enclosed disc mass by radius:
+
+| R / h_r | Disc mass enclosed |
+|---|---|
+| 2 | 59% |
+| 3 | 80% |
+| 4 | 91% |
+| 5 | 96% |
+
+`R / h_r` is **not** a universal ratio, which is why the scale length is a required independent input rather than derived from `R`. Real values vary widely:
+
+| Galaxy | h_r | R | R / h_r | Source |
+|---|---|---|---|---|
+| Milky Way | 2.6 kpc | 26.8 kpc | 10.3 | Bland-Hawthorn & Gerhard 2016 |
+| Andromeda (M31) | 5.3 kpc | 33.5 kpc | 6.3 | Courteau et al. 2011 |
+| M51a (NGC 5194) | 4.65 kpc | 18.62 kpc | 4.0 | Salo & Laurikainen 2000 |
+| M51b (NGC 5195) | 1.54 kpc | 11.17 kpc | 7.3 | Salo & Laurikainen 2000 |
+
+If no measured scale length is available for a galaxy, `R / 4` is a reasonable convention (a disc truncated where ~91% of the mass is enclosed) — but put the computed number in the script explicitly and note the assumption in a comment.
+
+The parser rejects a `GalaxyDisc` line with fewer than 18 values, or with `h_r <= 0` or `h_r >= R`, reporting the offending line and exiting.
+
+#### Radial sampling
+
+Particle radii are drawn from the exponential disc profile. The radial *number* density is the surface density times the area of a ring:
+
+```
+p(r) dr = Sigma(r) * 2*pi*r dr  ~  r * exp(-r / h_r) dr
+```
+
+which is a Gamma(shape 2, scale `h_r`) distribution. Because a Gamma with integer shape 2 is the sum of two exponentials, it is sampled exactly as `r = -h_r * ln(u1 * u2)` for two uniform deviates, with draws outside `[inner_radius, outer_radius]` rejected (~10% for a disc truncated at 4 `h_r`).
+
+Note the `2*pi*r` ring-area factor: omitting it would sample `p(r) ~ exp(-r/h_r)` and produce a disc roughly twice as centrally concentrated as intended, with an underpopulated outer disc.
 
 The velocity dispersion at each radius is computed from the Toomre criterion: `sigma_r = Q * 3.36 * G * Sigma(r) / kappa(r)`, where `Sigma(r)` is the local surface density (exponential disc) and `kappa(r)` is the epicyclic frequency derived from the full rotation curve (baryons + halo). The tangential dispersion follows from epicyclic theory: `sigma_phi = sigma_r * kappa / (2*Omega)`. This produces a self-consistent equilibrium that suppresses particle-noise-driven instabilities while allowing the desired level of spiral response.
 
 The dark matter halo applies a cored isothermal sphere potential: `a_halo = v_c^2 * r / (r^2 + r_c^2)`, centered on the mass-weighted barycenter of that system's particles (recomputed every derivative evaluation, not fixed to the central body). Every particle feels its own system's halo plus the halo of every other system, so multiple galaxies interact through their halos as well as their particles. The halo is a rigid analytic background — it never deforms, is never tidally stripped, and has no truncation radius; see `docs/dark-matter-halo.md` for what this does and does not model.
 
-**Example (Milky-Way-like galaxy with dark matter halo, disc in x-z plane):**
+**Example (Milky Way, disc in x-z plane).** `h_r` = 43.3 is the measured 2.6 kpc scale length, so `R / h_r` = 10.3:
 ```
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1.0e7 0.5 250.0 25.0 1.2  200.0 50.0
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 43.3 1.2  220.0 166.7
+```
+
+**Example (M51b), a disc truncated at 7.3 scale lengths:**
+```
+GalaxyDisc  1   0.0 506.5 89.3   -219.0 0.0 0.0   0.5373 0.8434 0.0000   1000000.0 1.51 186.2 3.3 25.6 1.5  166.4 31.0
 ```
 
 ---
@@ -478,8 +637,8 @@ N_SystemBodies  30000  10000
 Camera          0.0  500.0  500.0
 Camera_lookAt   150.0  0.0  -250.0
 
-GalaxyDisc  0   0.0 0.0 0.0       0.0 0.0 0.0       0.0 1.0 0.0    1.0e7 0.5 250.0 25.0 1.2  200.0 50.0
-GalaxyDisc  1   300.0 0.0 -500.0  -150.0 0.0 0.0    0.0 1.0 0.0    6.0e6 0.5 125.0 25.0 1.2  155.0 25.0
+GalaxyDisc  0   0.0 0.0 0.0       0.0 0.0 0.0       0.0 1.0 0.0    1.0e7 0.5 250.0 25.0 62.5 1.2  200.0 50.0
+GalaxyDisc  1   300.0 0.0 -500.0  -150.0 0.0 0.0    0.0 1.0 0.0    6.0e6 0.5 125.0 25.0 31.3 1.2  155.0 25.0
 ```
 
 ---

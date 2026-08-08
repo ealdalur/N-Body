@@ -1,4 +1,4 @@
-# ── M51 Whirlpool Galaxy Interaction ──────────────────────────
+# -- M51 Whirlpool Galaxy Interaction --------------------------
 #
 # Unit system (G=1):
 #   1 distance unit = 60 pc = 0.060 kpc
@@ -6,48 +6,106 @@
 #   1 velocity unit = 1 km/s
 #   1 time unit     = 58.7 Myr
 #
+# All parameters follow Salo & Laurikainen (2000), MNRAS 319, 377, for their
+# BOUND MULTIPLE-ENCOUNTER model -- the model whose morphology AND kinematics
+# they find best reproduces M51. There are no deliberate departures.
+#
+# Angular sizes are converted at the paper's OWN assumed distance of 9.6 Mpc
+# (Scoville & Young 1983), not the modern TRGB value of 8.58 Mpc. The paper's
+# encounter distances are quoted as ratios of its own Rd, and its 1.2-1.4 range
+# was tuned against Rd = 18.6 kpc; mixing a modern distance with those ratios
+# silently changes the encounter geometry.
+#   1 arcsec = 0.046542 kpc at 9.6 Mpc
+#
 # NGC 5194 (M51a): Grand-design Sbc spiral galaxy
-#   - Baryonic mass: 2.74e10 Msun (rotation-curve-decomposed)
-#   - Bulge: 4.7e9 Msun, Disc: 2.27e10 Msun
-#   - Disc radius: 11.2 kpc (186.7 code units)
+#   - Scale length  Re = 100" =  4.65 kpc ( 77.6 code units)
+#   - Truncation    Rd = 400" = 18.62 kpc (310.3 code units) = 4 Re
+#     Rd is the dynamical disc truncation and the paper's unit of
+#     length, larger than the R25 optical radius (11.2 kpc).
+#   - Baryonic mass: 4.56e10 Msun (rotation-curve-decomposed)
+#   - Bulge: 7.8e9 Msun, Disc: 3.78e10 Msun
 #   - Flat rotation curve: 210 km/s (baryon 121 + halo 172)
-#   - DM halo: Vc=172 km/s, Rc=1.0 kpc, M_halo/M_baryon=2.0
+#   - DM halo: Vc=171.5 km/s, Rc=8" =0.372 kpc, M_halo/M_baryon=2.0
 #
 # NGC 5195 (M51b): Compact SB0-pec lenticular companion
-#   - Baryonic mass: 1.97e9 Msun (rotation-curve-decomposed)
-#   - Bulge: 8.0e8 Msun, Disc: 1.17e9 Msun
-#   - Radius: 2.1 kpc (35 code units)
-#   - Rotation curve: 130 km/s (baryon 75 + halo 106)
-#   - DM halo: Vc=110 km/s, Rc=0.6 kpc, M_halo/M_baryon=2.0
-#   - Dynamical mass ratio M51b:M51a ~ 1:3.1 (at pericenter)
+#   - Scale length  Re =  33" =  1.54 kpc ( 25.6 code units)
+#   - Truncation    Rd = 240" = 11.17 kpc (186.2 code units)
+#     NOTE Rd/Re = 7.27 here, NOT 4 as for the primary. The paper is
+#     explicit: "take Rd = 240 arcsec ~ 7Re ... assuming Re = 33
+#     arcsec", so Rd is NOT 4 Re here and the scale length must be
+#     given independently of the truncation radius.
+#   - Mass set by the paper's ratio Mp = 0.55 (its primary mass
+#     constraint), NOT by an assumed rotation curve. Paper range
+#     0.5-0.7; "passages with Mp < 0.55 seem to be too weak".
+#   - Baryonic mass: 2.51e10 Msun, Bulge 1.0e10, Disc 1.51e10
+#   - Implied rotation curve: 201 km/s (derived, not assumed)
+#   - DM halo: Vc=166.4 km/s, Rc=40" =1.862 kpc, M_halo/M_baryon=2.0
+#   - Disc tilted 32.5 deg to M51a's disc (observed; paper sect 2.2)
 #
-# Mass decomposition: Salo & Laurikainen (2000) methodology
+# Mass decomposition: M_disc/M_tot = 1/3 within 4Re (paper sect 2.2)
 #   V_baryon = V_total/sqrt(3), V_halo = V_total*sqrt(2/3)
 #   This gives M_halo/M_disc ~ 2 within the disc radius.
 #   Baryonic masses are the dynamically cold component only.
 #
-# Interaction: PROGRADE tidal encounter
-#   - M51b starts at apocenter (40 kpc, 667 code units)
-#   - Orbit computed for pericenter at 12 kpc (200 code units)
-#   - Orbital inclination: 15 deg to M51a disc plane
-#   - v_tangential at apocenter: 109 km/s (v_t/v_circ = 0.51)
-#   - v_pericenter: 365 km/s
+# Interaction: BOUND, HIGH-INCLINATION multiple-encounter orbit
+#   - Rcross = 1.20 Rd, the LOW end of the paper's 1.2-1.4 range and so
+#     the strongest perturbation it allows: "passages with Mp < 0.55 or
+#     Rcross > 1.4 seem to be too weak to account for the
+#     observations". Tidal strength S = Mp*(Rd/r)^3 = 0.318.
+#   - Pericenter 20.57 kpc (342.9 code units) -- SOLVED to hit the
+#     target Rcross, not assumed. Rcross is the paper's constraint;
+#     pericenter is not independently meaningful in its framework.
+#   - Apocenter 30.86 kpc (514.3 code units) -- DERIVED from
+#     pericenter and eccentricity, not chosen independently
+#   - Eccentricity e = 0.2 (paper Fig. 1 caption, bound model)
+#   - Orbital inclination 80 deg (paper Table 2: iorb = 75-85 deg)
+#     This is a near-POLAR orbit. The paper treats the high
+#     inclination as essential: it produces the out-of-plane
+#     velocities, the 40-50 deg tilted HI tail, and the S-shaped
+#     major-axis rotation curve that coplanar models cannot explain.
+#   - Argument of pericenter 90 deg, so the APOCENTER SITS BETWEEN
+#     the disc-plane crossings (paper Fig. 1 caption). M51b therefore
+#     starts at maximum height ABOVE the disc plane (y = +506.5), with
+#     the line of nodes along +/-x. It descends through the plane on
+#     the way in, not out.
+#   - v_tangential at apocenter: 219.0 km/s (v_t/v_circ = 0.82)
+#   - v_pericenter: 328.4 km/s
 #
-# Expected timeline:
-#   t ~ 0-4:   M51b approaches, tidal perturbation grows
-#   t ~ 4-7:   Spiral arms develop as M51b nears pericenter
-#   t ~ 7:     First pericenter passage (closest approach 12 kpc)
-#   t ~ 7-11:  Strong tidal tails and grand-design spiral arms
-#   t ~ 14:    Second passage
+# Verified by numerical integration of the relative orbit
+# (see the ORBIT EVENTS section of scripts/compute_M51.py output):
+#   pericenter 20.57 kpc, apocenter 30.86 kpc, e = 0.200
+#   apocenter confirmed to fall between two crossings
+#   close crossings at 1.19-1.21 Rd -- inside the paper's
+#   Rcross = 1.2-1.4 and Rdown = 1.2-1.3
 #
-# The prograde orbit (M51b co-rotating with M51a's disc) is
-# critical: it produces strong, long-lasting two-arm spiral
-# structure via resonant tidal excitation (Toomre & Toomre 1972).
-# A retrograde encounter would produce only weak, transient
-# perturbations.
+# Event sequence (t in code units, 58.7 Myr each):
+#   t =  2.87   CLOSE crossing #1 (Rcross): 22.34 kpc = 1.20 Rd
+#   t =  3.73   pericenter, 20.57 kpc
+#   t =  7.47   apocenter, 30.86 kpc  <- between crossings
+#   t =  7.49   grazing crossing near apocenter (1.66 Rd), weak
+#   t = 11.20   pericenter
+#   t = 12.09   CLOSE crossing #2 (Rdown): 22.44 kpc = 1.21 Rd
+#   t = 14.94   apocenter
+#   t = 17.84   CLOSE crossing #3: 22.25 kpc = 1.19 Rd
 #
-# Sources: Salo & Laurikainen 2000; Dobbs et al. 2010;
-#          Querejeta et al. 2015; McQuinn et al. 2016
+# Crossings alternate close (~1.20 Rd) and grazing (~1.66 Rd) because
+# the apsides precess: in a logarithmic potential the apsidal angle is
+# not 180 deg, so they advance relative to the fixed line of nodes.
+# Only the close crossings matter.
+#
+# BEST MORPHOLOGY: t = 12.8 to 13.5 (centre ~13.1).
+#   The paper's observation epoch Tobs is 0.5-1.0 of its 80 Myr time
+#   units after the most recent close crossing (Rdown, here t=12.09).
+#   Interval between the two close crossings is 541 Myr against the
+#   paper's Tobs = 440-520 Myr -- 4% above range. The untruncated halo
+#   (no Rh cutoff) is the likely cause; see docs section 9.3.
+#
+# This is the paper's central claim: M51's present structure reflects
+# MULTIPLE crossings, not a single parabolic flyby, and the most
+# recent crossing explains features single-passage models miss.
+#
+# Sources: Salo & Laurikainen 2000, MNRAS 319, 377 (docs/ has the PDF)
+#          Dobbs et al. 2010
 # Parameters derived by: scripts/compute_M51.py
 #
 
@@ -58,30 +116,44 @@ r_soft          0.3
 BH_Opening_Theta  0.5
 
 Gravity         Octree
-End_Time        20.0
+End_Time        14.0
 
 DataLog         0
 RecordVideo     1
 Display         1920  1080
 accel_sq_color_thresh 2000000.0
 
+# Let each galaxy relax out of its initial particle-noise transients before the
+# interaction starts. The run begins at t = -2.0 with the systems dynamically
+# ISOLATED: gravity acts only within a system, cross-system halo terms are off,
+# and each system's bulk velocity is withheld so it stays at its specified
+# position. At t = 0 the bulk velocities are applied and full coupling resumes,
+# so all the orbital parameters below still refer to t = 0.
+# Remove this line to start at t = 0 with no warmup.
+InitializationTime  2.0
+
 # ── Systems ────────────────────────────────────────────────────
-# M51a: 160000 bodies (spiral resolution), M51b: 40000 bodies
-N_SystemBodies  640000  160000
+#N_SystemBodies  640000  160000
 #N_SystemBodies  256000  64000
-#N_SystemBodies  64000  16000
+N_SystemBodies  64000  16000
+#N_SystemBodies  16000  4000
 
 # ── Camera ─────────────────────────────────────────────────────
 # Face-on view of M51a disc (normal along +y), distant enough
 # to see both galaxies throughout interaction
-Camera          -1.0  2000.0  0.0
+Camera          -1.0  1600.0  0.0
 
 # ── Initial Conditions ─────────────────────────────────────────
-# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Q  haloVc  haloRc
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  h_r  Q  haloVc  haloRc
 
 # M51a (NGC 5194) at origin, disc in x-z plane (normal +y)
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   470000.0 4.84 186.7 5.0 1.5  172.1 16.7
+# h_r is the exponential scale length Re = 100" (see header).
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   780000.0 4.85 310.3 5.0 77.6 1.5  171.5 6.2
 
-# M51b (NGC 5195) at apocenter along +x, prograde orbit velocity in +z
-# with 15-deg orbital inclination (small +y velocity component)
-GalaxyDisc  1   644.0 0.0 0.0   0.0 -28.3 -105.7   0.2588 0.9659 0.0000   80000.0 1.46 35.0 3.3 1.5  110.4 10.0
+# M51b (NGC 5195) at apocenter, ABOVE M51a's disc plane (y = +506.5).
+# Velocity is purely tangential there, directed along -x (in the disc plane),
+# which is the line of nodes. This puts the apocenter a quarter-orbit from each
+# crossing -- the paper's "apocentre between the two disc crossings".
+# |pos| = 514.3 must equal the apocenter the velocity was solved for.
+# h_r = 25.6 (= Re = 33"); note Rd/Re = 7.27 here, not 4.
+GalaxyDisc  1   0.0 506.5 89.3   -219.0 0.0 0.0   0.5373 0.8434 0.0000   1000000.0 1.51 186.2 3.3 25.6 1.5  166.4 31.0

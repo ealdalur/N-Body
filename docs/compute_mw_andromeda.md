@@ -19,7 +19,8 @@ Convert real astrophysical measurements of the Milky Way and Andromeda galaxies 
 
 | Parameter | Milky Way | Andromeda | Source |
 |-----------|-----------|-----------|--------|
-| Disc radius | 26.8 kpc | 33.5 kpc | Bland-Hawthorn & Gerhard 2016; Tamm et al. 2012 |
+| Disc truncation radius | 26.8 kpc | 33.5 kpc | Bland-Hawthorn & Gerhard 2016; Tamm et al. 2012 |
+| Disc scale length | 2.6 kpc | 5.3 kpc | Bland-Hawthorn & Gerhard 2016; Courteau et al. 2011 |
 | Bulge mass | 1.5e10 Msun | 3.0e10 Msun | McMillan 2011; Tamm et al. 2012 |
 | Disc mass | 4.5e10 Msun | 7.0e10 Msun | Bland-Hawthorn & Gerhard 2016; Tamm et al. 2012 |
 | SMBH mass | 4.0e6 Msun (Sgr A*) | 1.4e8 Msun (M31*) | GRAVITY Collab. 2019; Bender et al. 2005 |
@@ -56,9 +57,30 @@ value_code = value_physical / unit_scale
 
 For example:
 ```
-mw_R = 26.8 kpc / 0.060 kpc = 446.7 code units
-mw_M = 1.5e10 Msun / 1e4 Msun = 1,500,000 code units
+mw_R   = 26.8 kpc / 0.060 kpc = 446.7 code units
+mw_h_r =  2.6 kpc / 0.060 kpc =  43.3 code units
+mw_M   = 1.5e10 Msun / 1e4 Msun = 1,500,000 code units
 ```
+
+### Disc Scale Length vs Truncation Radius
+
+`GalaxyDisc` takes both radii as independent inputs:
+
+- **Scale length** `h_r` — the e-folding distance of surface density,
+  `Sigma(r) = Sigma_0 * exp(-r / h_r)`. Sets how centrally concentrated the disc is,
+  and feeds the rotation curve (via enclosed mass) and the velocity dispersion
+  (via the Toomre criterion).
+- **Truncation radius** `R` — where particle placement stops.
+
+The ratio is not universal, so it cannot be derived from `R`:
+
+| Galaxy | h_r | R | R / h_r | Scale length source |
+|---|---|---|---|---|
+| Milky Way | 2.6 kpc | 26.8 kpc | 10.3 | Bland-Hawthorn & Gerhard 2016, ARA&A 54, 529 (thin disc, 2.6 ± 0.5 kpc) |
+| Andromeda | 5.3 kpc | 33.5 kpc | 6.3 | Courteau et al. 2011, ApJ 739, 20 (3.6 μm exponential disc) |
+
+Both are measured values rather than assumptions. Note the Milky Way's disc is
+considerably more centrally concentrated than Andromeda's relative to its extent.
 
 ### Mass Fraction (Mfrac)
 
@@ -152,4 +174,4 @@ The rough timescale calculation uses the relation 1 km/s ~ 1.022 kpc/Gyr (from 1
 
 ### Output
 
-The final output section prints complete GalaxyDisc lines ready for copy-paste into a .sim file, including all 17 parameters in the correct order.
+The final output section prints complete GalaxyDisc lines ready for copy-paste into a .sim file, including all 18 parameters in the correct order.

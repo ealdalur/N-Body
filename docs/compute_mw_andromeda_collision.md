@@ -19,8 +19,8 @@ Determine the initial separation and approach velocity for a Milky Way - Androme
 |-----------|-------|--------|
 | Current separation | 780 kpc = 13,000 code units | Riess et al. 2012 |
 | Current radial velocity | 110 km/s (approaching) | van der Marel et al. 2012 |
-| MW disc radius | 446.7 code units (26.8 kpc) | Same as Milky_Way_Andromeda.sim |
-| Andromeda disc radius | 558.3 code units (33.5 kpc) | Same as Milky_Way_Andromeda.sim |
+| MW disc truncation radius | 446.7 code units (26.8 kpc) | Same as Milky_Way_Andromeda.sim |
+| Andromeda disc truncation radius | 558.3 code units (33.5 kpc) | Same as Milky_Way_Andromeda.sim |
 
 ### Galaxy Parameters (from `compute_mw_andromeda.py`)
 
@@ -28,8 +28,20 @@ Determine the initial separation and approach velocity for a Milky Way - Androme
 |-----------|-----|-----------|
 | Central mass (code) | 1,500,000 | 3,000,000 |
 | Mfrac | 3.0 | 2.33 |
+| Disc truncation R | 446.7 code (26.8 kpc) | 558.3 code (33.5 kpc) |
+| Disc scale length h_r | 43.3 code (2.6 kpc) | 88.3 code (5.3 kpc) |
 | Halo v_c | 220 km/s | 225 km/s |
 | Halo r_c | 166.7 code | 200 code |
+
+Scale lengths are measured values: Bland-Hawthorn & Gerhard 2016 for the Milky
+Way (2.6 ± 0.5 kpc thin disc) and Courteau et al. 2011 for Andromeda (5.3 kpc,
+3.6 μm). They are supplied to `GalaxyDisc` independently of the truncation
+radius — see `docs/script-format.md`.
+
+Note the gap calculations below use the **truncation** radii, since those bound
+where particles actually exist. The discs become visually apparent well inside
+that: surface brightness at `R` is only a few percent of central for these
+concentrations.
 
 ### Unit System
 

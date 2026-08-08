@@ -79,8 +79,21 @@ class Simulation
 	double totalKE, totalPE, totalE;
 	std::vector<double> body_pot;
 
-	bool Zero_Net_Momentum;          // subtract net COM velocity at t=0
 	bool Remove_Halo_Monopole;       // cancel net force of the rigid analytic halos
+
+	// Warmup / initialization phase.
+	// When InitializationTime > 0 the simulation starts at t = -InitializationTime
+	// with the systems dynamically ISOLATED: gravity acts only within a system,
+	// cross-system halo terms are off, and each system's bulk velocity is
+	// withheld. This lets each galaxy relax out of its initial particle-noise
+	// transients before the interaction begins. At t >= 0 the stored bulk
+	// velocities are applied and full N-body coupling resumes.
+	// Zero (the default) disables all of this: the run starts at t = 0 exactly
+	// as before.
+	double InitializationTime;
+	bool warmupActive;               // true while t < 0 and warmup is enabled
+	bool bulkVelocityApplied;        // one-shot guard for the t=0 transition
+	std::vector<double> system_bulk_vel;   // 3 per system, withheld during warmup
 
 	Camera Cam;
 
@@ -128,8 +141,17 @@ class Simulation
 	void CalcOutputsRange(int iStart, int iEnd);
 	void CalcOutputs();
 	void CalcEnergy();
-	void ZeroNetMomentum();
 	void RemoveHaloMonopole();
+	// Zero one system's net momentum. Called by the procedural generators only,
+	// where random particle phases leave a residual of order v_c/sqrt(N) that is
+	// pure sampling noise. Systems built from explicit `Body` state vectors do not
+	// call it: there the net momentum is physical (real ephemeris data).
+	// Must be called BEFORE the system's bulk velocity is applied.
+	void ZeroNetMomentum(int system);
+	void ApplyBulkVelocity(int system);
+	void ApplyBulkVelocities();
+	void BuildOctreeForSystem(int sys, int &outFirst, int &outCount);
+	void CalcAccelIsolated();
 	void BuildOctreeVerts(int nodeIdx);
 public:
 	bool DrawOctree = false;
@@ -141,7 +163,11 @@ public:
 	Simulation(const std::string &scriptPath);
 	~Simulation();
 
-	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double Q, double haloVc, double haloRc);
+	// h_r is the exponential disc scale length, a required physical input. It is
+	// independent of the truncation radius R because R/h_r is not universal:
+	// Salo & Laurikainen (2000) truncate M51a at 4 h_r and M51b at 7.3 h_r.
+	// Caller must ensure 0 < h_r < R.
+	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double h_r, double Q, double haloVc, double haloRc);
 	void LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc);
 	void BuildOctree();
 	void Step();
@@ -156,6 +182,19 @@ public:
 	bool ReadState();
 
 	bool GetRecordVideo() const { return Record_Video; }
+
+	// Whether the frame about to be presented should be written to the video.
+	// During the warmup phase (t < 0) the systems are isolated and held at rest,
+	// so those frames are setup rather than simulation output.
+	//
+	// The comparison carries a half-step tolerance because t is accumulated as
+	// t += dt and so never lands exactly on zero (from -2.0 at dt = 0.0005 the
+	// closest value is -1.65e-13). The tolerance includes that frame as t = 0
+	// while still excluding the step before it.
+	bool ShouldRecordFrame() const {
+		if (InitializationTime <= 0.0) return true;
+		return t >= -0.5 * dt;
+	}
 	double GetTime() const { return t; }
 	double GetEndTime() const { return EndTime; }
 	int GetDisplayWidth() const { return DisplayWidth; }

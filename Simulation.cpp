@@ -32,8 +32,10 @@ Simulation::Simulation(const std::string &scriptPath)
 	totalKE = 0.0;
 	totalPE = 0.0;
 	totalE = 0.0;
-	Zero_Net_Momentum = false;
 	Remove_Halo_Monopole = true;
+	InitializationTime = 0.0;
+	warmupActive = false;
+	bulkVelocityApplied = true;   // nothing withheld unless warmup is enabled
 	CamOrbit = false;
 	CamOrbitTheta = 0.0;
 	vset(0.0, 0.0, 0.0, Cam.lookAt);
@@ -44,18 +46,24 @@ Simulation::Simulation(const std::string &scriptPath)
 	LoadScript(scriptPath);
 	Allocate();
 
-	if (Zero_Net_Momentum)
-		ZeroNetMomentum();
+	if (warmupActive) {
+		std::cout << "Warmup enabled: starting at t = " << t
+		          << ", systems isolated (no cross-system gravity, bulk"
+		          << " velocities withheld) until t = 0" << std::endl;
+	}
 
 	posBuf = new float[N_Bodies * 3];
 	clrBuf = new float[N_Bodies * 4];
 
 	InitGL();
 
-	if (Gravity_Oct)
-		BuildOctree();
-
-	CalcAccelerations();
+	if (warmupActive) {
+		CalcAccelIsolated();
+	} else {
+		if (Gravity_Oct)
+			BuildOctree();
+		CalcAccelerations();
+	}
 	CalcOutputs();
 
 	if (Data_Log)
@@ -96,6 +104,7 @@ void Simulation::Allocate()
 	halo_rc_sq.resize(N_Systems, 0.0);
 	halo_central.resize(N_Systems, 0);
 	halo_center.resize(N_Systems * 3, 0.0);
+	system_bulk_vel.resize(N_Systems * 3, 0.0);
 	body_system.resize(N_Bodies, 0);
 
 	mass.resize(N_Bodies, 0.0);
@@ -218,12 +227,17 @@ void Simulation::LoadScript(const std::string &path)
 		} else if (key == "Info_Display") {
 			int val; iss >> val;
 			Info_Display = (val != 0);
-		} else if (key == "ZeroNetMomentum") {
-			int val; iss >> val;
-			Zero_Net_Momentum = (val != 0);
 		} else if (key == "RemoveHaloMonopole") {
 			int val; iss >> val;
 			Remove_Halo_Monopole = (val != 0);
+		} else if (key == "InitializationTime") {
+			iss >> InitializationTime;
+			if (InitializationTime > 0.0) {
+				// Start before zero; the systems evolve in isolation until t=0.
+				t = -InitializationTime;
+				warmupActive = true;
+				bulkVelocityApplied = false;
+			}
 		} else if (key == "N_SystemBodies") {
 			N_System_Bodies.clear();
 			int n;
@@ -238,15 +252,35 @@ void Simulation::LoadScript(const std::string &path)
 			int system;
 			double px, py, pz, vx, vy, vz;
 			double nx, ny, nz;
-			double M, Mfrac, R, Ri, Q, haloVc, haloRc;
-			iss >> system >> px >> py >> pz >> vx >> vy >> vz >> nx >> ny >> nz >> M >> Mfrac >> R >> Ri >> Q >> haloVc >> haloRc;
+			double M, Mfrac, R, Ri, h_r, Q, haloVc, haloRc;
+			if (!(iss >> system >> px >> py >> pz >> vx >> vy >> vz
+			          >> nx >> ny >> nz >> M >> Mfrac >> R >> Ri >> h_r
+			          >> Q >> haloVc >> haloRc)) {
+				std::cerr << "Error: malformed GalaxyDisc command." << std::endl;
+				std::cerr << "Expected 18 values: system posX posY posZ velX velY velZ"
+				          << " normalX normalY normalZ mass massFrac R Ri h_r Q"
+				          << " haloVc haloRc" << std::endl;
+				std::cerr << "  got: " << line << std::endl;
+				exit(1);
+			}
+			if (h_r <= 0.0) {
+				std::cerr << "Error: GalaxyDisc scale length (h_r) must be > 0, got "
+				          << h_r << std::endl;
+				exit(1);
+			}
+			if (h_r >= R) {
+				std::cerr << "Error: GalaxyDisc scale length (h_r = " << h_r
+				          << ") must be less than the outer radius R = " << R
+				          << std::endl;
+				exit(1);
+			}
 
 			if (pos_data.empty()) Allocate();
 
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
 			double discNormal[3] = {nx, ny, nz};
-			LoadGalaxyDiscState(system, sysPos, sysVel, discNormal, M, Mfrac, R, Ri, Q, haloVc, haloRc);
+			LoadGalaxyDiscState(system, sysPos, sysVel, discNormal, M, Mfrac, R, Ri, h_r, Q, haloVc, haloRc);
 		} else if (key == "SphericalUniverse") {
 			int system;
 			double px, py, pz, vx, vy, vz;
@@ -319,7 +353,7 @@ void Simulation::LoadScript(const std::string &path)
 		std::cout << "  System " << i << ": " << N_System_Bodies[i] << " bodies" << std::endl;
 }
 
-void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double Q, double haloVc, double haloRc){
+void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double h_r, double Q, double haloVc, double haloRc){
 
 	double m,r,theta,vm,m_orbit;
 	double p[3],v[3];
@@ -347,16 +381,33 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	mass[sysIdx] = M;
 	has_gravity[sysIdx] = true;
 	vcopy(sysPos, pos[sysIdx]);
-	vcopy(sysVel, vel[sysIdx]);
 
-	// Exponential disc profile: surface density Sigma(r) ~ exp(-r/h_r)
-	// Scale length h_r = R/4 gives realistic concentration with ~98% of mass within R.
-	// Sampling via inverse CDF: r = -h_r * ln(1 - u*(1 - exp(-R/h_r)))
-	// with rejection of r < Ri.
-	double h_r = R / 4.0;
-	double exp_norm = 1.0 - exp(-R / h_r);
+	// Record this system's bulk velocity. Particles are built WITHOUT it so that
+	// ZeroNetMomentum() below sees only the sampling noise; the bulk motion is
+	// added afterwards (or, under warmup, withheld until t = 0). The bulk
+	// POSITION is always applied -- the systems must be spatially separated.
+	system_bulk_vel[system*3+0] = sysVel[0];
+	system_bulk_vel[system*3+1] = sysVel[1];
+	system_bulk_vel[system*3+2] = sysVel[2];
 
-	// Precompute enclosed mass fraction for the exponential profile:
+	vset(0.0, 0.0, 0.0, vel[sysIdx]);
+
+	// Exponential disc: surface density Sigma(r) = Sigma_0 * exp(-r/h_r).
+	//
+	// The radial NUMBER density is the surface density times the area of a ring,
+	//   p(r) dr = Sigma(r) * 2*pi*r dr  ~  r * exp(-r/h_r) dr
+	// which is exactly a Gamma(shape=2, scale=h_r) distribution. A Gamma with
+	// integer shape 2 is the sum of two independent exponentials, so
+	//   r = -h_r * (ln u1 + ln u2) = -h_r * ln(u1*u2)
+	// samples it exactly, with no numerical inversion. Draws outside [Ri, R] are
+	// rejected (~10% for a disc truncated at 4 h_r).
+	//
+	// h_r is supplied by the caller and validated at parse time (0 < h_r < R).
+	// It is independent of R because R/h_r is not a universal ratio: Salo &
+	// Laurikainen (2000) truncate M51a at 4 h_r and M51b at 7.3 h_r. A disc
+	// truncated at 4 h_r retains ~91% of its mass.
+
+	// Enclosed mass fraction for the exponential disc:
 	// M_enc(r) / M_disc = [1 - (1 + r/h_r)*exp(-r/h_r)] / [1 - (1 + R/h_r)*exp(-R/h_r)]
 	double enc_denom = 1.0 - (1.0 + R/h_r)*exp(-R/h_r);
 
@@ -372,11 +423,15 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 		mass[sysIdx+i] = m;
 		has_gravity[sysIdx+i] = true;
 
-		// Sample radius from exponential disc profile (reject if < Ri)
+		// Sample radius from the exponential disc profile, r ~ Gamma(2, h_r),
+		// rejecting draws outside the disc. drand() is guarded against returning
+		// exactly 0, which would give log(0).
 		do {
-			double u_r = drand();
-			r = -h_r * log(1.0 - u_r * exp_norm);
-		} while (r < Ri);
+			double u1 = drand(), u2 = drand();
+			if (u1 < 1e-300) u1 = 1e-300;
+			if (u2 < 1e-300) u2 = 1e-300;
+			r = -h_r * log(u1 * u2);
+		} while (r < Ri || r > R);
 		theta = 2*M_PI*drand();
 
 		// In-plane position
@@ -442,8 +497,15 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 		v[2] = v_tan * t_hat[2] + v_rad * r_hat[2];
 
 		vadd(p, pos[sysIdx], pos[sysIdx+i]);
-		vadd(v, vel[sysIdx], vel[sysIdx+i]);
+		vcopy(v, vel[sysIdx+i]);
 	}
+
+	// Random particle phases leave a net momentum of order v_c/sqrt(N). Remove it
+	// now, while the particles still carry only their internal motion.
+	ZeroNetMomentum(system);
+
+	// Apply the bulk motion, unless warmup is deferring it to t = 0.
+	if (!warmupActive) ApplyBulkVelocity(system);
 }
 
 void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc) {
@@ -459,6 +521,12 @@ void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *
 	halo_central[system] = sysIdx;
 
 	m = M/N_System_Bodies[system];
+
+	// Bulk velocity is recorded and applied after the momentum correction; see
+	// LoadGalaxyDiscState for the rationale.
+	system_bulk_vel[system*3+0] = sysVel[0];
+	system_bulk_vel[system*3+1] = sysVel[1];
+	system_bulk_vel[system*3+2] = sysVel[2];
 
 	std::mt19937 generator;
 	std::normal_distribution<double> normal(0.0, 1.0);
@@ -485,8 +553,11 @@ void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *
 		vscale(p, H, v);
 
 		vadd(p, sysPos, pos[sysIdx+i]);
-		vadd(v, sysVel, vel[sysIdx+i]);
+		vcopy(v, vel[sysIdx+i]);
 	}
+
+	ZeroNetMomentum(system);
+	if (!warmupActive) ApplyBulkVelocity(system);
 }
 
 void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
@@ -846,38 +917,279 @@ void Simulation::CalcEnergy() {
 	totalE = totalKE + totalPE;
 }
 
-void Simulation::ZeroNetMomentum() {
-	// Random-phase disc sampling leaves a residual net momentum of order
-	// v_c/sqrt(N) that nothing damps, so the system drifts off the origin at
-	// constant velocity. Subtracting the mass-weighted mean velocity just picks
-	// the COM rest frame -- it changes no relative motion and so no physics,
-	// only the (arbitrary) inertial frame the simulation is viewed in.
+void Simulation::ZeroNetMomentum(int system) {
+	// Remove one system's net momentum. The procedural generators sample particle
+	// azimuths randomly and never correct the sum, leaving a residual of order
+	// v_c/sqrt(N). Nothing damps it, so it carries the system off the origin at
+	// constant velocity forever -- for a 100k-particle disc at 220 km/s that is
+	// ~1 code unit per time unit.
 	//
-	// Off by default, and only appropriate for a single system: with a moving
-	// companion the net momentum is mostly the INTENDED bulk motion, so zeroing
-	// it boosts every galaxy into the COM frame and the primary no longer sits at
-	// the origin. On Milky_Way.sim this residual was ~0.94 code units/time, about
-	// 3% of the observed drift -- the halo monopole was the rest. It still earns
-	// its place on long runs, since a constant velocity grows linearly while the
-	// remaining (force-error) sources random-walk as sqrt(t).
-	double cvx = 0.0, cvy = 0.0, cvz = 0.0;
-	double total_m = 0.0;
-	for (int i = 0; i < N_Bodies; i++) {
-		double mi = mass[i];
-		cvx += mi * vel[i][0];
-		cvy += mi * vel[i][1];
-		cvz += mi * vel[i][2];
+	// Called from the generators themselves, so it applies exactly to the systems
+	// that need it. Systems built from explicit `Body` state vectors never reach
+	// here, which is correct: their net momentum is physical (real ephemerides,
+	// where the Sun's recoil balances the planets) and zeroing it would corrupt
+	// the trajectories.
+	//
+	// PRECONDITION: the system's particles must not yet carry the bulk velocity.
+	// Otherwise this would subtract the intended bulk motion along with the noise.
+	//
+	// Per system rather than globally, because a global correction cancels only
+	// the total: each individual system would keep its own residual drift, and
+	// under warmup the isolated systems would wander away from their specified
+	// separation before t = 0.
+	int sysIdx = 0;
+	for (int i = 0; i < system; i++) sysIdx += N_System_Bodies[i];
+	int n = N_System_Bodies[system];
+
+	double cvx = 0.0, cvy = 0.0, cvz = 0.0, total_m = 0.0;
+	for (int i = 0; i < n; i++) {
+		double mi = mass[sysIdx + i];
+		cvx += mi * vel[sysIdx + i][0];
+		cvy += mi * vel[sysIdx + i][1];
+		cvz += mi * vel[sysIdx + i][2];
 		total_m += mi;
 	}
 	if (total_m <= 0.0) return;
 
 	double inv_m = 1.0 / total_m;
-	double v0[3] = {cvx * inv_m, cvy * inv_m, cvz * inv_m};
+	double v0[3] = {cvx*inv_m, cvy*inv_m, cvz*inv_m};
+	for (int i = 0; i < n; i++) {
+		vel[sysIdx + i][0] -= v0[0];
+		vel[sysIdx + i][1] -= v0[1];
+		vel[sysIdx + i][2] -= v0[2];
+	}
+}
 
-	for (int i = 0; i < N_Bodies; i++) {
-		vel[i][0] -= v0[0];
-		vel[i][1] -= v0[1];
-		vel[i][2] -= v0[2];
+void Simulation::ApplyBulkVelocity(int system) {
+	// Add the system's stored bulk velocity to every one of its particles.
+	// A uniform shift leaves all internal relative motion untouched, so the disc
+	// structure is preserved exactly; only the system as a whole starts moving.
+	int sysIdx = 0;
+	for (int i = 0; i < system; i++) sysIdx += N_System_Bodies[i];
+	double *vb = &system_bulk_vel[system * 3];
+	for (int i = 0; i < N_System_Bodies[system]; i++) {
+		vel[sysIdx + i][0] += vb[0];
+		vel[sysIdx + i][1] += vb[1];
+		vel[sysIdx + i][2] += vb[2];
+	}
+}
+
+void Simulation::ApplyBulkVelocities() {
+	// End of warmup: hand every system the bulk velocity that was withheld at
+	// load time.
+	for (int sys = 0; sys < N_Systems; sys++)
+		ApplyBulkVelocity(sys);
+	bulkVelocityApplied = true;
+
+	std::cout << "t=0: warmup complete, applying bulk velocities and enabling"
+	          << " cross-system gravity" << std::endl;
+}
+
+void Simulation::BuildOctreeForSystem(int sys, int &outFirst, int &outCount) {
+	// Build the tree from ONE system's gravitating bodies only.
+	//
+	// This is the reliable way to isolate the systems. Spatial separation is NOT
+	// sufficient with a shared tree: the root node spans every body, and the
+	// Barnes-Hut acceptance test (d*d <= theta_sq * dsq in BHTree.cpp) gets
+	// EASIER to satisfy as separation grows, so a distant system is more likely
+	// to be swallowed as a single accepted multipole, not less. Excluding its
+	// bodies from the tree entirely is a structural guarantee that needs no
+	// assumption about distance or opening angle.
+	int sysStart = 0;
+	for (int s = 0; s < sys; s++) sysStart += N_System_Bodies[s];
+
+	int numActive = 0;
+	for (int i = 0; i < N_System_Bodies[sys]; i++) {
+		int bi = sysStart + i;
+		if (!has_gravity[bi]) continue;
+		pos_f[bi*3]   = (float)pos[bi][0];
+		pos_f[bi*3+1] = (float)pos[bi][1];
+		pos_f[bi*3+2] = (float)pos[bi][2];
+		sortedIdx[numActive++] = bi;
+	}
+
+	outFirst = 0;
+	outCount = numActive;
+	if (numActive == 0) return;
+
+	float p_min[3], p_max[3];
+	int first = sortedIdx[0];
+	p_min[0] = pos_f[first*3]; p_min[1] = pos_f[first*3+1]; p_min[2] = pos_f[first*3+2];
+	p_max[0] = p_min[0]; p_max[1] = p_min[1]; p_max[2] = p_min[2];
+	for (int i = 1; i < numActive; i++) {
+		int bi = sortedIdx[i];
+		for (int j = 0; j < 3; j++) {
+			if (pos_f[bi*3+j] < p_min[j]) p_min[j] = pos_f[bi*3+j];
+			if (pos_f[bi*3+j] > p_max[j]) p_max[j] = pos_f[bi*3+j];
+		}
+	}
+
+	float maxDim = p_max[0] - p_min[0];
+	if (p_max[1] - p_min[1] > maxDim) maxDim = p_max[1] - p_min[1];
+	if (p_max[2] - p_min[2] > maxDim) maxDim = p_max[2] - p_min[2];
+	maxDim *= 1.001f;
+	float center[3] = {(p_min[0]+p_max[0])*0.5f, (p_min[1]+p_max[1])*0.5f,
+	                   (p_min[2]+p_max[2])*0.5f};
+	for (int j = 0; j < 3; j++) {
+		p_min[j] = center[j] - maxDim*0.5f;
+		p_max[j] = center[j] + maxDim*0.5f;
+	}
+
+	// Morton sort for cache-coherent insertion, same as BuildOctree()
+	for (int i = 0; i < numActive; i++) {
+		int bi = sortedIdx[i];
+		mortonCodes[bi] = morton3D(pos_f[bi*3], pos_f[bi*3+1], pos_f[bi*3+2],
+		                           p_min, p_max);
+	}
+	for (int shift = 0; shift < 30; shift += 10) {
+		int counts[1024] = {};
+		for (int i = 0; i < numActive; i++)
+			counts[(mortonCodes[sortedIdx[i]] >> shift) & 0x3FF]++;
+		int total = 0;
+		for (int i = 0; i < 1024; i++) {
+			int c = counts[i]; counts[i] = total; total += c;
+		}
+		for (int i = 0; i < numActive; i++) {
+			int bi = sortedIdx[i];
+			sortTemp[counts[(mortonCodes[bi] >> shift) & 0x3FF]++] = bi;
+		}
+		memcpy(sortedIdx.data(), sortTemp.data(), numActive * sizeof(int));
+	}
+
+	Octree.Reset(p_min, p_max);
+	for (int i = 0; i < numActive; i++) {
+		int bi = sortedIdx[i];
+		Octree.InsertBody(pos_f.data() + bi*3, (float)mass[bi], bi);
+	}
+	Octree.CalcMasses();
+}
+
+void Simulation::CalcAccelIsolated() {
+	// Warmup force evaluation: each system feels ONLY its own gravity and its
+	// OWN halo. No cross-system particle forces, no cross-system halo terms.
+	ZeroAccelerationRange(0, N_Bodies-1);
+	ComputeHaloCenters();
+
+	int sysStart = 0;
+	for (int sys = 0; sys < N_Systems; sys++) {
+		int n = N_System_Bodies[sys];
+
+		if (Gravity_Oct) {
+			int first, count;
+			BuildOctreeForSystem(sys, first, count);
+			// sortedIdx[0..count) now holds only this system's bodies, and the
+			// tree contains only those bodies, so this is exactly self-gravity.
+			// Threaded the same way as the normal path: the tree is read-only
+			// here and each body writes only its own acc[], so this is safe.
+			if (multiThreading && count >= numThreads && numThreads > 1) {
+				int chunk = count / numThreads;
+				for (int th = 0; th < numThreads; ++th) {
+					int kStart = th * chunk;
+					int kEnd = (th == numThreads - 1) ? (count - 1) : (kStart + chunk - 1);
+					pool->submit([this, kStart, kEnd]() {
+						for (int k = kStart; k <= kEnd; k++) {
+							int bi = sortedIdx[k];
+							float pf[3] = {(float)pos[bi][0], (float)pos[bi][1],
+							               (float)pos[bi][2]};
+							double a[3], pot;
+							Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft,
+							        (float)(BH_Opening_Theta*BH_Opening_Theta), a, &pot);
+							vadd(acc[bi], a, acc[bi]);
+							body_pot[bi] = pot * mass[bi];
+							vscaleadd(pos[bi], FDE, acc[bi]);
+						}
+					});
+				}
+				pool->waitAll();
+			} else {
+				for (int k = 0; k < count; k++) {
+					int bi = sortedIdx[k];
+					float pf[3] = {(float)pos[bi][0], (float)pos[bi][1], (float)pos[bi][2]};
+					double a[3], pot;
+					Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft,
+					                        (float)(BH_Opening_Theta*BH_Opening_Theta),
+					                        a, &pot);
+					vadd(acc[bi], a, acc[bi]);
+					body_pot[bi] = pot * mass[bi];
+					vscaleadd(pos[bi], FDE, acc[bi]);
+				}
+			}
+		} else {
+			// P2P restricted to this system's index range
+			for (int i = sysStart; i < sysStart + n; i++) {
+				vscaleadd(pos[i], FDE, acc[i]);
+				double pot = 0.0, d[3];
+				for (int j = sysStart; j < sysStart + n; j++) {
+					if (j == i) continue;
+					vsub(pos[j], pos[i], d);
+					double dsq = vmagsqsoft(d, r_soft);
+					double r_inv = 1.0 / sqrt(dsq);
+					vscaleadd(d, G * mass[j] * (r_inv/dsq), acc[i]);
+					pot += -G * mass[j] * r_inv;
+				}
+				body_pot[i] = pot * mass[i];
+			}
+		}
+
+		// Own halo only -- the cross-halo loop is deliberately omitted.
+		if (halo_vc[sys] > 0.0) {
+			double *hc = &halo_center[sys * 3];
+			for (int i = sysStart; i < sysStart + n; i++) {
+				double r_halo[3];
+				r_halo[0] = hc[0] - pos[i][0];
+				r_halo[1] = hc[1] - pos[i][1];
+				r_halo[2] = hc[2] - pos[i][2];
+				double rsq = vmagsq(r_halo);
+				if (rsq > 1e-10) {
+					double s = halo_vc[sys]*halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+					vscaleadd(r_halo, s, acc[i]);
+				}
+			}
+		}
+
+		sysStart += n;
+	}
+
+	// Halo monopole removal, applied PER SYSTEM during warmup. The normal
+	// global version would transfer spurious momentum between isolated systems.
+	if (Remove_Halo_Monopole) {
+		sysStart = 0;
+		for (int sys = 0; sys < N_Systems; sys++) {
+			int n = N_System_Bodies[sys];
+			if (halo_vc[sys] > 0.0) {
+				double fh[3] = {0.0, 0.0, 0.0};
+				double total_m = 0.0;
+				double *hc = &halo_center[sys * 3];
+				for (int i = sysStart; i < sysStart + n; i++) {
+					if (!has_gravity[i]) continue;
+					double mi = mass[i];
+					total_m += mi;
+					double r_halo[3];
+					r_halo[0] = hc[0] - pos[i][0];
+					r_halo[1] = hc[1] - pos[i][1];
+					r_halo[2] = hc[2] - pos[i][2];
+					double rsq = vmagsq(r_halo);
+					if (rsq > 1e-10) {
+						double s = halo_vc[sys]*halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+						fh[0] += mi * s * r_halo[0];
+						fh[1] += mi * s * r_halo[1];
+						fh[2] += mi * s * r_halo[2];
+					}
+				}
+				if (total_m > 0.0) {
+					double inv_m = 1.0 / total_m;
+					double aCorr[3];
+					vscale(fh, inv_m, aCorr);
+					for (int i = sysStart; i < sysStart + n; i++) {
+						if (!has_gravity[i]) continue;
+						acc[i][0] -= aCorr[0];
+						acc[i][1] -= aCorr[1];
+						acc[i][2] -= aCorr[2];
+					}
+				}
+			}
+			sysStart += n;
+		}
 	}
 }
 
@@ -1018,20 +1330,35 @@ void Simulation::Step()
 	CalcLeapFrogPositions();
 	PinCentralBodies();
 
-	// The octree must be rebuilt from the current positions before forces are
-	// evaluated against it, otherwise every step computes forces from the
-	// previous step's tree -- a body is attracted toward where mass used to be.
-	// The constructor already initialized in this order; Step() did not, so this
-	// aligns the two. Correctness fix rather than a drift fix: it cut the net
-	// spurious gravity force ~30x when measured, but that error is largely
-	// direction-randomizing and cancels in the sum, so its contribution to
-	// center-of-mass drift was small (a ~12% change in COM velocity growth).
-	if (Gravity_Oct)
-	{
-		BuildOctree();
+	// End of warmup. Checked BEFORE the force evaluation so the first step at
+	// t >= 0 already sees the coupled system and the applied bulk velocities.
+	if (warmupActive && t >= 0.0) {
+		warmupActive = false;
+		if (!bulkVelocityApplied) ApplyBulkVelocities();
 	}
 
-	CalcAccelerations();
+	if (warmupActive) {
+		// Systems isolated: each builds its own tree and feels only its own
+		// gravity and halo. CalcAccelIsolated does its own tree construction
+		// per system, so the shared BuildOctree() below is skipped.
+		CalcAccelIsolated();
+	} else {
+		// The octree must be rebuilt from the current positions before forces are
+		// evaluated against it, otherwise every step computes forces from the
+		// previous step's tree -- a body is attracted toward where mass used to be.
+		// The constructor already initialized in this order; Step() did not, so this
+		// aligns the two. Correctness fix rather than a drift fix: it cut the net
+		// spurious gravity force ~30x when measured, but that error is largely
+		// direction-randomizing and cancels in the sum, so its contribution to
+		// center-of-mass drift was small (a ~12% change in COM velocity growth).
+		if (Gravity_Oct)
+		{
+			BuildOctree();
+		}
+
+		CalcAccelerations();
+	}
+
 	CalcLeapFrogVelocitiesAndOutputs();
 
 	CalcEnergy();

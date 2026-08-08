@@ -142,7 +142,8 @@ The code uses an exponential surface density profile:
 Sigma(r) = (M_disc / (2 * pi * h_r^2)) * exp(-r / h_r)
 ```
 
-where h_r = R/4 is the scale length and M_disc = Mfrac * M is the total disc mass.
+where h_r is the disc scale length (a required `GalaxyDisc` input, independent of
+the truncation radius R) and M_disc = Mfrac * M is the total disc mass.
 
 ### 5.2 Why Sigma Matters
 

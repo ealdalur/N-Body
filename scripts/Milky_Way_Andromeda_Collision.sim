@@ -50,6 +50,15 @@ DataLog         0
 RecordVideo     1
 Display         1920  1080
 
+# Let each galaxy relax out of its initial particle-noise transients before the
+# interaction starts. The run begins at t = -2.0 with the systems dynamically
+# ISOLATED: gravity acts only within a system, cross-system halo terms are off,
+# and each system's bulk velocity is withheld so it stays at its specified
+# position. At t = 0 the bulk velocities are applied and full coupling resumes,
+# so all the orbital parameters below still refer to t = 0.
+# Remove this line to start at t = 0 with no warmup.
+InitializationTime  2.0
+
 # 40,000 bodies per galaxy = 80,000 total
 N_SystemBodies  200000  200000
 
@@ -59,10 +68,18 @@ Camera          -1000.0  250.0  0.0
 Camera_lookAt   0.0 200.0 0.0
 
 # ── Initial Conditions ─────────────────────────────
-# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  Q  haloVc  haloRc
+# Disc scale length h_R = 2.6 kpc = 43.3 code units
+#   Bland-Hawthorn & Gerhard 2016, ARA&A 54, 529 (recommended thin-disc
+#   scalelength, 2.6 +/- 0.5 kpc). The truncation R = 446.7 is therefore
+#   10.3 scale lengths -- the MW disc is far more centrally concentrated
+#   than the R/4 convention would imply.
+# Andromeda disc scale length h_R = 5.3 kpc = 88.3 code units
+#   Courteau et al. 2011, ApJ 739, 20 (3.6um exponential disc scalelength).
+#   Truncation R = 558.3 is 6.3 scale lengths.
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  h_r  Q  haloVc  haloRc
 
 # Milky Way at origin, disc in x-z plane
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 1.2  220.0 166.7
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 43.3 1.2  220.0 166.7
 
 # Andromeda approaching from +x at 300 km/s with 50 km/s transverse
-GalaxyDisc  1   3000.0 0.0 0.0   -300.0 50.0 0.0   0.2250 0.7982 0.5589   3000000.0 2.33 558.3 5.0 1.2  225.0 200.0
+GalaxyDisc  1   3000.0 0.0 0.0   -300.0 50.0 0.0   0.2250 0.7982 0.5589   3000000.0 2.33 558.3 5.0 88.3 1.2  225.0 200.0
