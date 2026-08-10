@@ -146,7 +146,7 @@ N_SystemBodies  640000  160000
 # ── Camera ─────────────────────────────────────────────────────
 # Face-on view of M51a disc (normal along +y), distant enough
 # to see both galaxies throughout interaction
-Camera          0.0  1600.0  1.0
+Camera          0.0  1600.0  -1.0
 Camera_lookAt_System   0
 
 # ── Initial Conditions ─────────────────────────────────────────
