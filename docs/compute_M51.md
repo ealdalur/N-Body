@@ -247,10 +247,32 @@ e1 = (1, 0, 0)                       along the line of nodes, in the disc plane
 e2 = (0, sin(iorb), cos(iorb))       perpendicular to e1, tilted out of the plane
 
 position = r_apo * e2 = (0, 506.5, 89.3)    apocenter, max height off plane
-velocity = -v_t * e1  = (-219.0, 0, 0)      purely tangential, in the disc plane
+velocity = +v_t * e1  = (+219.0, 0, 0)      purely tangential, in the disc plane
 ```
 
-The script asserts `|pos|` equals the apocenter the velocity was solved for, and that `pos · vel` ≈ 0.
+The **sign of the velocity** sets the orbit's circulation sense and is not free. `iorb` is defined as the angle between the orbital angular momentum `L_orb = pos × vel` and the primary's disc angular momentum `L_disc`. With `+e1`:
+
+```
+L_orb  = (0, +19557, -110924)
+L_disc = (0, +1, 0)              M51a's disc normal
+angle  = 80.0 deg                matches iorb
+```
+
+Using `−e1` mirrors this to `180 − iorb` = 100 deg — the same near-polar geometry but counter-circulating, and outside the paper's 75–85 deg range.
+
+The script asserts three things: `|pos|` equals the apocenter the velocity was solved for, `pos · vel` ≈ 0 (apocenter has no radial velocity), and the realized `iorb` recomputed from the emitted state vector equals the requested value. The last check is what catches a sign or basis error, which the inclination input alone cannot.
+
+#### Three independent rotation senses
+
+These are easy to conflate but are set separately:
+
+| | Sense | Set by | Value |
+|---|---|---|---|
+| 1 | M51a's stars about M51a's centre | M51a disc normal | `L` along +y |
+| 2 | M51b's stars about M51b's centre | M51b disc normal | `L` 32.5 deg from #1, same sense |
+| 3 | M51b's orbit about M51a | orbital state vector | `L_orb` at `iorb` = 80 deg to #1 |
+
+`GalaxyDisc` gives each disc a spin angular momentum parallel to its own normal (the generator uses `v_tan = -vm * cross(r_hat, n)`, which yields `L ∥ +n`). So #1 and #2 follow directly from the normal vectors in the script, and the 32.5 deg between them is the paper's observed relative disc inclination. Only #3 depends on the orbital velocity sign.
 
 ### 4.5 Computed Parameters
 
@@ -322,7 +344,7 @@ Cross-check on the longer interval: the paper wants 440–520 Myr between succes
 ### 4.8 Coordinate System
 
 - M51a disc lies in the **x-z plane**, disc normal **+y**
-- M51a disc rotates **clockwise** viewed from +y (`LoadGalaxyDiscState` uses `v_tan = -vm`, and `t_hat = cross(r_hat, n_hat)` is +z at the +x position)
+- M51a disc rotates **counter-clockwise** about its normal: `LoadGalaxyDiscState` uses `v_tan = -vm` with `t_hat = cross(r_hat, n_hat)`, which puts the disc angular momentum `L_disc` along **+y**, parallel to the normal. With the camera at +y looking toward the origin this also reads counter-clockwise on screen.
 - M51b's line of nodes is along **±x**; its apocenter is on the **+y side**
 
 ---
@@ -369,7 +391,9 @@ sigma_phi(r) = sigma_r * kappa / (2 * Omega)
 
 where `Sigma(r)` is the local exponential surface density and `kappa(r)` the epicyclic frequency from the full rotation curve.
 
-Q = 1.5 gives a "warm" disc: stable against spontaneous fragmentation and particle-noise-driven multi-arm structure, while remaining responsive to the strong m=2 tidal perturbation. At Q < 1.2 particle noise drives incoherent modes (m = 2, 3, 4 comparable) that create spurious spiral structure before the encounter begins.
+Q = 1.5 gives a "warm" disc: stable against spontaneous fragmentation and particle-noise-driven multi-arm structure, while remaining responsive to the strong m=2 tidal perturbation. Below about Q = 1.2 particle noise begins driving incoherent modes (m = 2, 3, 4 comparable) that create spurious spiral structure before the encounter begins.
+
+Note the warmup phase interacts with this: an isolated disc heats through two-body relaxation, so the effective Q at t = 0 is somewhat above the value set here.
 
 See `docs/toomre-q-velocity-dispersion.md` for the full derivation.
 
@@ -471,7 +495,7 @@ Also worth inspecting: frames shortly after **close crossing #1** (t ~ 3–4), w
 |---|---|---|---|
 | Orbit class | Bound, multiple passage | Bound, multiple passage | yes |
 | Eccentricity | ~0.2 | 0.200 | yes |
-| Orbital inclination | 75–85 deg | 80 deg | yes |
+| Orbital inclination `iorb` | 75–85 deg | 80.0 deg (verified) | yes |
 | Crossing distance `Rcross` | 1.2–1.4 Rd | 1.195–1.205 Rd | yes |
 | Apocenter between crossings | required | confirmed | yes |
 | Mass ratio `Mp` | 0.5–0.7 (nom. 0.55) | 0.550 | yes |

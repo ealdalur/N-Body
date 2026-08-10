@@ -222,6 +222,11 @@ m51b_Mfrac = m51b_disc_code / m51b_bulge_code
 #   Rcross = 1.20 -> S = Mp*(Rd/r)^3 = 0.318
 #   Rcross = 1.30 -> S = 0.250
 #   Rcross = 1.40 -> S = 0.200  (the paper's stated weak limit)
+# Toomre Q for both discs: the paper's standard value. Gives a warm disc, stable
+# against noise-driven multi-arm structure while still responsive to the m=2
+# tidal forcing.
+toomre_Q = 1.5                      # Salo & Laurikainen section 2.2
+
 target_Rcross = 1.20                # units of primary Rd; paper range 1.2-1.4
 orbital_eccentricity = 0.2          # bound model (Fig. 1 caption)
 orbital_inclination_deg = 80.0      # Table 2 range 75-85, mid-range
@@ -510,14 +515,42 @@ pos_x = r_start * e2[0]
 pos_y = r_start * e2[1]
 pos_z = r_start * e2[2]
 
-# Velocity purely tangential at apocenter, directed along -e1 (in the disc plane)
-vel_x = -v_t * e1[0]
-vel_y = -v_t * e1[1]
-vel_z = -v_t * e1[2]
-# e1 has exact zero components; -v_t*0.0 yields -0.0, which prints as "-0.0".
+# Velocity purely tangential at apocenter, along +e1 (in the disc plane).
+#
+# The SIGN sets the circulation sense of the orbit relative to M51a's disc spin,
+# and it must be +e1 rather than -e1. The generator gives each disc a spin angular
+# momentum along its own normal, so M51a's L_disc points along +y. With velocity
+# along +e1 the orbital angular momentum L_orb = pos x vel has a positive
+# y-component, making the angle between L_orb and L_disc exactly iorb = 80 deg.
+# Using -e1 mirrors it to 180 - iorb = 100 deg: the same near-polar geometry but
+# the opposite circulation, i.e. retrograde, and outside the paper's 75-85 range.
+# The assertion after this block guards the sign.
+vel_x = v_t * e1[0]
+vel_y = v_t * e1[1]
+vel_z = v_t * e1[2]
+# e1 has exact zero components; v_t*0.0 can yield -0.0, which prints as "-0.0".
 # Normalize so the emitted script lines are clean.
 vel_x += 0.0; vel_y += 0.0; vel_z += 0.0
 pos_x += 0.0; pos_y += 0.0; pos_z += 0.0
+
+# === Verify the orbital inclination actually realized ===
+# iorb is defined as the angle between the orbital angular momentum and the
+# primary's disc angular momentum. Recomputing it from the emitted state vector
+# catches a sign or basis error that the inclination input alone cannot.
+_L_orb = (pos_y*vel_z - pos_z*vel_y,
+          pos_z*vel_x - pos_x*vel_z,
+          pos_x*vel_y - pos_y*vel_x)
+_L_orb_mag = math.sqrt(sum(c*c for c in _L_orb))
+# M51a's disc normal is +y (set in its GalaxyDisc line), and the generator makes
+# disc spin angular momentum parallel to the normal.
+_L_disc = (0.0, 1.0, 0.0)
+_cos_i = sum(a*b for a, b in zip(_L_orb, _L_disc)) / _L_orb_mag
+_iorb_actual = math.degrees(math.acos(max(-1.0, min(1.0, _cos_i))))
+
+assert abs(_iorb_actual - orbital_inclination_deg) < 1e-6, (
+    f"realized iorb {_iorb_actual:.3f} deg != requested "
+    f"{orbital_inclination_deg} deg -- check the sign of the velocity basis "
+    f"vector; a flipped sign gives the 180-iorb mirror (retrograde)")
 
 print(f"\n--- Initial conditions (code units) ---")
 print(f"  M51b position: ({pos_x:.1f}, {pos_y:.1f}, {pos_z:.1f})")
@@ -527,7 +560,10 @@ print(f"  height off disc plane: {abs(pos_y):.1f} code = {abs(pos_y)*du:.2f} kpc
 print(f"  M51b velocity: ({vel_x:.1f}, {vel_y:.1f}, {vel_z:.1f})")
 print(f"  |velocity|:    {math.sqrt(vel_x**2+vel_y**2+vel_z**2):.1f} km/s (= v_t, all tangential)")
 print(f"  pos . vel = {pos_x*vel_x+pos_y*vel_y+pos_z*vel_z:.3e} (must be ~0 at apocenter)")
-print(f"  Orbit inclination: {orbital_inclination_deg} deg; line of nodes along +/-x")
+print(f"  Orbit inclination: {_iorb_actual:.1f} deg (requested {orbital_inclination_deg:.0f}),"
+      f" verified from L_orb vs L_disc")
+print(f"  Line of nodes along +/-x; orbit circulates in the same sense as the")
+print(f"    M51a disc (L_orb . L_disc > 0), i.e. prograde, not the 100 deg mirror")
 print(f"  Argument of pericenter: 90 deg (apocenter between the disc crossings)")
 
 # === Camera ===
@@ -578,10 +614,10 @@ print(f"N_SystemBodies  {n_m51a}  {n_m51b}")
 print(f"Camera          0.0  {cam_height:.0f}  0.0")
 print(f"")
 print(f"# M51a (NGC 5194) at origin, disc in x-z plane")
-print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {m51a_bulge_code:.1f} {m51a_Mfrac:.2f} {m51a_R_code:.1f} {m51a_Ri_code:.1f} {m51a_h_r_code:.1f} 1.5  {m51a_haloVc:.1f} {m51a_haloRc_code:.1f}")
+print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {m51a_bulge_code:.1f} {m51a_Mfrac:.2f} {m51a_R_code:.1f} {m51a_Ri_code:.1f} {m51a_h_r_code:.1f} {toomre_Q:.1f}  {m51a_haloVc:.1f} {m51a_haloRc_code:.1f}")
 print(f"")
 print(f"# M51b (NGC 5195) at apocenter, near-polar bound orbit (iorb={orbital_inclination_deg:.0f} deg)")
-print(f"GalaxyDisc  1   {pos_x:.1f} {pos_y:.1f} {pos_z:.1f}   {vel_x:.1f} {vel_y:.1f} {vel_z:.1f}   {m51b_normal_x:.4f} {m51b_normal_y:.4f} {m51b_normal_z:.4f}   {m51b_bulge_code:.1f} {m51b_Mfrac:.2f} {m51b_R_code:.1f} {m51b_Ri_code:.1f} {m51b_h_r_code:.1f} 1.5  {m51b_haloVc:.1f} {m51b_haloRc_code:.1f}")
+print(f"GalaxyDisc  1   {pos_x:.1f} {pos_y:.1f} {pos_z:.1f}   {vel_x:.1f} {vel_y:.1f} {vel_z:.1f}   {m51b_normal_x:.4f} {m51b_normal_y:.4f} {m51b_normal_z:.4f}   {m51b_bulge_code:.1f} {m51b_Mfrac:.2f} {m51b_R_code:.1f} {m51b_Ri_code:.1f} {m51b_h_r_code:.1f} {toomre_Q:.1f}  {m51b_haloVc:.1f} {m51b_haloRc_code:.1f}")
 
 # === Orbit integration: verify and report the actual event sequence ===
 # The analytic v_t solution guarantees the pericenter/apocenter radii, but the
