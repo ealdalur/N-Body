@@ -140,6 +140,7 @@ InitializationTime  2.0
 # ── Systems ────────────────────────────────────────────────────
 N_SystemBodies  640000  160000
 #N_SystemBodies  256000  64000
+#N_SystemBodies  100000  25000
 #N_SystemBodies  64000  16000
 #N_SystemBodies  16000  4000
 
