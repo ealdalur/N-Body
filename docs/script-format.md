@@ -184,6 +184,20 @@ When enabled (`1`), writes binary state data (position magnitudes, velocity magn
 
 ---
 
+### `OrbitDiagnostic` — Two-Galaxy Orbit Logging
+
+```
+OrbitDiagnostic  <N>
+```
+
+For a run with two or more systems, appends one CSV row every `N` steps to `orbit_diagnostic.csv` (in the simulation's working directory) recording the two galaxies' barycentre and halo-centre positions/velocities, their separation, and the radial/tangential split of the relative velocity. Analyse with `scripts/analyze_orbit_diagnostic.py`, which reconstructs the specific orbital energy and compares the live orbit against the conservative analytic orbit — useful for detecting spurious orbital decay.
+
+`N = 0` (or omitting the command) disables it entirely; there is no output and no per-step cost.
+
+**Default:** 0 (disabled)
+
+---
+
 ### `Info_Display` — On-Screen Information
 
 ```

@@ -100,6 +100,7 @@ Simulation::~Simulation()
 	delete[] clrBuf;
 
 	if (Data_Log) fclose(DataLog);
+	if (orbitLog) fclose(orbitLog);
 }
 
 void Simulation::Allocate()
@@ -110,6 +111,10 @@ void Simulation::Allocate()
 	halo_M_rh.resize(N_Systems, 0.0);
 	halo_central.resize(N_Systems, 0);
 	halo_center.resize(N_Systems * 3, 0.0);
+	halo_vel.resize(N_Systems * 3, 0.0);
+	halo_acc.resize(N_Systems * 3, 0.0);
+	halo_acc_prev.resize(N_Systems * 3, 0.0);
+	halo_mass.resize(N_Systems, 0.0);
 	system_bulk_vel.resize(N_Systems * 3, 0.0);
 	body_system.resize(N_Bodies, 0);
 
@@ -227,6 +232,9 @@ void Simulation::LoadScript(const std::string &path)
 		} else if (key == "DataLog") {
 			int val; iss >> val;
 			Data_Log = (val != 0);
+		} else if (key == "OrbitDiagnostic") {
+			// Steps between orbit-diagnostic CSV rows; 0 (or absent) disables.
+			iss >> orbitLogEvery;
 		} else if (key == "RecordVideo") {
 			int val; iss >> val;
 			Record_Video = (val != 0);
@@ -442,6 +450,25 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	    : 0.0;
 	halo_central[system] = sysIdx;
 
+	// The halo centre is now an inertial body integrated under gravity (see
+	// IntegrateHaloCenters), not re-derived from the particle barycentre. Seed it
+	// at the galaxy's start position, at rest (the bulk velocity is applied at
+	// t=0 with the particles). Its inertial mass is the total (truncated) halo
+	// mass; for an untruncated halo we use the mass enclosed within the disc
+	// radius R as a finite proxy.
+	halo_center[system*3+0] = sysPos[0];
+	halo_center[system*3+1] = sysPos[1];
+	halo_center[system*3+2] = sysPos[2];
+	halo_vel[system*3+0] = halo_vel[system*3+1] = halo_vel[system*3+2] = 0.0;
+	halo_acc[system*3+0] = halo_acc[system*3+1] = halo_acc[system*3+2] = 0.0;
+	halo_acc_prev[system*3+0] = halo_acc_prev[system*3+1] = halo_acc_prev[system*3+2] = 0.0;
+	if (haloVc > 0.0)
+		halo_mass[system] = (haloRh > 0.0)
+		    ? halo_M_rh[system]
+		    : haloVc*haloVc * R*R*R / (R*R + haloRc*haloRc);
+	else
+		halo_mass[system] = 0.0;
+
 	for (int i=0; i<N_System_Bodies[system]; i++)
 		body_system[sysIdx+i] = system;
 
@@ -623,6 +650,20 @@ void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *
 	    : 0.0;
 	halo_central[system] = sysIdx;
 
+	// Inertial halo centre (see IntegrateHaloCenters / LoadGalaxyDiscState).
+	halo_center[system*3+0] = sysPos[0];
+	halo_center[system*3+1] = sysPos[1];
+	halo_center[system*3+2] = sysPos[2];
+	halo_vel[system*3+0] = halo_vel[system*3+1] = halo_vel[system*3+2] = 0.0;
+	halo_acc[system*3+0] = halo_acc[system*3+1] = halo_acc[system*3+2] = 0.0;
+	halo_acc_prev[system*3+0] = halo_acc_prev[system*3+1] = halo_acc_prev[system*3+2] = 0.0;
+	if (haloVc > 0.0)
+		halo_mass[system] = (haloRh > 0.0)
+		    ? halo_M_rh[system]
+		    : haloVc*haloVc * R*R*R / (R*R + haloRc*haloRc);
+	else
+		halo_mass[system] = 0.0;
+
 	m = M/N_System_Bodies[system];
 
 	// Bulk velocity is recorded and applied after the momentum correction; see
@@ -762,67 +803,6 @@ void Simulation::ZeroAccelerationRange(int iStart, int iEnd) {
 	}
 }
 
-void Simulation::PinCentralBodies()
-{
-	int sysIdx = 0;
-	for (int sys = 0; sys < N_Systems; sys++) {
-		if (halo_vc[sys] > 0.0) {
-			int ci = halo_central[sys];
-			double cx = 0.0, cy = 0.0, cz = 0.0;
-			double cvx = 0.0, cvy = 0.0, cvz = 0.0;
-			double total_m = 0.0;
-			for (int i = 0; i < N_System_Bodies[sys]; i++) {
-				double mi = mass[sysIdx + i];
-				cx += mi * pos[sysIdx + i][0];
-				cy += mi * pos[sysIdx + i][1];
-				cz += mi * pos[sysIdx + i][2];
-				cvx += mi * vel[sysIdx + i][0];
-				cvy += mi * vel[sysIdx + i][1];
-				cvz += mi * vel[sysIdx + i][2];
-				total_m += mi;
-			}
-			double inv_m = 1.0 / total_m;
-
-			double comP[3] = {cx * inv_m, cy * inv_m, cz * inv_m};
-			double comV[3] = {cvx * inv_m, cvy * inv_m, cvz * inv_m};
-
-			// Change forced onto the central body by the pin.
-			double dP[3], dV[3];
-			vsub(comP, pos[ci], dP);
-			vsub(comV, vel[ci], dV);
-
-			vcopy(comP, pos[ci]);
-			vcopy(comV, vel[ci]);
-
-			// Momentum-conserving compensation. Overwriting the central body's
-			// state injects mass-weighted position M_c*dP and momentum M_c*dV
-			// out of nowhere; with M_c = 25% of the system mass and this running
-			// every step, that injection was the dominant cause of COM drift.
-			// Applying the equal and opposite shift, spread over the remaining
-			// particles, makes the pin exactly conservative:
-			//   sum_i m_i * (M_c/M_rest) * dV = M_c * dV
-			// so the system (and hence global) COM position and velocity are
-			// unchanged. Uniform per-particle shifts are correct here regardless
-			// of whether the particles share a common mass.
-			double M_rest = total_m - mass[ci];
-			if (M_rest > 0.0) {
-				double f = mass[ci] / M_rest;
-				for (int i = 0; i < N_System_Bodies[sys]; i++) {
-					int bi = sysIdx + i;
-					if (bi == ci) continue;
-					pos[bi][0] -= f * dP[0];
-					pos[bi][1] -= f * dP[1];
-					pos[bi][2] -= f * dP[2];
-					vel[bi][0] -= f * dV[0];
-					vel[bi][1] -= f * dV[1];
-					vel[bi][2] -= f * dV[2];
-				}
-			}
-		}
-		sysIdx += N_System_Bodies[sys];
-	}
-}
-
 void Simulation::ComputeHaloCenters()
 {
 	int sysIdx = 0;
@@ -843,6 +823,66 @@ void Simulation::ComputeHaloCenters()
 	}
 }
 
+void Simulation::IntegrateHaloCenters()
+{
+	// Acceleration of each halo centre, treated as an inertial body (Salo &
+	// Laurikainen 2000: "the disc back-action is taken into account in the halo
+	// motion"). Two momentum-conserving contributions:
+	//   1. Disc back-reaction. Every particle the halo pulls pulls back on it
+	//      (Newton's 3rd law). The net force the halo exerts on all gravitating
+	//      particles is fh_s = sum_i m_i * HaloScale_s * (hc_s - pos_i); the
+	//      reaction on the halo is -fh_s. This REPLACES RemoveHaloMonopole: rather
+	//      than deleting that net force from the particles, the halo recoils under
+	//      it, so the halo is never dragged around by a tidal tail.
+	//   2. Halo-halo. Each halo centre falls in every other halo's field exactly
+	//      as a particle there would. Beyond both truncation radii the pair is
+	//      equal-and-opposite point masses, so total momentum is conserved.
+	// Together with the particle forces this reproduces the analytic relative
+	// orbit (compute_M51.py) while leaving only the real, weak disc friction.
+	int NS = N_Systems;
+	std::vector<double> fh(NS * 3, 0.0);
+
+	for (int i = 0; i < N_Bodies; i++) {
+		if (!has_gravity[i]) continue;
+		double mi = mass[i];
+		for (int s = 0; s < NS; s++) {
+			if (halo_vc[s] == 0.0) continue;
+			double *hc = &halo_center[s * 3];
+			double r_halo[3] = { hc[0]-pos[i][0], hc[1]-pos[i][1], hc[2]-pos[i][2] };
+			double rsq = vmagsq(r_halo);
+			if (rsq <= 1e-10) continue;
+			double scale = HaloScale(s, rsq);
+			fh[s*3+0] += mi * scale * r_halo[0];
+			fh[s*3+1] += mi * scale * r_halo[1];
+			fh[s*3+2] += mi * scale * r_halo[2];
+		}
+	}
+
+	for (int s = 0; s < NS; s++) {
+		if (halo_vc[s] == 0.0 || halo_mass[s] <= 0.0) {
+			halo_acc[s*3+0] = halo_acc[s*3+1] = halo_acc[s*3+2] = 0.0;
+			continue;
+		}
+		double inv = 1.0 / halo_mass[s];
+		double a[3] = { -fh[s*3+0]*inv, -fh[s*3+1]*inv, -fh[s*3+2]*inv };
+		double *hcs = &halo_center[s * 3];
+		for (int o = 0; o < NS; o++) {
+			if (o == s || halo_vc[o] == 0.0) continue;
+			double *hco = &halo_center[o * 3];
+			double d[3] = { hco[0]-hcs[0], hco[1]-hcs[1], hco[2]-hcs[2] };
+			double rsq = vmagsq(d);
+			if (rsq <= 1e-10) continue;
+			double scale = HaloScale(o, rsq);
+			a[0] += scale * d[0];
+			a[1] += scale * d[1];
+			a[2] += scale * d[2];
+		}
+		halo_acc[s*3+0] = a[0];
+		halo_acc[s*3+1] = a[1];
+		halo_acc[s*3+2] = a[2];
+	}
+}
+
 void Simulation::CalcAccelerations()
 {
 	if (multiThreading) {
@@ -854,8 +894,6 @@ void Simulation::CalcAccelerations()
 			pool->submit([this, iStart, iEnd]() { ZeroAccelerationRange(iStart, iEnd); });
 		}
 		pool->waitAll();
-
-		ComputeHaloCenters();
 
 		if (Gravity_P2P) {
 			int accel_chunk = N_Bodies / numThreads;
@@ -877,15 +915,16 @@ void Simulation::CalcAccelerations()
 		}
 	} else {
 		ZeroAccelerationRange(0, N_Bodies-1);
-		ComputeHaloCenters();
 		if (Gravity_P2P) CalcAccelRangeP2P(0, N_Bodies-1);
 		if (Gravity_Oct) CalcAccelRangeOct(0, numActiveBodies-1);
 	}
 
-	// Applied after every acceleration contribution is summed, so the correction
-	// reflects the halo forces actually in acc[] this step.
-	if (Remove_Halo_Monopole)
-		RemoveHaloMonopole();
+	// Halo centres are inertial bodies: derive their acceleration from the disc
+	// back-reaction and the other halos. This replaces the old RemoveHaloMonopole
+	// band-aid -- the net halo force is now balanced by the halo recoiling rather
+	// than being deleted from the particles, so momentum is conserved and the halo
+	// is never dragged off the nucleus by tidal debris.
+	IntegrateHaloCenters();
 }
 
 static uint32_t expandBits(uint32_t v)
@@ -1020,6 +1059,71 @@ void Simulation::CalcEnergy() {
 	totalE = totalKE + totalPE;
 }
 
+// Orbit-decay diagnostic. For a >=2-system run, periodically append one CSV row
+// with the two galaxies' barycentre positions/velocities, their separation, and
+// the radial/tangential split of the relative velocity. The conservative
+// analytic orbit (see compute_M51.py) fixes the specific orbital energy
+// 0.5*v_rel^2 + Phi(sep); a steady decline of that quantity in the live run is
+// the signature of spurious orbital-energy loss. Phi is formed in the Python
+// analyzer so the C++ side only logs kinematics.
+void Simulation::LogOrbitDiagnostic() {
+	if (orbitLogEvery <= 0 || N_Systems < 2) return;
+	if ((orbitStepCount++ % orbitLogEvery) != 0) return;
+
+	// Barycentre position and velocity of the first two systems.
+	double c[2][3] = {{0,0,0},{0,0,0}};
+	double vc[2][3] = {{0,0,0},{0,0,0}};
+	int idx = 0;
+	for (int sys = 0; sys < 2; sys++) {
+		double m_tot = 0.0;
+		for (int i = 0; i < N_System_Bodies[sys]; i++) {
+			double mi = mass[idx + i];
+			for (int k = 0; k < 3; k++) {
+				c[sys][k]  += mi * pos[idx + i][k];
+				vc[sys][k] += mi * vel[idx + i][k];
+			}
+			m_tot += mi;
+		}
+		double inv = 1.0 / m_tot;
+		for (int k = 0; k < 3; k++) { c[sys][k] *= inv; vc[sys][k] *= inv; }
+		idx += N_System_Bodies[sys];
+	}
+
+	double dr[3] = { c[1][0]-c[0][0], c[1][1]-c[0][1], c[1][2]-c[0][2] };
+	double dv[3] = { vc[1][0]-vc[0][0], vc[1][1]-vc[0][1], vc[1][2]-vc[0][2] };
+	double sep = sqrt(dr[0]*dr[0] + dr[1]*dr[1] + dr[2]*dr[2]);
+	double vrel = sqrt(dv[0]*dv[0] + dv[1]*dv[1] + dv[2]*dv[2]);
+	double vrad = (sep > 0.0) ? (dr[0]*dv[0] + dr[1]*dv[1] + dr[2]*dv[2]) / sep : 0.0;
+	double vtan_sq = vrel*vrel - vrad*vrad;
+	double vtan = (vtan_sq > 0.0) ? sqrt(vtan_sq) : 0.0;
+
+	// Halo-centre orbit: the inertial centres are the paper's actual orbital
+	// coordinates and, unlike the particle barycentres, are not shifted by tidal
+	// debris -- so this is the clean measure of true orbital decay.
+	double *h0 = &halo_center[0], *h1 = &halo_center[3];
+	double *hv0 = &halo_vel[0], *hv1 = &halo_vel[3];
+	double hdr[3] = { h1[0]-h0[0], h1[1]-h0[1], h1[2]-h0[2] };
+	double hsep = sqrt(hdr[0]*hdr[0] + hdr[1]*hdr[1] + hdr[2]*hdr[2]);
+
+	if (!orbitLog) {
+		orbitLog = fopen("orbit_diagnostic.csv", "w");
+		if (!orbitLog) { orbitLogEvery = 0; return; }
+		fprintf(orbitLog, "t,sep,c0x,c0y,c0z,c1x,c1y,c1z,"
+		        "v0x,v0y,v0z,v1x,v1y,v1z,vrel,vrad,vtan,KE,PE,E,"
+		        "hsep,h0x,h0y,h0z,h1x,h1y,h1z,hv0x,hv0y,hv0z,hv1x,hv1y,hv1z\n");
+	}
+	fprintf(orbitLog,
+	    "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,"
+	    "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6e,%.6e,%.6e,"
+	    "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n",
+	    t, sep, c[0][0],c[0][1],c[0][2], c[1][0],c[1][1],c[1][2],
+	    vc[0][0],vc[0][1],vc[0][2], vc[1][0],vc[1][1],vc[1][2],
+	    vrel, vrad, vtan, totalKE, totalPE, totalE,
+	    hsep, h0[0],h0[1],h0[2], h1[0],h1[1],h1[2],
+	    hv0[0],hv0[1],hv0[2], hv1[0],hv1[1],hv1[2]);
+	fflush(orbitLog);
+}
+
 void Simulation::ZeroNetMomentum(int system) {
 	// Remove one system's net momentum. The procedural generators sample particle
 	// azimuths randomly and never correct the sum, leaving a residual of order
@@ -1075,6 +1179,11 @@ void Simulation::ApplyBulkVelocity(int system) {
 		vel[sysIdx + i][1] += vb[1];
 		vel[sysIdx + i][2] += vb[2];
 	}
+	// The inertial halo centre shares the bulk motion, so it starts at t=0 moving
+	// with its galaxy (its velocity was withheld during warmup, like the particles').
+	halo_vel[system*3+0] += vb[0];
+	halo_vel[system*3+1] += vb[1];
+	halo_vel[system*3+2] += vb[2];
 }
 
 void Simulation::ApplyBulkVelocities() {
@@ -1296,82 +1405,6 @@ void Simulation::CalcAccelIsolated() {
 	}
 }
 
-void Simulation::RemoveHaloMonopole() {
-	// The analytic halos are rigid potentials with no inertia, so they cannot
-	// obey Newton's third law: a particle is pulled toward the halo center but
-	// nothing pulls back. For a perfectly axisymmetric disc the per-particle
-	// forces cancel in the sum, but any asymmetry -- above all the m=1 lopsided
-	// mode, and outer material dragging the centroid off the nucleus -- leaves a
-	// net force that accelerates the entire system. Measured on Milky_Way.sim
-	// this was the dominant remaining drift source (a_halo ~ 15-25, matching the
-	// observed COM velocity growth almost exactly).
-	//
-	// Removing the monopole restores momentum conservation. Subtracting a UNIFORM
-	// vector from every particle leaves every difference a_i - a_j unchanged, so
-	// all relative motion -- including the mutual orbit of two galaxies -- is
-	// preserved exactly; only the spurious bulk acceleration is cancelled.
-	// Physically this lets the rigid halo recoil with its system instead of being
-	// anchored to absolute space, which is what a live halo would do.
-	//
-	// This MUST be global, not per-system: subtracting each system's own halo net
-	// force separately would also cancel the real mutual attraction between
-	// galaxies and destroy the orbit.
-	//
-	// FDE is deliberately excluded. It is a genuine external force (radial from
-	// the origin), so its net contribution is physically meant to be nonzero;
-	// folding it in would break Spherical_Universe.sim.
-	double fh[3] = {0.0, 0.0, 0.0};
-	double total_m = 0.0;
-	double r_halo[3];
-
-	int nAcc = Gravity_Oct ? numActiveBodies : N_Bodies;
-	for (int k = 0; k < nAcc; k++) {
-		int i = Gravity_Oct ? sortedIdx[k] : k;
-		double mi = mass[i];
-		total_m += mi;
-
-		int sys = body_system[i];
-		if (halo_vc[sys] > 0.0) {
-			double *hc = &halo_center[sys * 3];
-			r_halo[0] = hc[0] - pos[i][0];
-			r_halo[1] = hc[1] - pos[i][1];
-			r_halo[2] = hc[2] - pos[i][2];
-			double rsq = vmagsq(r_halo);
-			if (rsq > 1e-10) {
-				double s = HaloScale(sys, rsq);
-				fh[0] += mi * s * r_halo[0];
-				fh[1] += mi * s * r_halo[1];
-				fh[2] += mi * s * r_halo[2];
-			}
-		}
-		for (int s = 0; s < N_Systems; s++) {
-			if (s == sys || halo_vc[s] == 0.0) continue;
-			double *hc2 = &halo_center[s * 3];
-			r_halo[0] = hc2[0] - pos[i][0];
-			r_halo[1] = hc2[1] - pos[i][1];
-			r_halo[2] = hc2[2] - pos[i][2];
-			double rsq = vmagsq(r_halo);
-			double s2 = HaloScale(s, rsq);
-			fh[0] += mi * s2 * r_halo[0];
-			fh[1] += mi * s2 * r_halo[1];
-			fh[2] += mi * s2 * r_halo[2];
-		}
-	}
-
-	if (total_m <= 0.0) return;
-
-	double inv_m = 1.0 / total_m;
-	double aCorr[3];
-	vscale(fh, inv_m, aCorr);
-
-	for (int k = 0; k < nAcc; k++) {
-		int i = Gravity_Oct ? sortedIdx[k] : k;
-		acc[i][0] -= aCorr[0];
-		acc[i][1] -= aCorr[1];
-		acc[i][2] -= aCorr[2];
-	}
-}
-
 void Simulation::CalcLeapFrogPositionsRange(int iStart, int iEnd) {
 	for (int i=iStart; i<=iEnd; i++)
 	{
@@ -1395,6 +1428,20 @@ void Simulation::CalcLeapFrogPositions() {
 		pool->waitAll();
 	} else {
 		CalcLeapFrogPositionsRange(0, N_Bodies-1);
+	}
+
+	// Drift the inertial halo centres with the same velocity-Verlet step. Held
+	// static during warmup (systems isolated and pinned in place); the barycentre
+	// tracking in CalcAccelIsolated keeps halo_center on the relaxing disc until
+	// t=0, after which it evolves purely under gravity.
+	if (!warmupActive) {
+		for (int s = 0; s < N_Systems; s++) {
+			if (halo_mass[s] <= 0.0) continue;
+			for (int k = 0; k < 3; k++) {
+				halo_acc_prev[s*3+k] = halo_acc[s*3+k];
+				halo_center[s*3+k] += halo_vel[s*3+k]*dt + 0.5*halo_acc[s*3+k]*dt*dt;
+			}
+		}
 	}
 }
 
@@ -1426,12 +1473,20 @@ void Simulation::CalcLeapFrogVelocitiesAndOutputs() {
 	} else {
 		CalcLeapFrogVelocitiesAndOutputsRange(0, N_Bodies-1);
 	}
+
+	// Kick the inertial halo centres (velocity-Verlet second half).
+	if (!warmupActive) {
+		for (int s = 0; s < N_Systems; s++) {
+			if (halo_mass[s] <= 0.0) continue;
+			for (int k = 0; k < 3; k++)
+				halo_vel[s*3+k] += 0.5*(halo_acc[s*3+k] + halo_acc_prev[s*3+k])*dt;
+		}
+	}
 }
 
 void Simulation::Step()
 {
 	CalcLeapFrogPositions();
-	PinCentralBodies();
 
 	// End of warmup. Checked BEFORE the force evaluation so the first step at
 	// t >= 0 already sees the coupled system and the applied bulk velocities.
@@ -1465,6 +1520,8 @@ void Simulation::Step()
 	CalcLeapFrogVelocitiesAndOutputs();
 
 	CalcEnergy();
+
+	LogOrbitDiagnostic();
 
 	if (Data_Log)
 	{

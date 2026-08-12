@@ -67,6 +67,16 @@ class Simulation
 	std::vector<int> body_system;
 	std::vector<double> halo_center;
 
+	// Salo & Laurikainen (2000) treat each rigid halo as an INERTIAL body whose
+	// centre is integrated under gravity ("the disc back-action is taken into
+	// account in the halo motion"), rather than re-pinned to the live particle
+	// barycentre each step. These hold that centre's velocity, current/previous
+	// acceleration (for velocity-Verlet), and its inertial mass.
+	std::vector<double> halo_vel;
+	std::vector<double> halo_acc;
+	std::vector<double> halo_acc_prev;
+	std::vector<double> halo_mass;   // inertial mass of the halo (0 = no halo)
+
 	std::vector<double> mass;
 
 	std::vector<double> pos_data;
@@ -136,6 +146,13 @@ class Simulation
 
 	FILE *DataLog;
 
+	// Orbit-decay diagnostic: for a >=2-system run, periodically log the two
+	// galaxies' barycentre separation and relative velocity to a CSV, so the
+	// live orbit can be compared against the conservative analytic orbit.
+	FILE *orbitLog = nullptr;
+	int orbitLogEvery = 0;      // steps between rows; 0 = disabled
+	long orbitStepCount = 0;
+
 	ThreadPool *pool;
 
 	// Scale factor s such that the halo acceleration on a body is
@@ -157,8 +174,8 @@ class Simulation
 	void CalcAccelRangeP2P(int iStart, int iEnd);
 	void CalcAccelRangeOct(int iStart, int iEnd);
 	void ZeroAccelerationRange(int iStart, int iEnd);
-	void PinCentralBodies();
 	void ComputeHaloCenters();
+	void IntegrateHaloCenters();
 	void CalcAccelerations();
 	void CalcLeapFrogPositionsRange(int iStart, int iEnd);
 	void CalcLeapFrogPositions();
@@ -167,7 +184,7 @@ class Simulation
 	void CalcOutputsRange(int iStart, int iEnd);
 	void CalcOutputs();
 	void CalcEnergy();
-	void RemoveHaloMonopole();
+	void LogOrbitDiagnostic();
 	// Zero one system's net momentum. Called by the procedural generators only,
 	// where random particle phases leave a residual of order v_c/sqrt(N) that is
 	// pure sampling noise. Systems built from explicit `Body` state vectors do not

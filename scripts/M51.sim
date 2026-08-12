@@ -135,6 +135,10 @@ Gravity         Octree
 End_Time        16.0
 
 DataLog         0
+# Orbit-decay diagnostic: append the two galaxies' barycentre separation and
+# relative velocity to orbit_diagnostic.csv every N steps (0 = off). Analyse
+# with scripts/analyze_orbit_diagnostic.py to compare against the analytic orbit.
+OrbitDiagnostic 20
 RecordVideo     1
 Display         1920  1080
 accel_sq_color_thresh 2000000.0
@@ -146,13 +150,13 @@ accel_sq_color_thresh 2000000.0
 # position. At t = 0 the bulk velocities are applied and full coupling resumes,
 # so all the orbital parameters below still refer to t = 0.
 # Remove this line to start at t = 0 with no warmup.
-InitializationTime  2.0
+InitializationTime  0.0
 
 # ── Systems ────────────────────────────────────────────────────
-N_SystemBodies  640000  160000
+#N_SystemBodies  640000  160000
 #N_SystemBodies  256000  64000
 #N_SystemBodies  100000  25000
-#N_SystemBodies  64000  16000
+N_SystemBodies  64000  16000
 #N_SystemBodies  16000  4000
 
 # ── Camera ─────────────────────────────────────────────────────
