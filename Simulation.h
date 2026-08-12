@@ -56,6 +56,13 @@ class Simulation
 
 	std::vector<double> halo_vc;
 	std::vector<double> halo_rc_sq;
+	// Halo truncation radius. <= 0 means untruncated (enclosed mass grows without
+	// bound as M_halo(r) ~ Vc^2 * r). When set, the enclosed mass is frozen at
+	// M_halo(Rh) beyond Rh and the force falls off as 1/r^2, which is what
+	// Salo & Laurikainen (2000) sect 2.2 do (Rh = 400 arcsec for the primary,
+	// equal to its disc truncation Rd).
+	std::vector<double> halo_rh;
+	std::vector<double> halo_M_rh;   // precomputed Vc^2 * Rh^3/(Rh^2+Rc^2)
 	std::vector<int> halo_central;
 	std::vector<int> body_system;
 	std::vector<double> halo_center;
@@ -131,6 +138,17 @@ class Simulation
 
 	ThreadPool *pool;
 
+	// Scale factor s such that the halo acceleration on a body is
+	//   a_vec = s * (halo_centre - position)
+	// Continuous at r = Rh by construction: the truncated branch evaluates to
+	// Vc^2/(Rh^2+Rc^2) there, matching the cored-isothermal branch exactly.
+	inline double HaloScale(int sys, double rsq) const {
+		double rh = halo_rh[sys];
+		if (rh <= 0.0 || rsq <= rh*rh)
+			return halo_vc[sys]*halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+		return halo_M_rh[sys] / (rsq * sqrt(rsq));
+	}
+
 	void Allocate();
 	void LoadScript(const std::string &path);
 	void InitGL();
@@ -176,8 +194,8 @@ public:
 	// independent of the truncation radius R because R/h_r is not universal:
 	// Salo & Laurikainen (2000) truncate M51a at 4 h_r and M51b at 7.3 h_r.
 	// Caller must ensure 0 < h_r < R.
-	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double h_r, double Q, double haloVc, double haloRc);
-	void LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc);
+	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double h_r, double Q, double haloVc, double haloRc, double haloRh, double sigmaZratio = 0.7);
+	void LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc, double haloRh);
 	void BuildOctree();
 	void Step();
 	void CamMove(double d_phi, double d_theta, double d_r);

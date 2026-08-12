@@ -558,7 +558,7 @@ Body  0   1.0 0.0 0.0   0.0 0.0 -6.28  3.0e-6      # Earth
 ### `GalaxyDisc` — Procedural Galaxy Disc
 
 ```
-GalaxyDisc  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <normalX> <normalY> <normalZ>  <total_mass> <mass_fraction> <outer_radius> <inner_radius> <disc_scale_length> <toomre_Q>  <halo_circular_velocity> <halo_core_radius>
+GalaxyDisc  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <normalX> <normalY> <normalZ>  <total_mass> <mass_fraction> <outer_radius> <inner_radius> <disc_scale_length> <toomre_Q>  <halo_circular_velocity> <halo_core_radius> <halo_truncation_radius>  [<sigma_z_ratio>]
 ```
 
 Generates a flattened disc of particles with approximately circular orbits, representing a spiral galaxy. The disc plane is defined by the normal vector; particles orbit counter-clockwise when viewed from the direction the normal points.
@@ -577,6 +577,8 @@ Generates a flattened disc of particles with approximately circular orbits, repr
 | `toomre_Q` | Target Toomre stability parameter. Controls the radial and tangential velocity dispersion via the Jeans equations. `Q = 1.0` is the stability threshold (disc will fragment); `Q = 1.2` gives a responsive disc with strong spiral structure; `Q = 1.5` gives a stable disc that responds only to external tidal perturbations; `Q = 2.0+` gives a hot, stable disc with weak spiral response. See `docs/toomre-q-velocity-dispersion.md` for the full derivation |
 | `halo_circular_velocity` | Asymptotic circular velocity of the dark matter halo. Controls how flat the rotation curve is at large radii. Set to `0.0` for no halo |
 | `halo_core_radius` | Core radius of the dark matter halo (cored isothermal sphere). The halo density flattens inside this radius. Irrelevant if `halo_circular_velocity` is 0 |
+| `halo_truncation_radius` | Radius beyond which the halo's enclosed mass is frozen and the force falls off as `1/r^2`. `0` = untruncated. See below |
+| `sigma_z_ratio` | **Optional** (20th field). Ratio of vertical to radial velocity dispersion, `sigma_z/sigma_r`, which sets the disc thickness via a self-gravitating sech² isothermal sheet and the vertical velocity spread. Defaults to `0.7` (Salo & Laurikainen 2000) when omitted, so existing 19-column scripts are unchanged. Solar-neighbourhood discs are nearer `0.5`; `0` gives a razor-thin, vertically cold disc |
 
 #### Radial profile: scale length vs outer radius
 
@@ -584,57 +586,48 @@ Two radii describe the disc and they are independent:
 
 | Quantity | Role |
 |---|---|
-| `disc_scale_length` (`h_r`) | How fast surface density falls: `Sigma(r) = Sigma_0 * exp(-r / h_r)`. Sets central concentration. |
-| `outer_radius` (`R`) | Hard truncation. No particles are placed beyond it. |
+| `disc_scale_length` (h_r) | How fast surface density falls: `Sigma(r) = Sigma_0 * exp(-r / h_r)`. Sets central concentration. |
+| `outer_radius` (R) | Hard truncation. No particles are placed beyond it. |
 
-`h_r` is the **e-folding distance** of the surface density: at `r = h_r` density is 37% of central, at `2 h_r` it is 13.5%, at `3 h_r` it is 5%. It governs more than appearance — it sets the rotation curve shape through the enclosed-mass profile, and the velocity dispersion through the Toomre criterion.
+`h_r` is the **e-folding distance** of the surface density: at `r = h_r` density is 37% of central, at `2 h_r` it is 13.5%, at `3 h_r` it is 5%. It sets not just appearance but the rotation curve shape (via enclosed mass) and the velocity dispersion (via the Toomre criterion).
 
-Enclosed disc mass by radius:
+A disc truncated at four scale lengths retains ~91% of its mass, which makes `R = 4 h_r` a common convention — but it is not universal, so both are required inputs. Salo & Laurikainen (2000) truncate M51a at `4 h_r` and M51b at `7.3 h_r`.
 
-| R / h_r | Disc mass enclosed |
-|---|---|
-| 2 | 59% |
-| 3 | 80% |
-| 4 | 91% |
-| 5 | 96% |
+Particle radii are drawn from the exponential disc profile. The radial *number* density is the surface density times the area of a ring, `p(r) ~ r * exp(-r / h_r)`, which is a Gamma(shape 2, scale h_r) distribution. It is sampled exactly as `r = -h_r * ln(u1 * u2)` for two uniform deviates, with draws outside `[inner_radius, outer_radius]` rejected (~10% for a disc truncated at 4 h_r).
 
-`R / h_r` is **not** a universal ratio, which is why the scale length is a required independent input rather than derived from `R`. Real values vary widely:
+#### Halo truncation
 
-| Galaxy | h_r | R | R / h_r | Source |
-|---|---|---|---|---|
-| Milky Way | 2.6 kpc | 26.8 kpc | 10.3 | Bland-Hawthorn & Gerhard 2016 |
-| Andromeda (M31) | 5.3 kpc | 33.5 kpc | 6.3 | Courteau et al. 2011 |
-| M51a (NGC 5194) | 4.65 kpc | 18.62 kpc | 4.0 | Salo & Laurikainen 2000 |
-| M51b (NGC 5195) | 1.54 kpc | 11.17 kpc | 7.3 | Salo & Laurikainen 2000 |
-
-If no measured scale length is available for a galaxy, `R / 4` is a reasonable convention (a disc truncated where ~91% of the mass is enclosed) — but put the computed number in the script explicitly and note the assumption in a comment.
-
-The parser rejects a `GalaxyDisc` line with fewer than 18 values, or with `h_r <= 0` or `h_r >= R`, reporting the offending line and exiting.
-
-#### Radial sampling
-
-Particle radii are drawn from the exponential disc profile. The radial *number* density is the surface density times the area of a ring:
+`halo_truncation_radius` (Rh) sets where the halo's enclosed mass stops growing:
 
 ```
-p(r) dr = Sigma(r) * 2*pi*r dr  ~  r * exp(-r / h_r) dr
+r <= Rh :  a_halo = Vc^2 * r / (r^2 + Rc^2)          cored isothermal
+r >  Rh :  a_halo = M_halo(Rh) / r^2                 enclosed mass frozen
+           M_halo(Rh) = Vc^2 * Rh^3 / (Rh^2 + Rc^2)
 ```
 
-which is a Gamma(shape 2, scale `h_r`) distribution. Because a Gamma with integer shape 2 is the sum of two exponentials, it is sampled exactly as `r = -h_r * ln(u1 * u2)` for two uniform deviates, with draws outside `[inner_radius, outer_radius]` rejected (~10% for a disc truncated at 4 `h_r`).
+The two branches agree at `r = Rh`, so the force is continuous.
 
-Note the `2*pi*r` ring-area factor: omitting it would sample `p(r) ~ exp(-r/h_r)` and produce a disc roughly twice as centrally concentrated as intended, with an underpopulated outer disc.
+With `Rh = 0` the halo is untruncated and `M_halo(r) ~ Vc^2 * r` grows without bound at all radii. That overestimates long-range attraction, and in a two-galaxy encounter it distorts the effective mass ratio: each halo keeps accreting mass past its own disc edge, and the less concentrated halo gains proportionally more. For M51 the enclosed-mass ratio at the encounter separation comes out near 1:1.22 untruncated, versus the intended 1:1.82.
 
-The velocity dispersion at each radius is computed from the Toomre criterion: `sigma_r = Q * 3.36 * G * Sigma(r) / kappa(r)`, where `Sigma(r)` is the local surface density (exponential disc) and `kappa(r)` is the epicyclic frequency derived from the full rotation curve (baryons + halo). The tangential dispersion follows from epicyclic theory: `sigma_phi = sigma_r * kappa / (2*Omega)`. This produces a self-consistent equilibrium that suppresses particle-noise-driven instabilities while allowing the desired level of spiral response.
+Setting `Rh` equal to the galaxy's own `outer_radius` makes the enclosed mass beyond the disc exactly the total mass within it, which is the prescription in Salo & Laurikainen (2000) section 2.2 (`Rh` = 400 arcsec for M51a, equal to its `Rd`).
+
+The velocity dispersion at each radius is computed from the Toomre criterion: `sigma_r = Q * 3.36 * G * Sigma(r) / kappa(r)`, where `Sigma(r)` is the local surface density (exponential disc, normalized to the truncated mass) and `kappa(r)` is the epicyclic frequency derived from the full rotation curve (baryons + halo). The tangential dispersion follows from epicyclic theory: `sigma_phi = sigma_r * kappa / (2*Omega)`, and the mean streaming velocity is reduced below the circular speed by the asymmetric-drift correction. The vertical dispersion is `sigma_z = sigma_z_ratio * sigma_r` (default ratio 0.7), and particle heights follow a sech² isothermal sheet of scale `z0 = sigma_z^2 / (2*pi*G*Sigma)`. Together this produces a self-consistent equilibrium that suppresses particle-noise-driven instabilities while allowing the desired level of spiral response.
 
 The dark matter halo applies a cored isothermal sphere potential: `a_halo = v_c^2 * r / (r^2 + r_c^2)`, centered on the mass-weighted barycenter of that system's particles (recomputed every derivative evaluation, not fixed to the central body). Every particle feels its own system's halo plus the halo of every other system, so multiple galaxies interact through their halos as well as their particles. The halo is a rigid analytic background — it never deforms, is never tidally stripped, and has no truncation radius; see `docs/dark-matter-halo.md` for what this does and does not model.
 
 **Example (Milky Way, disc in x-z plane).** `h_r` = 43.3 is the measured 2.6 kpc scale length, so `R / h_r` = 10.3:
 ```
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 43.3 1.2  220.0 166.7
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 43.3 1.2  220.0 166.7 0.0
+```
+
+The same disc with an explicit, cooler vertical structure (`sigma_z/sigma_r` = 0.5, closer to the solar neighbourhood) appends the optional 20th field:
+```
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 43.3 1.2  220.0 166.7 0.0  0.5
 ```
 
 **Example (M51b), a disc truncated at 7.3 scale lengths:**
 ```
-GalaxyDisc  1   0.0 506.5 89.3   -219.0 0.0 0.0   0.5373 0.8434 0.0000   1000000.0 1.51 186.2 3.3 25.6 1.5  166.4 31.0
+GalaxyDisc  1   0.0 458.4 80.8   200.0 0.0 0.0   0.5373 0.8434 0.0000   780000.0 1.50 186.2 3.3 25.6 1.5  186.6 31.0 186.2
 ```
 
 ---
@@ -642,7 +635,7 @@ GalaxyDisc  1   0.0 506.5 89.3   -219.0 0.0 0.0   0.5373 0.8434 0.0000   1000000
 ### `SphericalUniverse` — Procedural Spherical Distribution
 
 ```
-SphericalUniverse  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <total_mass> <radius> <H>  <halo_circular_velocity> <halo_core_radius>
+SphericalUniverse  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <total_mass> <radius> <H>  <halo_circular_velocity> <halo_core_radius> <halo_truncation_radius>
 ```
 
 Generates a uniform spherical distribution of particles with Hubble flow initial velocities. Each particle receives an outward radial velocity proportional to its distance from the center (v = H * r), mimicking cosmological expansion. Useful for simulating large-scale structure formation, collapsing gas clouds, or cosmological initial conditions.
@@ -657,10 +650,11 @@ Generates a uniform spherical distribution of particles with Hubble flow initial
 | `H` | Hubble parameter. Each particle receives a radial outward velocity v = H * r, where r is its distance from the sphere center. This establishes Hubble flow (expansion proportional to distance). The critical value H_crit = sqrt(2*G*M/R^3) gives marginal unbinding; H < H_crit produces a bound (closed) system, H > H_crit produces an unbound (open) system. Set to 0 for no initial expansion (static sphere). |
 | `halo_circular_velocity` | Dark matter halo circular velocity (same model as GalaxyDisc). Set to `0.0` for no halo |
 | `halo_core_radius` | Dark matter halo core radius. Irrelevant if `halo_circular_velocity` is 0 |
+| `halo_truncation_radius` | Halo truncation radius; `0` for untruncated. Same meaning as for `GalaxyDisc` |
 
 **Example (100k-body expanding sphere with Hubble flow for structure formation):**
 ```
-SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   5.0e7 200.0 2.83  0.0 1.0
+SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   5.0e7 200.0 2.83  0.0 1.0 0.0
 ```
 
 ---

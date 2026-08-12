@@ -3,9 +3,9 @@ Compute physical parameters for Milky Way - Andromeda simulation script.
 
 Converts real astrophysical measurements into the N-Body code unit system:
   1 distance unit = 60 pc = 0.060 kpc
-  1 mass unit     = 10^4 solar masses
   1 velocity unit = 1 km/s
   1 time unit     = 58.7 Myr  (= 60 pc / 1 km/s)
+  1 mass unit     = 60 pc / G = 1.395e4 solar masses (fixed by G=1)
 
 Sources:
   - MW rotation curve: Eilers et al. 2019 (~220 km/s)
@@ -24,8 +24,13 @@ import math
 
 # === Unit system ===
 du = 0.060   # 1 code distance unit = 60 pc = 0.060 kpc
-mu = 1.0e4   # 1 code mass unit = 10^4 solar masses
 vu = 1.0     # 1 code velocity unit = 1 km/s
+# The mass unit is FIXED by G=1 with the length and velocity units above:
+# G = L*V^2/M  =>  M = 60 pc / G = 1.395e4 Msun (NOT 1e4, which would imply
+# G = 0.717 in these units). Masses given in Msun are divided by this to get code
+# units, so the value affects the dynamics here, not just the printed labels.
+G_pc = 4.300917e-3           # G in pc (km/s)^2 / Msun
+mu = du * 1.0e3 / G_pc       # 1 code mass unit in Msun = 60 pc / G = 1.395e4
 
 # === Milky Way parameters ===
 mw_radius_kpc = 26.8        # stellar disc radius (truncation)
@@ -38,6 +43,10 @@ mw_disc_msun = 4.5e10       # disc mass (stars + gas)
 mw_smbh_msun = 4.0e6        # Sgr A*
 mw_vc_kms = 220             # flat rotation curve velocity
 mw_haloRc_kpc = 10.0        # dark matter halo core radius
+mw_haloRh_kpc = 0.0         # halo truncation radius (0 = untruncated)
+mw_sigmaZ_ratio = 0.5       # sigma_z/sigma_r for the vertical structure;
+                            #   ~0.5 for the MW thin disc (solar-neighbourhood
+                            #   value, Bland-Hawthorn & Gerhard 2016)
 
 # === Andromeda parameters ===
 and_radius_kpc = 33.5        # stellar disc radius (truncation)
@@ -50,6 +59,10 @@ and_disc_msun = 7.0e10       # disc mass
 and_smbh_msun = 1.4e8        # M31*
 and_vc_kms = 225             # flat rotation curve velocity
 and_haloRc_kpc = 12.0        # dark matter halo core radius
+and_haloRh_kpc = 0.0         # halo truncation radius (0 = untruncated)
+and_sigmaZ_ratio = 0.6       # sigma_z/sigma_r for the vertical structure; M31 is
+                             #   an earlier-type (Sb) galaxy with a somewhat
+                             #   hotter/thicker disc than the MW
 
 # === Relative geometry ===
 distance_kpc = 780           # current MW-M31 distance
@@ -75,6 +88,7 @@ mw_M_central = mw_bulge_msun / mu
 mw_Mfrac = mw_disc_msun / mw_bulge_msun
 mw_haloVc = mw_vc_kms / vu
 mw_haloRc = mw_haloRc_kpc / du
+mw_haloRh = mw_haloRh_kpc / du
 mw_particle_msun = mw_disc_msun / 39999
 
 print(f"  Disc radius:     {mw_R:.1f} code units ({mw_radius_kpc} kpc)")
@@ -85,6 +99,8 @@ print(f"  Mass fraction:   {mw_Mfrac:.2f}")
 print(f"  Particle mass:   ~{mw_particle_msun:.0f} Msun each")
 print(f"  Halo Vc:         {mw_haloVc:.1f} code units ({mw_vc_kms} km/s)")
 print(f"  Halo Rc:         {mw_haloRc:.1f} code units ({mw_haloRc_kpc} kpc)")
+print(f"  Halo Rh:         {mw_haloRh:.1f} code units ({mw_haloRh_kpc} kpc, 0 = untruncated)")
+print(f"  sigma_z/sigma_r: {mw_sigmaZ_ratio:.2f}")
 print(f"  Disc normal:     (0, 1, 0)")
 
 print("\n--- Andromeda ---")
@@ -95,6 +111,7 @@ and_M_central = and_bulge_msun / mu
 and_Mfrac = and_disc_msun / and_bulge_msun
 and_haloVc = and_vc_kms / vu
 and_haloRc = and_haloRc_kpc / du
+and_haloRh = and_haloRh_kpc / du
 and_particle_msun = and_disc_msun / 39999
 
 print(f"  Disc radius:     {and_R:.1f} code units ({and_radius_kpc} kpc)")
@@ -105,6 +122,8 @@ print(f"  Mass fraction:   {and_Mfrac:.2f}")
 print(f"  Particle mass:   ~{and_particle_msun:.0f} Msun each")
 print(f"  Halo Vc:         {and_haloVc:.1f} code units ({and_vc_kms} km/s)")
 print(f"  Halo Rc:         {and_haloRc:.1f} code units ({and_haloRc_kpc} kpc)")
+print(f"  Halo Rh:         {and_haloRh:.1f} code units ({and_haloRh_kpc} kpc, 0 = untruncated)")
+print(f"  sigma_z/sigma_r: {and_sigmaZ_ratio:.2f}")
 
 # Compute Andromeda disc normal
 inc = math.radians(inclination_deg)
@@ -130,11 +149,10 @@ print(f"  (Very long! For faster interaction, reduce initial separation)")
 
 print("\n--- Script lines ---")
 print(f"N_SystemBodies  40000  40000")
-print(f"Camera          0.0  8000.0  8000.0")
 print(f"# Milky Way at origin, disc in x-z plane")
-print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {mw_M_central:.1f} {mw_Mfrac:.2f} {mw_R:.1f} {mw_Ri:.1f} {mw_h_r:.1f} 1.2  {mw_haloVc:.1f} {mw_haloRc:.1f}")
+print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {mw_M_central:.1f} {mw_Mfrac:.2f} {mw_R:.1f} {mw_Ri:.1f} {mw_h_r:.1f} 1.2  {mw_haloVc:.1f} {mw_haloRc:.1f} {mw_haloRh:.1f}  {mw_sigmaZ_ratio:.2f}")
 print(f"# Andromeda along +x axis")
-print(f"GalaxyDisc  1   {sep:.1f} 0.0 0.0   {v_radial_kms:.1f} {v_transverse_kms:.1f} 0.0   {nx:.4f} {ny:.4f} {nz:.4f}   {and_M_central:.1f} {and_Mfrac:.2f} {and_R:.1f} {and_Ri:.1f} {and_h_r:.1f} 1.2  {and_haloVc:.1f} {and_haloRc:.1f}")
+print(f"GalaxyDisc  1   {sep:.1f} 0.0 0.0   {v_radial_kms:.1f} {v_transverse_kms:.1f} 0.0   {nx:.4f} {ny:.4f} {nz:.4f}   {and_M_central:.1f} {and_Mfrac:.2f} {and_R:.1f} {and_Ri:.1f} {and_h_r:.1f} 1.2  {and_haloVc:.1f} {and_haloRc:.1f} {and_haloRh:.1f}  {and_sigmaZ_ratio:.2f}")
 
 # Rotation directions:
 print("\n--- Rotation directions ---")

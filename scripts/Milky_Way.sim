@@ -2,7 +2,7 @@
 #
 # Unit system (G=1):
 #   1 distance unit = 60 pc = 0.060 kpc
-#   1 mass unit     = 10^4 solar masses
+#   1 mass unit     = 60 pc / G = 1.395e4 solar masses (fixed by G=1)
 #   1 velocity unit = 1 km/s
 #   1 time unit     = 58.7 Myr
 #
@@ -48,7 +48,11 @@ Camera          0.0  300.0  700.0
 #   scalelength, 2.6 +/- 0.5 kpc). The truncation R = 446.7 is therefore
 #   10.3 scale lengths -- the MW disc is far more centrally concentrated
 #   than the R/4 convention would imply.
-# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  h_r  Q  haloVc  haloRc
+# haloRh = 0 means the halo is NOT truncated: its enclosed mass keeps growing
+# as M_halo(r) ~ Vc^2 * r at all radii. That overestimates long-range attraction.
+# No published truncation radius is adopted here, so 0 is kept deliberately
+# rather than inventing one. Set it to a radius in code units to truncate.
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  h_r  Q  haloVc  haloRc  haloRh  [sigma_z_ratio]
 
 # Milky Way at origin, disc in x-z plane
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 43.3 1.2  220.0 166.7
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1075229.2 3.0 446.7 16.7 43.3 1.2  220.0 166.7 0.0  0.5

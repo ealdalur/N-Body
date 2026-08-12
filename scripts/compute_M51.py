@@ -36,10 +36,13 @@ pericenter, "motivated by the high inclination of the relative orbit".
 
 === Mass Decomposition Methodology ===
 
-Following Salo & Laurikainen (2000): the disc contributes ~1/3 of the total
-rotational support at the disc edge, and the halo contributes ~2/3. This gives
-M_halo/M_disc ~ 2 within the disc radius. The baryonic (disc+bulge) masses
-used here are rotation-curve-decomposed values, not photometric stellar masses.
+Following Salo & Laurikainen (2000): for the PRIMARY the disc contributes ~1/3
+of the total rotational support at the disc edge and the halo ~2/3, giving
+M_halo/M_disc ~ 2 within the disc radius. The COMPANION is treated differently
+(sect 2.2): as the fainter galaxy it is made more halo-dominated, with the paper
+setting M_disc = 0.13 and M_halo = 0.42 (M_halo/M_disc = 3.23). The baryonic
+(disc+bulge) masses used here are rotation-curve-decomposed values, not
+photometric stellar masses.
 This is standard for N-body tidal interaction studies — the dynamically cold
 disc mass that participates in spiral arm formation is lower than the total
 photometric mass (which includes dynamically hot thick-disc and bulge stars).
@@ -50,9 +53,16 @@ photometric mass (which includes dynamically hot thick-disc and bulge stars).
 
 === Unit system (G=1) ===
   1 distance unit = 60 pc = 0.060 kpc
-  1 mass unit     = 10^4 solar masses
   1 velocity unit = 1 km/s
   1 time unit     = 60 pc / (1 km/s) = 58.7 Myr
+  1 mass unit     = 60 pc / G = 1.395e4 solar masses
+
+Note the mass unit is NOT a free choice. Fixing G = 1 together with the length
+unit (60 pc) and the velocity unit (1 km/s) DETERMINES the mass unit through
+G = L*V^2/M, giving M = 60 pc * (1 km/s)^2 / G = 1.395e4 Msun. The older value
+of 1e4 Msun was inconsistent with G = 1 (it implied G = 0.717); every Msun
+figure printed here now uses the consistent 1.395e4 factor. Only the Msun labels
+change -- the code-unit masses, and hence the dynamics, are unaffected.
 
 === Sources ===
   - Salo & Laurikainen 2000, MNRAS 319, 377 (orbit-constrained N-body model)
@@ -67,9 +77,16 @@ import math
 
 # === Unit system ===
 du = 0.060   # 1 code distance unit = 60 pc = 0.060 kpc
-mu = 1.0e4   # 1 code mass unit = 10^4 Msun
 vu = 1.0     # 1 code velocity unit = 1 km/s
 tu = 58.7    # 1 code time unit = 60 pc / (1 km/s) = 58.7 Myr
+# The mass unit is FORCED by G = 1 with the length and velocity units above:
+# G = L*V^2/M  =>  M = L*V^2/G. With L = 60 pc, V = 1 km/s and
+# G = 4.300917e-3 pc (km/s)^2 / Msun, this is 60/G = 1.395e4 Msun, NOT 1e4.
+# (1e4 would imply G = 0.717 in these units, contradicting G = 1.) This factor
+# only rescales the human-readable Msun printouts; code-unit masses are set by
+# V^2*R with G = 1 and are independent of it.
+G_pc = 4.300917e-3           # G in pc (km/s)^2 / Msun
+mu = du * 1.0e3 / G_pc       # 1 code mass unit in Msun = 60 pc / G = 1.395e4
 
 # === Distance ===
 # The paper's own assumed distance, used throughout so that every angular size
@@ -89,7 +106,10 @@ m51a_Re_arcsec = 100.0
 m51a_Rd_arcsec = 400.0
 m51a_haloRc_arcsec = 8.0
 
-m51a_Vtotal_kms = 210               # observed flat rotation velocity
+m51a_Vtotal_kms = 220               # observed flat rotation velocity; Salo &
+                                    # Laurikainen adopt 220 km/s as the peak of
+                                    # NGC 5194's rotation curve and their
+                                    # velocity unit (sect 2.2 / 2.3)
 m51a_radius_kpc = m51a_Rd_arcsec * arcsec_to_kpc      # Rd, the truncation
 m51a_h_r_kpc = m51a_Re_arcsec * arcsec_to_kpc         # Re, the scale length
 m51a_inner_kpc = 0.3                # inner bulge region (no disc particles)
@@ -157,10 +177,16 @@ m51a_Mhalo_disc_pre = (m51a_haloVc**2 * m51a_R_code**3
 m51a_total_code = m51a_baryon_code + m51a_Mhalo_disc_pre
 m51b_total_code = m51b_mass_ratio * m51a_total_code
 
-# Split the companion total into baryon + halo on the same 1/3 : 2/3 basis used
-# for the primary, keeping M_halo/M_baryon ~ 2 (the paper holds the halo-to-disc
-# ratio fixed at 2:1 within the disc radius for both components).
-m51b_baryon_code = m51b_total_code / 3.0
+# Split the companion total into baryon + halo. The paper does NOT reuse the
+# primary's 1/3:2/3 (M_halo/M_disc = 2) split for the companion. Because the
+# companion is the fainter galaxy, Persic & Salucci (1990) M_halo/M_disc ~
+# L_disc^-0.5 makes it MORE halo-dominated, and the paper sets this explicitly
+# (sect 2.2): "We thus set for the companion M_disc = 0.13 and M_halo = 0.42",
+# in units where the primary's total mass within Rd = 1. Those sum to Mp = 0.55,
+# so the companion's baryon fraction of its own total is 0.13/0.55 = 0.236 and
+# M_halo/M_baryon = 0.42/0.13 = 3.23 -- not 2.0.
+m51b_disc_frac_of_total = 0.13 / m51b_mass_ratio     # 0.13 of primary total = 0.236 of Mp
+m51b_baryon_code = m51b_total_code * m51b_disc_frac_of_total
 m51b_baryon_msun = m51b_baryon_code * mu
 m51b_Mhalo_target = m51b_total_code - m51b_baryon_code
 
@@ -290,7 +316,7 @@ print(f"  V_total consistency:  {v_total_check:.1f} km/s (recomputed from masses
 
 m51b_Mhalo_disc = m51b_haloVc**2 * m51b_R_code**3 / (m51b_R_code**2 + m51b_haloRc_code**2)
 print(f"  M_halo within disc: {m51b_Mhalo_disc:.0f} code units")
-print(f"  M_halo/M_baryon:   {m51b_Mhalo_disc/m51b_baryon_code:.2f} (target: ~2.0)")
+print(f"  M_halo/M_baryon:   {m51b_Mhalo_disc/m51b_baryon_code:.2f} (target: ~3.23, paper Mdisc=0.13/Mhalo=0.42)")
 
 # === Mass ratio Mp (the paper's primary mass constraint) ===
 # The paper defines Mp = M_tot(companion) / M_tot(primary) within 4Re, where
@@ -327,24 +353,68 @@ print(f"  Equivalent as a ratio: 1:{1/Mp_check:.2f}")
 
 M_baryon_total = m51a_baryon_code + m51b_baryon_code
 
-def Phi(r):
-    phi_halo_a = 0.5 * m51a_haloVc**2 * math.log(r**2 + m51a_haloRc_code**2)
-    phi_halo_b = 0.5 * m51b_haloVc**2 * math.log(r**2 + m51b_haloRc_code**2)
-    phi_baryon = -M_baryon_total / r
-    return phi_halo_a + phi_halo_b + phi_baryon
+# === Halo truncation ===
+# Salo & Laurikainen sect 2.2 truncate each halo at Rh equal to that galaxy's own
+# disc truncation Rd ("The halo truncation is set at Rh = 400 arcsec" for the
+# primary; "disc truncation, Rh = 240 arcsec" for the companion). Beyond Rh the
+# enclosed halo mass is frozen at M_halo(Rh) and the force falls off as 1/r^2.
+#
+# This matters at the encounter separation, which lies outside BOTH Rh values.
+# Untruncated, each halo keeps accreting mass there, and because the companion's
+# halo is the less concentrated of the two it gains proportionally more: the
+# enclosed-mass ratio comes out near 1:1.22 instead of the intended 1:1.82.
+# Truncated, the enclosed mass past Rh IS the total within Rd for each galaxy, so
+# the ratio is exactly Mp by construction.
+m51a_haloRh_code = m51a_R_code      # Rh = Rd = 400 arcsec
+m51b_haloRh_code = m51b_R_code      # Rh = Rd = 240 arcsec
+
+
+def _M_halo(r, Vc, Rc, Rh):
+    """Enclosed halo mass of a cored isothermal sphere, frozen beyond Rh.
+    Rh <= 0 means untruncated."""
+    rr = r if (Rh <= 0.0 or r <= Rh) else Rh
+    return Vc*Vc * rr**3 / (rr*rr + Rc*Rc)
+
+
+def _M_enc(r):
+    """Total enclosed mass governing the relative orbit: both baryonic components
+    plus both halos. Mirrors HaloScale() in Simulation.cpp."""
+    return (M_baryon_total
+            + _M_halo(r, m51a_haloVc, m51a_haloRc_code, m51a_haloRh_code)
+            + _M_halo(r, m51b_haloVc, m51b_haloRc_code, m51b_haloRh_code))
+
+
+def _accel(p):
+    """Relative acceleration. Single definition used by every integration here."""
+    r = math.sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2])
+    g = _M_enc(r) / (r*r)
+    return [-g*p[0]/r, -g*p[1]/r, -g*p[2]/r], r
+
+
+# Alias kept so the bisection code below reads naturally.
+_accel_solve = _accel
+
+
+def Phi(r, _ref=6000.0, _n=200000):
+    """Potential of the (possibly truncated) mass model, by numerical integration
+    of the actual force law. A closed form exists only for the untruncated case;
+    integrating keeps this consistent with _accel() whatever Rh is set to.
+    Phi(_ref) = 0 by convention -- only differences are ever used."""
+    lo, hi = (r, _ref) if r < _ref else (_ref, r)
+    h = (hi - lo) / _n
+    total = 0.0
+    for i in range(_n + 1):
+        x = lo + i*h
+        w = 0.5 if (i == 0 or i == _n) else 1.0
+        total += w * (_M_enc(x) / (x*x)) * h
+    return -total if r < _ref else total
+
 
 # === Solve pericenter from the target crossing distance ===
 # Rcross is the paper's constraint, so it is the input; pericenter follows.
 # The crossing radius is not a closed-form function of pericenter -- it depends
-# on the node geometry, and the apsides precess in a logarithmic potential --
-# so bisect using a short numerical integration.
-
-def _accel_solve(p):
-    r = math.sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2])
-    g = (M_baryon_total / (r*r)
-         + m51a_haloVc**2 * r / (r*r + m51a_haloRc_code**2)
-         + m51b_haloVc**2 * r / (r*r + m51b_haloRc_code**2))
-    return [-g*p[0]/r, -g*p[1]/r, -g*p[2]/r], r
+# on the node geometry, and the apsides precess -- so bisect on a short
+# numerical integration.
 
 def _vt_for(r_apo, r_per):
     num = 2.0 * (Phi(r_per) - Phi(r_apo))
@@ -458,18 +528,19 @@ print(f"    At dt=0.0005: {int(t_to_peri/0.0005)} steps")
 
 # Enclosed-mass ratio at pericenter (different quantity: both halos are
 # evaluated at the encounter separation rather than at each disc radius)
-r_peri_code = pericenter_kpc / du
-m51a_halo_peri = m51a_haloVc**2 * r_peri_code**3 / (r_peri_code**2 + m51a_haloRc_code**2)
-m51b_halo_peri = m51b_haloVc**2 * r_peri_code**3 / (r_peri_code**2 + m51b_haloRc_code**2)
-m51a_dyn_peri = m51a_baryon_code + m51a_halo_peri
-m51b_dyn_peri = m51b_baryon_code + m51b_halo_peri
-dyn_ratio = m51b_dyn_peri / m51a_dyn_peri
-
-print(f"\n--- Enclosed mass ratio at pericenter ({pericenter_kpc:.2f} kpc) ---")
-print(f"  M51a enclosed: {m51a_dyn_peri:.0f} (baryonic {m51a_baryon_code:.0f} + halo {m51a_halo_peri:.0f})")
-print(f"  M51b enclosed: {m51b_dyn_peri:.0f} (baryonic {m51b_baryon_code:.0f} + halo {m51b_halo_peri:.0f})")
-print(f"  M51b / M51a: 1:{1/dyn_ratio:.2f}")
-
+# Enclosed mass ratio. The meaningful radius is the disc-plane CROSSING, not the
+# pericenter: beyond both Rh values the enclosed masses are the totals within each
+# Rd, so the ratio there equals Mp exactly. At the pericenter (which sits at Rh
+# for the primary) the primary's halo is not yet truncated, so the ratio differs.
+print("")
+print(f"--- Enclosed mass ratio ---")
+_r_cross = target_Rcross * m51a_R_code
+for _lab, _r in (("at pericenter", r_peri), ("at the crossing", _r_cross)):
+    _Ma = m51a_baryon_code + _M_halo(_r, m51a_haloVc, m51a_haloRc_code, m51a_haloRh_code)
+    _Mb = m51b_baryon_code + _M_halo(_r, m51b_haloVc, m51b_haloRc_code, m51b_haloRh_code)
+    print(f"  {_lab:16s} r={_r*du:5.2f} kpc:  1:{_Ma/_Mb:.2f}   (Mp = {_Mb/_Ma:.3f})")
+print(f"  Target Mp = {m51b_mass_ratio}. Untruncated this drifts to ~1:1.22 at the")
+print(f"  crossing, because each halo keeps accreting mass past its own Rd.")
 # === Coordinate system ===
 # M51a at origin, disc in the x-z plane, disc normal +y.
 #
@@ -566,11 +637,6 @@ print(f"  Line of nodes along +/-x; orbit circulates in the same sense as the")
 print(f"    M51a disc (L_orb . L_disc > 0), i.e. prograde, not the 100 deg mirror")
 print(f"  Argument of pericenter: 90 deg (apocenter between the disc crossings)")
 
-# === Camera ===
-cam_height = m51a_R_code * 4.0
-print(f"\n--- Camera ---")
-print(f"  Position: (0, {cam_height:.0f}, 0)")
-
 # === Particle counts ===
 n_m51a = 40000
 n_m51b = 10000
@@ -611,13 +677,12 @@ print(f"\n{'='*65}")
 print(f"SCRIPT LINES")
 print(f"{'='*65}")
 print(f"N_SystemBodies  {n_m51a}  {n_m51b}")
-print(f"Camera          0.0  {cam_height:.0f}  0.0")
 print(f"")
 print(f"# M51a (NGC 5194) at origin, disc in x-z plane")
-print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {m51a_bulge_code:.1f} {m51a_Mfrac:.2f} {m51a_R_code:.1f} {m51a_Ri_code:.1f} {m51a_h_r_code:.1f} {toomre_Q:.1f}  {m51a_haloVc:.1f} {m51a_haloRc_code:.1f}")
+print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {m51a_bulge_code:.1f} {m51a_Mfrac:.2f} {m51a_R_code:.1f} {m51a_Ri_code:.1f} {m51a_h_r_code:.1f} {toomre_Q:.1f}  {m51a_haloVc:.1f} {m51a_haloRc_code:.1f} {m51a_haloRh_code:.1f}")
 print(f"")
 print(f"# M51b (NGC 5195) at apocenter, near-polar bound orbit (iorb={orbital_inclination_deg:.0f} deg)")
-print(f"GalaxyDisc  1   {pos_x:.1f} {pos_y:.1f} {pos_z:.1f}   {vel_x:.1f} {vel_y:.1f} {vel_z:.1f}   {m51b_normal_x:.4f} {m51b_normal_y:.4f} {m51b_normal_z:.4f}   {m51b_bulge_code:.1f} {m51b_Mfrac:.2f} {m51b_R_code:.1f} {m51b_Ri_code:.1f} {m51b_h_r_code:.1f} {toomre_Q:.1f}  {m51b_haloVc:.1f} {m51b_haloRc_code:.1f}")
+print(f"GalaxyDisc  1   {pos_x:.1f} {pos_y:.1f} {pos_z:.1f}   {vel_x:.1f} {vel_y:.1f} {vel_z:.1f}   {m51b_normal_x:.4f} {m51b_normal_y:.4f} {m51b_normal_z:.4f}   {m51b_bulge_code:.1f} {m51b_Mfrac:.2f} {m51b_R_code:.1f} {m51b_Ri_code:.1f} {m51b_h_r_code:.1f} {toomre_Q:.1f}  {m51b_haloVc:.1f} {m51b_haloRc_code:.1f} {m51b_haloRh_code:.1f}")
 
 # === Orbit integration: verify and report the actual event sequence ===
 # The analytic v_t solution guarantees the pericenter/apocenter radii, but the
@@ -625,13 +690,6 @@ print(f"GalaxyDisc  1   {pos_x:.1f} {pos_y:.1f} {pos_z:.1f}   {vel_x:.1f} {vel_y
 # the node geometry and can only be found by integrating. This also verifies the
 # node geometry is right: with the apocenter between the crossings, the crossing
 # radii should sit near 1.3 Rd, not at the apsides.
-
-def _accel(p):
-    r = math.sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2])
-    g = (M_baryon_total / (r*r)
-         + m51a_haloVc**2 * r / (r*r + m51a_haloRc_code**2)
-         + m51b_haloVc**2 * r / (r*r + m51b_haloRc_code**2))
-    return [-g*p[0]/r, -g*p[1]/r, -g*p[2]/r], r
 
 def integrate_events(t_max=24.0, dt=5.0e-5):
     """Velocity-Verlet the relative orbit. Returns a time-ordered list of
@@ -702,45 +760,81 @@ for kind, te, re_ in events:
                   f"t={before[-1]:.2f} and t={after[0]:.2f}  OK")
         break
 
-# Close crossings only. Because the apsides precess in a logarithmic potential,
-# the orbit alternates between crossing near the semi-latus rectum (~1.3 Rd, a
-# genuine close passage) and crossing near apocenter (~1.8 Rd, a grazing pass
-# that does little). Only the close ones are the paper's Rcross / Rdown.
-_close_cut = (r_peri + r_start) / 2.0 / m51a_R_code   # semi-major axis, in Rd
-close = [(te, re_) for te, re_ in crossings if re_ / m51a_R_code <= _close_cut]
+# === Identify the paper's Rcross / Rdown pair ===
+#
+# A near-polar orbit crosses the disc plane TWICE per orbit, at the two nodes.
+# Those crossings split the orbit into two unequal arcs: one containing
+# pericenter, one containing apocenter. The two arcs sum to the full radial
+# period, so picking the wrong one gives a badly wrong interval.
+#
+# The paper identifies its pair unambiguously (Fig. 1 caption): "in the
+# multiple-passage model the apocentre is between the two disc crossings". So
+# Rcross and Rdown are the pair that BRACKETS APOCENTER, not merely the first
+# two crossings in time.
+_apo_times = [te for kind, te, _ in events if kind == "apocenter"]
+
+_pair = None
+for i in range(len(crossings) - 1):
+    t_a, r_a = crossings[i]
+    t_b, r_b = crossings[i + 1]
+    if any(t_a < ta < t_b for ta in _apo_times):
+        _pair = (t_a, r_a, t_b, r_b)
+        break
 
 print("")
-print(f"  Close crossings (<= {_close_cut:.2f} Rd = semi-major axis; Rcross/Rdown events):")
-for te, re_ in close:
-    print(f"    t={te:6.2f} ({te*tu:5.0f} Myr)  {re_*du:5.2f} kpc = {re_/m51a_R_code:.2f} Rd")
-print(f"  Grazing crossings near apocenter (~1.8 Rd) are skipped: the companion")
-print(f"  is at its greatest distance there, so the perturbation is weak.")
+print(f"  All disc-plane crossings:")
+for te, re_ in crossings:
+    print(f"    t={te:6.2f} ({te*tu:5.0f} Myr)  {re_*du:5.2f} kpc = {re_/m51a_R_code:.3f} Rd")
 
-if len(close) >= 2:
-    t_principal = close[0][0]      # Rcross: the spiral-inducing passage
-    t_down = close[1][0]           # Rdown: the most recent crossing
-    # Paper: Tobs - Tdown = 0.5-1.0 in ITS time unit (80 Myr) after Rdown
+print("")
+print(f"  Consecutive pairs and the apsis each brackets:")
+for i in range(len(crossings) - 1):
+    t_a, _ = crossings[i]
+    t_b, _ = crossings[i + 1]
+    _between = [k for k, ta, _ in events
+                if k in ("apocenter", "pericenter") and t_a < ta < t_b]
+    _tag = "  <-- the paper's Rcross/Rdown pair" if "apocenter" in _between else ""
+    print(f"    t={t_a:6.2f} -> {t_b:6.2f}   gap {(t_b-t_a)*tu:5.0f} Myr"
+          f"   brackets {_between}{_tag}")
+print(f"  The two arcs sum to the full radial period, so the pericenter-bracketing")
+print(f"  arc is NOT the quantity the paper constrains.")
+
+if _pair is not None:
+    t_principal, r_principal, t_down, r_down = _pair
+
+    # Paper: Tobs - Tdown = 0.5-1.0 of its 80 Myr unit after the latest crossing
     lo = t_down + 0.5*80.0/tu
     hi = t_down + 1.0*80.0/tu
     print("")
     print(f"  BEST-MORPHOLOGY WINDOW")
-    print(f"  The paper's observation epoch (Tobs) is 0.5-1.0 of its own time")
-    print(f"  units (80 Myr each) after the most recent close crossing Rdown.")
-    print(f"    principal crossing (Rcross): t={t_principal:.2f} at {close[0][1]/m51a_R_code:.2f} Rd")
-    print(f"    most recent crossing (Rdown): t={t_down:.2f} at {close[1][1]/m51a_R_code:.2f} Rd")
+    print(f"  The observation epoch is Tobs - Tdown = 0.5-1.0 of the paper's")
+    print(f"  80 Myr unit (40-80 Myr) after the most recent crossing Rdown.")
+    print(f"    principal crossing (Rcross): t={t_principal:6.2f} at {r_principal/m51a_R_code:.3f} Rd")
+    print(f"    most recent crossing (Rdown): t={t_down:6.2f} at {r_down/m51a_R_code:.3f} Rd")
     print(f"  => observe at t = {lo:.2f} to {hi:.2f}  (centre ~{(lo+hi)/2:.2f})")
     print(f"  Set End_Time above {hi:.1f}.")
+
     print("")
-    dt_principal = (t_down - t_principal)*tu
-    print(f"  Tobs cross-check: the paper wants {5.5*80.0:.0f}-{6.5*80.0:.0f} Myr between")
-    print(f"  successive close crossings. Here it is {dt_principal:.0f} Myr", end="")
-    if 440.0 <= dt_principal <= 520.0:
-        print(" -- in range.")
+    dt_cross = (t_down - t_principal)*tu
+    # Table 2 gives Tobs = 5.5-6.5 (principal crossing -> observation) and
+    # Tobs - Tdown = 0.5-1.0 (latest crossing -> observation), in its 80 Myr unit.
+    # The CROSSING-TO-CROSSING interval is Tdown itself:
+    #   Tdown = Tobs - (Tobs - Tdown) in [5.5-1.0, 6.5-0.5] = [4.5, 6.0] units
+    #         = 360-480 Myr
+    # Tobs (440-520 Myr) and Tobs - Tdown (40-80 Myr) are both
+    # crossing-to-OBSERVATION and are the wrong comparison for this quantity.
+    _lo_gap, _hi_gap = 4.5*80.0, 6.0*80.0
+    print(f"  Crossing-to-crossing (Rcross -> Rdown, the apocenter-bracketing arc):")
+    print(f"    paper Tdown = 4.5-6.0 of its 80 Myr unit = {_lo_gap:.0f}-{_hi_gap:.0f} Myr")
+    print(f"    here {dt_cross:.0f} Myr", end="")
+    if _lo_gap <= dt_cross <= _hi_gap:
+        print(" -- IN RANGE.")
     else:
-        print(f" -- {'above' if dt_principal > 520 else 'BELOW'} range.")
-        print(f"  The untruncated halo (no Rh cutoff, see docs section 9.3)")
-        print(f"  overestimates enclosed mass at large radii, which shortens the")
-        print(f"  period for a given orbit shape.")
+        print(f" -- {'above' if dt_cross > _hi_gap else 'below'} range.")
+else:
+    print("")
+    print(f"  No crossing pair brackets an apocenter within the integration span;")
+    print(f"  extend t_max in integrate_events() to find the paper's pair.")
 
 # === Timeline ===
 print("")
@@ -752,6 +846,8 @@ print(f"  Apocenter:    {apocenter_kpc:.1f} kpc ({r_start:.1f} code), derived fr
 print(f"  Eccentricity: {orbital_eccentricity}")
 print(f"  Inclination:  {orbital_inclination_deg:.0f} deg (near-polar)")
 print(f"  Arg. of peri: 90 deg (apocenter between crossings)")
-print(f"  Mass ratio Mp:{Mp_check:.3f}")
-print(f"  Orbital period: {(close[1][0]-close[0][0])*2 if len(close)>1 else float('nan'):.2f} code units"
-      if len(close) > 1 else "")
+print(f"  Mass ratio Mp: {Mp_check:.3f}")
+print(f"  Halo Rh:       {m51a_haloRh_code:.1f} / {m51b_haloRh_code:.1f} code (= each Rd)")
+if _pair is not None:
+    print(f"  Rcross -> Rdown: {(_pair[2]-_pair[0])*tu:.0f} Myr (paper 360-480)")
+    print(f"  Observe at:    t = {_pair[2] + 0.5*80.0/tu:.2f} to {_pair[2] + 1.0*80.0/tu:.2f}")

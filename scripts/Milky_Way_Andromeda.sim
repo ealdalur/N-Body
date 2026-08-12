@@ -2,7 +2,7 @@
 #
 # Unit system (G=1):
 #   1 distance unit = 60 pc = 0.060 kpc
-#   1 mass unit     = 10^4 solar masses
+#   1 mass unit     = 60 pc / G = 1.395e4 solar masses (fixed by G=1)
 #   1 velocity unit = 1 km/s
 #   1 time unit     = 58.7 Myr
 #
@@ -73,10 +73,14 @@ Camera          6500.0  3000.0  0.0
 # Andromeda disc scale length h_R = 5.3 kpc = 88.3 code units
 #   Courteau et al. 2011, ApJ 739, 20 (3.6um exponential disc scalelength).
 #   Truncation R = 558.3 is 6.3 scale lengths.
-# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  h_r  Q  haloVc  haloRc
+# haloRh = 0 means the halo is NOT truncated: its enclosed mass keeps growing
+# as M_halo(r) ~ Vc^2 * r at all radii. That overestimates long-range attraction.
+# No published truncation radius is adopted here, so 0 is kept deliberately
+# rather than inventing one. Set it to a radius in code units to truncate.
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  h_r  Q  haloVc  haloRc  haloRh  [sigma_z_ratio]
 
 # Milky Way at origin, disc in x-z plane
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 43.3 1.2  220.0 166.7
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1075229.2 3.0 446.7 16.7 43.3 1.2  220.0 166.7 0.0  0.5
 
 # Andromeda at 780 kpc along +x, approaching at 110 km/s
-GalaxyDisc  1   13000.0 0.0 0.0   -110.0 17.0 0.0   0.2250 0.7982 0.5589   3000000.0 2.33 558.3 5.0 88.3 1.2  225.0 200.0
+GalaxyDisc  1   13000.0 0.0 0.0   -110.0 17.0 0.0   0.2250 0.7982 0.5589   2150458.5 2.33 558.3 25.0 88.3 1.2  225.0 200.0 0.0  0.6

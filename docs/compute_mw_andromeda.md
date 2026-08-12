@@ -174,4 +174,4 @@ The rough timescale calculation uses the relation 1 km/s ~ 1.022 kpc/Gyr (from 1
 
 ### Output
 
-The final output section prints complete GalaxyDisc lines ready for copy-paste into a .sim file, including all 18 parameters in the correct order.
+The final output section prints complete GalaxyDisc lines ready for copy-paste into a .sim file: the 19 required parameters (through `halo_truncation_radius`) plus the optional `sigma_z_ratio` (20th field), in the correct order.

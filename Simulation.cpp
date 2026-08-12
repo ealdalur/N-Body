@@ -106,6 +106,8 @@ void Simulation::Allocate()
 {
 	halo_vc.resize(N_Systems, 0.0);
 	halo_rc_sq.resize(N_Systems, 0.0);
+	halo_rh.resize(N_Systems, 0.0);
+	halo_M_rh.resize(N_Systems, 0.0);
 	halo_central.resize(N_Systems, 0);
 	halo_center.resize(N_Systems * 3, 0.0);
 	system_bulk_vel.resize(N_Systems * 3, 0.0);
@@ -256,20 +258,33 @@ void Simulation::LoadScript(const std::string &path)
 			int system;
 			double px, py, pz, vx, vy, vz;
 			double nx, ny, nz;
-			double M, Mfrac, R, Ri, h_r, Q, haloVc, haloRc;
+			double M, Mfrac, R, Ri, h_r, Q, haloVc, haloRc, haloRh;
 			if (!(iss >> system >> px >> py >> pz >> vx >> vy >> vz
 			          >> nx >> ny >> nz >> M >> Mfrac >> R >> Ri >> h_r
-			          >> Q >> haloVc >> haloRc)) {
+			          >> Q >> haloVc >> haloRc >> haloRh)) {
 				std::cerr << "Error: malformed GalaxyDisc command." << std::endl;
-				std::cerr << "Expected 18 values: system posX posY posZ velX velY velZ"
+				std::cerr << "Expected 19 values: system posX posY posZ velX velY velZ"
 				          << " normalX normalY normalZ mass massFrac R Ri h_r Q"
-				          << " haloVc haloRc" << std::endl;
+				          << " haloVc haloRc haloRh" << std::endl;
+				std::cerr << "  (optional 20th value: sigma_z/sigma_r ratio, default 0.7)" << std::endl;
 				std::cerr << "  got: " << line << std::endl;
 				exit(1);
 			}
+			// Optional 20th field: ratio of vertical to radial velocity dispersion,
+			// sigma_z/sigma_r, used for the isothermal-sheet vertical structure.
+			// Defaults to 0.7 (Salo & Laurikainen 2000) when omitted, so existing
+			// 19-column scripts are unaffected. operator>> writes 0 on failure since
+			// C++11, so read into a temp and keep the default when no token is present.
+			double sigmaZratio = 0.7;
+			{ double tmp; if (iss >> tmp) sigmaZratio = tmp; }
 			if (h_r <= 0.0) {
 				std::cerr << "Error: GalaxyDisc scale length (h_r) must be > 0, got "
 				          << h_r << std::endl;
+				exit(1);
+			}
+			if (haloRh < 0.0) {
+				std::cerr << "Error: GalaxyDisc haloRh must be >= 0 (0 = untruncated), got "
+				          << haloRh << std::endl;
 				exit(1);
 			}
 			if (h_r >= R) {
@@ -278,24 +293,36 @@ void Simulation::LoadScript(const std::string &path)
 				          << std::endl;
 				exit(1);
 			}
+			if (sigmaZratio < 0.0) {
+				std::cerr << "Error: GalaxyDisc sigma_z/sigma_r ratio must be >= 0, got "
+				          << sigmaZratio << std::endl;
+				exit(1);
+			}
 
 			if (pos_data.empty()) Allocate();
 
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
 			double discNormal[3] = {nx, ny, nz};
-			LoadGalaxyDiscState(system, sysPos, sysVel, discNormal, M, Mfrac, R, Ri, h_r, Q, haloVc, haloRc);
+			LoadGalaxyDiscState(system, sysPos, sysVel, discNormal, M, Mfrac, R, Ri, h_r, Q, haloVc, haloRc, haloRh, sigmaZratio);
 		} else if (key == "SphericalUniverse") {
 			int system;
 			double px, py, pz, vx, vy, vz;
-			double M, R, H, haloVc, haloRc;
-			iss >> system >> px >> py >> pz >> vx >> vy >> vz >> M >> R >> H >> haloVc >> haloRc;
+			double M, R, H, haloVc, haloRc, haloRh;
+			if (!(iss >> system >> px >> py >> pz >> vx >> vy >> vz
+			          >> M >> R >> H >> haloVc >> haloRc >> haloRh)) {
+				std::cerr << "Error: malformed SphericalUniverse command." << std::endl;
+				std::cerr << "Expected 13 values: system posX posY posZ velX velY velZ"
+				          << " mass radius H haloVc haloRc haloRh" << std::endl;
+				std::cerr << "  got: " << line << std::endl;
+				exit(1);
+			}
 
 			if (pos_data.empty()) Allocate();
 
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
-			LoadSphericalUniverseState(system, sysPos, sysVel, M, R, H, haloVc, haloRc);
+			LoadSphericalUniverseState(system, sysPos, sysVel, M, R, H, haloVc, haloRc, haloRh);
 		} else if (key == "Body") {
 			int system;
 			double px, py, pz, vx, vy, vz, m;
@@ -388,9 +415,9 @@ void Simulation::LoadScript(const std::string &path)
 	}
 }
 
-void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double h_r, double Q, double haloVc, double haloRc){
+void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double h_r, double Q, double haloVc, double haloRc, double haloRh, double sigmaZratio){
 
-	double m,r,theta,vm,m_orbit;
+	double m,r,theta;
 	double p[3],v[3];
 
 	// Build orthonormal frame from disc normal
@@ -407,6 +434,12 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 
 	halo_vc[system] = haloVc;
 	halo_rc_sq[system] = haloRc * haloRc;
+	// Halo truncation. <= 0 leaves the halo untruncated. When set, the enclosed
+	// mass is frozen at M_halo(Rh) beyond Rh, so precompute that constant.
+	halo_rh[system] = haloRh;
+	halo_M_rh[system] = (haloRh > 0.0)
+	    ? haloVc*haloVc * haloRh*haloRh*haloRh / (haloRh*haloRh + haloRc*haloRc)
+	    : 0.0;
 	halo_central[system] = sysIdx;
 
 	for (int i=0; i<N_System_Bodies[system]; i++)
@@ -453,6 +486,36 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	std::mt19937 gen(42 + system);
 	std::normal_distribution<double> normal(0.0, 1.0);
 
+	// Local disc kinematics at radius rr. Factored into a lambda so the
+	// asymmetric-drift correction below can finite-difference d ln(Sigma*sigma_r^2)
+	// with respect to R. Returns:
+	//   vc_sq   circular speed squared (enclosed disc mass + halo)
+	//   Omega   angular speed vc/rr
+	//   Sigma   exponential surface density, normalized to the TRUNCATED disc mass
+	//   kappa   epicyclic frequency from the full rotation curve
+	//   sig_r   Toomre-Q radial dispersion; sig_phi = sig_r*kappa/(2*Omega)
+	double haloRc_sq = haloRc * haloRc;
+	auto discProps = [&](double rr, double &vc_sq, double &Omega, double &Sigma,
+	                     double &kappa, double &sig_r, double &sig_phi){
+		double enc = (1.0 - (1.0 + rr/h_r)*exp(-rr/h_r)) / enc_denom;
+		double morb = M + M_disc*enc;
+		vc_sq = G*morb/rr + haloVc*haloVc*rr*rr/(rr*rr + haloRc_sq);
+		Omega = sqrt(vc_sq) / rr;
+		// Sigma_0 = M_disc / (2*pi*h_r^2 * enc_denom): the /enc_denom factor makes
+		// the surface density integrate to M_disc over the truncated disc, and
+		// keeps it consistent with dMenc_dr (which already carries it).
+		Sigma = (M_disc / (2.0*M_PI*h_r*h_r*enc_denom)) * exp(-rr/h_r);
+		double dMenc_dr = M_disc * (rr/(h_r*h_r))*exp(-rr/h_r) / enc_denom;
+		double dvc_sq_dr = -G*morb/(rr*rr) + G*dMenc_dr/rr
+		                   + haloVc*haloVc * 2.0*rr*haloRc_sq
+		                     / ((rr*rr + haloRc_sq)*(rr*rr + haloRc_sq));
+		double kappa_sq = dvc_sq_dr/rr + 2.0*vc_sq/(rr*rr);
+		if (kappa_sq < 0.0) kappa_sq = 4.0*Omega*Omega;
+		kappa = sqrt(kappa_sq);
+		sig_r = Q * 3.36 * G * Sigma / kappa;
+		sig_phi = sig_r * kappa / (2.0*Omega);
+	};
+
 	for (int i=1; i<N_System_Bodies[system]; i++)
 	{
 		mass[sysIdx+i] = m;
@@ -476,60 +539,59 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 		p_plane[1] = r*ct*u[1] + r*st*w[1];
 		p_plane[2] = r*ct*u[2] + r*st*w[2];
 
-		// Height scatter scales with r (~5% of r, matching disc flaring)
-		double h = r*(M_PI/64.0)*(2*drand()-1);
-		p[0] = p_plane[0] + h*n[0];
-		p[1] = p_plane[1] + h*n[1];
-		p[2] = p_plane[2] + h*n[2];
+		// Local kinematics at this radius (circular speed, dispersions, kappa).
+		double vc_sq, Omega, Sigma, kappa, sigma_r, sigma_phi;
+		discProps(r, vc_sq, Omega, Sigma, kappa, sigma_r, sigma_phi);
 
-		// Enclosed disc mass from exponential profile
-		double enc_frac = (1.0 - (1.0 + r/h_r)*exp(-r/h_r)) / enc_denom;
-		m_orbit = M + M_disc*enc_frac;
-		double haloRc_sq = haloRc * haloRc;
-		double vc_sq = G*m_orbit/r + haloVc*haloVc*r*r/(r*r + haloRc_sq);
-		vm = sqrt(vc_sq);
+		// Vertical structure: self-gravitating isothermal sheet (Spitzer 1942),
+		//   rho(z) = rho0 * sech^2(z/z0),  z0 = sigma_z^2 / (2*pi*G*Sigma),
+		// with sigma_z/sigma_r = sigmaZratio (default 0.7, Salo & Laurikainen 2000,
+		// sect 2.2; set per-disc via the optional 20th GalaxyDisc field). Sample z
+		// by inverting the CDF F(z) = (1 + tanh(z/z0))/2, i.e. z = z0*atanh(2u-1).
+		double sigma_z = sigmaZratio * sigma_r;
+		double z0 = sigma_z*sigma_z / (2.0*M_PI*G*Sigma);
+		double uz = drand();
+		if (uz < 1e-6) uz = 1e-6;
+		if (uz > 1.0 - 1e-6) uz = 1.0 - 1e-6;
+		double zc = (z0 > 0.0)
+		    ? z0 * 0.5 * log((1.0 + (2.0*uz - 1.0)) / (1.0 - (2.0*uz - 1.0)))
+		    : 0.0;
+		p[0] = p_plane[0] + zc*n[0];
+		p[1] = p_plane[1] + zc*n[1];
+		p[2] = p_plane[2] + zc*n[2];
 
-		// Toomre Q velocity dispersion:
-		// sigma_r = Q * 3.36 * G * Sigma(r) / kappa(r)
-		// where Sigma(r) = (M_disc / (2*pi*h_r^2)) * exp(-r/h_r)
-		//       kappa^2 = (2*Omega/r) * d(r^2*Omega)/dr  (epicyclic frequency)
-		//       Omega = v_c / r
-		// sigma_phi = sigma_r * kappa / (2*Omega)
+		// Asymmetric drift: the mean streaming (tangential) velocity is LOWER than
+		// the circular speed by the pressure support of the random motions
+		// (Binney & Tremaine, asymmetric drift equation):
+		//   vc^2 - <v_phi>^2 = sigma_r^2 [ sigma_phi^2/sigma_r^2 - 1
+		//                                  - d ln(Sigma sigma_r^2)/d ln R ]
+		// The log-derivative is taken numerically from discProps().
+		double v_stream;
+		{
+			double hs = 1.0e-3 * r;
+			double vcs, Om, ka, sp, Sg1, sr1, Sg2, sr2;
+			discProps(r + hs, vcs, Om, Sg1, ka, sr1, sp);
+			discProps(r - hs, vcs, Om, Sg2, ka, sr2, sp);
+			double f1 = Sg1*sr1*sr1, f2 = Sg2*sr2*sr2;
+			double dln_f = (log(f1) - log(f2)) / (log(r + hs) - log(r - hs));
+			double bracket = (sigma_phi*sigma_phi)/(sigma_r*sigma_r) - 1.0 - dln_f;
+			double v_stream_sq = vc_sq - sigma_r*sigma_r*bracket;
+			v_stream = (v_stream_sq > 0.0) ? sqrt(v_stream_sq) : 0.0;
+		}
 
-		double Omega = vm / r;
-		double Sigma = (M_disc / (2.0 * M_PI * h_r * h_r)) * exp(-r / h_r);
-
-		// kappa from the full rotation curve:
-		// kappa^2 = R_d * (d/dR)(Omega^2) + 4*Omega^2
-		// For vc_sq = G*M_enc(r)/r + Vc^2*r^2/(r^2+Rc^2):
-		//   d(vc_sq)/dr = -G*M_enc/r^2 + G*(dM_enc/dr)/r + Vc^2*2*r*Rc^2/(r^2+Rc^2)^2
-		// where dM_enc/dr = Mfrac*M * (r/h_r^2)*exp(-r/h_r) / enc_denom  (exponential disc)
-		double dMenc_dr = M_disc * (r / (h_r * h_r)) * exp(-r / h_r) / enc_denom;
-		double dvc_sq_dr = -G*m_orbit/(r*r) + G*dMenc_dr/r
-		                   + haloVc*haloVc * 2.0*r*haloRc_sq / ((r*r + haloRc_sq)*(r*r + haloRc_sq));
-
-		// kappa^2 = r * d(Omega^2)/dr + 4*Omega^2
-		// Omega^2 = vc_sq / r^2, so d(Omega^2)/dr = (dvc_sq_dr * r^2 - vc_sq * 2*r) / r^4 = (dvc_sq_dr - 2*vc_sq/r) / r^2
-		// kappa^2 = r * (dvc_sq_dr - 2*vc_sq/r) / r^2 + 4*vc_sq/r^2 = dvc_sq_dr/r + 2*vc_sq/r^2
-		double kappa_sq = dvc_sq_dr / r + 2.0 * vc_sq / (r * r);
-		if (kappa_sq < 0.0) kappa_sq = 4.0 * Omega * Omega;
-		double kappa = sqrt(kappa_sq);
-
-		double sigma_r = Q * 3.36 * G * Sigma / kappa;
-		double sigma_phi = sigma_r * kappa / (2.0 * Omega);
-
-		// Apply velocity dispersion: tangential = -(vc + sigma_phi*gauss), radial = sigma_r*gauss
-		double v_tan = -(vm + sigma_phi * normal(gen));
-		double v_rad = sigma_r * normal(gen);
+		// Gaussian random velocities about the drift-corrected streaming speed.
+		double v_tan  = -(v_stream + sigma_phi * normal(gen));
+		double v_rad  = sigma_r * normal(gen);
+		double v_vert = sigma_z * normal(gen);
 
 		// Tangential direction: perpendicular to radial, in disc plane
 		double t_hat[3], r_hat[3];
 		vcopy(p_plane, r_hat); vnorm(r_hat);
 		vcross(r_hat, n, t_hat); vnorm(t_hat);
 
-		v[0] = v_tan * t_hat[0] + v_rad * r_hat[0];
-		v[1] = v_tan * t_hat[1] + v_rad * r_hat[1];
-		v[2] = v_tan * t_hat[2] + v_rad * r_hat[2];
+		v[0] = v_tan * t_hat[0] + v_rad * r_hat[0] + v_vert * n[0];
+		v[1] = v_tan * t_hat[1] + v_rad * r_hat[1] + v_vert * n[1];
+		v[2] = v_tan * t_hat[2] + v_rad * r_hat[2] + v_vert * n[2];
 
 		vadd(p, pos[sysIdx], pos[sysIdx+i]);
 		vcopy(v, vel[sysIdx+i]);
@@ -543,7 +605,7 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	if (!warmupActive) ApplyBulkVelocity(system);
 }
 
-void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc) {
+void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc, double haloRh) {
 
 	double m,r,theta,phi;
 	double p[3],v[3];
@@ -553,6 +615,12 @@ void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *
 
 	halo_vc[system] = haloVc;
 	halo_rc_sq[system] = haloRc * haloRc;
+	// Halo truncation. <= 0 leaves the halo untruncated. When set, the enclosed
+	// mass is frozen at M_halo(Rh) beyond Rh, so precompute that constant.
+	halo_rh[system] = haloRh;
+	halo_M_rh[system] = (haloRh > 0.0)
+	    ? haloVc*haloVc * haloRh*haloRh*haloRh / (haloRh*haloRh + haloRc*haloRc)
+	    : 0.0;
 	halo_central[system] = sysIdx;
 
 	m = M/N_System_Bodies[system];
@@ -626,7 +694,7 @@ void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
 		r_halo[2] = hc[2] - pos[i][2];
 		double rsq = vmagsq(r_halo);
 		if (rsq > 1e-10) {
-			double halo_scale = halo_vc[sys] * halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+			double halo_scale = HaloScale(sys, rsq);
 			vscaleadd(r_halo, halo_scale, acc[i]);
 		}
 
@@ -637,7 +705,7 @@ void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
 			r_halo[1] = hc2[1] - pos[i][1];
 			r_halo[2] = hc2[2] - pos[i][2];
 			rsq = vmagsq(r_halo);
-			double halo_scale = halo_vc[s] * halo_vc[s] / (rsq + halo_rc_sq[s]);
+			double halo_scale = HaloScale(s, rsq);
 			vscaleadd(r_halo, halo_scale, acc[i]);
 		}
 	}
@@ -669,7 +737,7 @@ void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
 		r_halo[2] = hc[2] - pos[bi][2];
 		double rsq = vmagsq(r_halo);
 		if (rsq > 1e-10) {
-			double halo_scale = halo_vc[sys] * halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+			double halo_scale = HaloScale(sys, rsq);
 			vscaleadd(r_halo, halo_scale, acc[bi]);
 		}
 
@@ -680,7 +748,7 @@ void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
 			r_halo[1] = hc2[1] - pos[bi][1];
 			r_halo[2] = hc2[2] - pos[bi][2];
 			rsq = vmagsq(r_halo);
-			double halo_scale = halo_vc[s] * halo_vc[s] / (rsq + halo_rc_sq[s]);
+			double halo_scale = HaloScale(s, rsq);
 			vscaleadd(r_halo, halo_scale, acc[bi]);
 		}
 	}
@@ -1176,7 +1244,7 @@ void Simulation::CalcAccelIsolated() {
 				r_halo[2] = hc[2] - pos[i][2];
 				double rsq = vmagsq(r_halo);
 				if (rsq > 1e-10) {
-					double s = halo_vc[sys]*halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+					double s = HaloScale(sys, rsq);
 					vscaleadd(r_halo, s, acc[i]);
 				}
 			}
@@ -1205,7 +1273,7 @@ void Simulation::CalcAccelIsolated() {
 					r_halo[2] = hc[2] - pos[i][2];
 					double rsq = vmagsq(r_halo);
 					if (rsq > 1e-10) {
-						double s = halo_vc[sys]*halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+						double s = HaloScale(sys, rsq);
 						fh[0] += mi * s * r_halo[0];
 						fh[1] += mi * s * r_halo[1];
 						fh[2] += mi * s * r_halo[2];
@@ -1270,7 +1338,7 @@ void Simulation::RemoveHaloMonopole() {
 			r_halo[2] = hc[2] - pos[i][2];
 			double rsq = vmagsq(r_halo);
 			if (rsq > 1e-10) {
-				double s = halo_vc[sys] * halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+				double s = HaloScale(sys, rsq);
 				fh[0] += mi * s * r_halo[0];
 				fh[1] += mi * s * r_halo[1];
 				fh[2] += mi * s * r_halo[2];
@@ -1283,7 +1351,7 @@ void Simulation::RemoveHaloMonopole() {
 			r_halo[1] = hc2[1] - pos[i][1];
 			r_halo[2] = hc2[2] - pos[i][2];
 			double rsq = vmagsq(r_halo);
-			double s2 = halo_vc[s] * halo_vc[s] / (rsq + halo_rc_sq[s]);
+			double s2 = HaloScale(s, rsq);
 			fh[0] += mi * s2 * r_halo[0];
 			fh[1] += mi * s2 * r_halo[1];
 			fh[2] += mi * s2 * r_halo[2];

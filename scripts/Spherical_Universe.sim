@@ -71,7 +71,11 @@ N_SystemBodies  1000000
 Camera          0.0  0.0  960.0
 Camera_Orbit    0.001
 
-# SphericalUniverse  system  posX posY posZ  velX velY velZ  M  R  H  haloVc  haloRc
+# haloRh = 0 means the halo is NOT truncated: its enclosed mass keeps growing
+# as M_halo(r) ~ Vc^2 * r at all radii. That overestimates long-range attraction.
+# No published truncation radius is adopted here, so 0 is kept deliberately
+# rather than inventing one. Set it to a radius in code units to truncate.
+# SphericalUniverse  system  posX posY posZ  velX velY velZ  M  R  H  haloVc  haloRc  haloRh
 #
 # H = 2.83: Hubble parameter giving each particle v = H * r (radial outward).
 #   H_crit = sqrt(2*M/R^3) = 3.54 for these parameters.
@@ -79,4 +83,4 @@ Camera_Orbit    0.001
 # M = 5e7 (~5e11 Msun), R = 200 (12 kpc)
 # No dark matter halo (structure from baryonic gravity + Hubble expansion)
 # FDE = 0.10: negligible during structure formation, delays late recollapse
-SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   5.0e7  200.0  2.83  0.0  1.0
+SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   5.0e7  200.0  2.83  0.0  1.0 0.0

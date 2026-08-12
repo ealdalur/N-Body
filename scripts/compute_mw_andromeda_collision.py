@@ -12,14 +12,19 @@ import math
 
 # Unit system
 du = 0.060   # 1 code unit = 60 pc = 0.060 kpc
-mu = 1.0e4   # 1 code mass unit = 10^4 Msun
 vu = 1.0     # 1 code velocity unit = 1 km/s
+# Mass unit fixed by G=1 with the length/velocity units: M = 60 pc / G = 1.395e4
+# Msun (not 1e4). Here mu only scales the printed Msun labels -- the code-unit
+# masses below are used directly and the approach velocity is computed in code
+# units, so it is independent of mu.
+G_pc = 4.300917e-3
+mu = du * 1.0e3 / G_pc   # 1 code mass unit in Msun = 60 pc / G = 1.395e4
 
 # Galaxy parameters (same as Milky_Way_Andromeda.sim)
-mw_M = 1500000.0       # MW central body (code units)
+mw_M = 1075229.2       # MW central body (code units); 1.5e10 Msun / 1.395e4
 mw_Mfrac = 3.0
 mw_R = 446.7
-and_M = 3000000.0      # Andromeda central body (code units)
+and_M = 2150458.5      # Andromeda central body (code units); 3.0e10 Msun / 1.395e4
 and_Mfrac = 2.33
 and_R = 558.3
 
@@ -70,11 +75,7 @@ print(f"  Transverse velocity: {v_transverse:.0f} km/s (for grazing encounter)")
 print(f"  Gap between disc edges: {r_close - mw_R - and_R:.0f} code units = {(r_close-mw_R-and_R)*du:.0f} kpc")
 print(f"  Time to first overlap (no extra accel): {(r_close-mw_R-and_R)/v_approach:.0f} time units = {(r_close-mw_R-and_R)/v_approach*58.7:.0f} Myr")
 
-# Camera: midpoint between galaxies, elevated
-cam_x = r_close / 2.0
-cam_y = 2000.0
 print(f"\n=== Script values ===")
-print(f"  Camera: {cam_x:.1f} {cam_y:.1f} 0.0")
 print(f"  MW: pos=(0,0,0) vel=(0,0,0)")
 print(f"  And: pos=({r_close:.1f}, 0, 0) vel=(-{v_approach:.1f}, {v_transverse:.1f}, 0)")
 
