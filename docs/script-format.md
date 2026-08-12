@@ -235,7 +235,7 @@ the interaction begins, so the encounter acts on a clean disc.
 | Bulk velocity | **Withheld.** Each system is loaded at rest so it stays at its specified position. |
 | Bulk position | Applied normally — the systems must be spatially separated. |
 | Net momentum | Zeroed **per system** (this happens on every run, see below). |
-| Halo monopole removal | Applied per system rather than globally. |
+| Halo monopole removal | Applied per system (halo centres are held static during warmup). |
 
 **Video recording** is suppressed during warmup. Because the systems are isolated
 and held at rest there, those frames are setup rather than simulation output, and
@@ -244,9 +244,11 @@ first frame written is the one at `t = 0`. For a 2.0-unit warmup at dt = 0.0005
 that skips 4000 frames.
 
 **At `t = 0`:** each system's stored bulk velocity is added to all of its
-particles, and full N-body coupling resumes. Adding a uniform velocity leaves all
-internal relative motion untouched, so the relaxed disc structure is preserved
-exactly — only the system as a whole starts moving.
+particles **and to its halo centre**, and full N-body coupling resumes. Adding a
+uniform velocity leaves all internal relative motion untouched, so the relaxed
+disc structure is preserved exactly — only the system as a whole starts moving.
+From here each halo centre evolves as an inertial body under gravity rather than
+being held in place (see `docs/dark-matter-halo.md`).
 
 Because the bulk velocities are applied at `t = 0`, every orbital parameter in the
 script still refers to `t = 0`. The warmup is prepended, not inserted.
@@ -332,25 +334,21 @@ so it changes no physics — only which inertial frame that system starts in.
 
 ---
 
-### `RemoveHaloMonopole` — Restore Momentum Conservation for Analytic Halos
+### `RemoveHaloMonopole` — Momentum Correction During Warmup
 
 ```
 RemoveHaloMonopole  <0 | 1>
 ```
 
-When enabled (`1`), subtracts the net halo force (divided by total mass) uniformly from every particle's acceleration each step.
+Controls a momentum-conservation correction for the rigid analytic halos **during warmup only**. When enabled (`1`, the default), each isolated system subtracts its own halo's net force (divided by its mass) uniformly from its particles' accelerations each step.
 
-The analytic dark matter halos are rigid potentials with no inertia, so they cannot obey Newton's third law — a particle is pulled toward the halo center, but nothing pulls back. For a perfectly axisymmetric disc the per-particle forces cancel in the sum, but any asymmetry leaves a net force that accelerates the entire system with nothing to oppose it. The dominant offender is the **m=1 lopsided mode**; a two-armed (m=2) bar is symmetric under 180° rotation and largely cancels. Outer material dragging the halo centroid off the nucleus has the same effect, since the halo center is the mass-weighted centroid of *all* the system's particles.
+Background: a rigid analytic halo has no inertia, so on its own it cannot obey Newton's third law — a particle is pulled toward the halo centre but nothing pulls back. For a perfectly axisymmetric disc the per-particle forces cancel in the sum, but any asymmetry leaves a net force that would drift the whole system; the dominant offender is the **m=1 lopsided mode** (a two-armed m=2 bar is symmetric under 180° rotation and largely cancels). Subtracting a **uniform** vector from every particle leaves every difference `a_i - a_j` unchanged, so internal structure is preserved exactly and only the spurious bulk drift is cancelled — as if the rigid halo recoiled with its system.
 
-Measured on `Milky_Way.sim` (100k particles, Vc=220, Rc=166.7), this produced a net acceleration of 15–25 code units, accounting for essentially all observed center-of-mass drift once other sources were fixed.
-
-Subtracting a **uniform** vector from every particle leaves every difference `a_i - a_j` unchanged, so all relative motion is preserved exactly — including the mutual orbit of two interacting galaxies. Only the spurious bulk acceleration is cancelled. Physically this lets the rigid halo recoil along with its system instead of being anchored to absolute space, which is closer to what a live particle halo would do.
-
-The correction is applied globally rather than per-system. Subtracting each system's own halo net force separately would also cancel the genuine mutual attraction between galaxies and destroy the orbit.
+**Post-warmup this correction is not used.** Once the systems couple at `t = 0`, each halo centre becomes an inertial body integrated under gravity (see `docs/dark-matter-halo.md`), and the net force the halo exerts on the particles is applied back onto the halo centre as its reaction. Momentum is then conserved directly by that recoil, so no monopole subtraction is wanted — applying one as well would double-count the reaction. During warmup the halo centres are instead held static (systems isolated and at rest), so the per-system subtraction remains the right tool there.
 
 `FDE` is deliberately excluded from the correction, since it is a real external force whose net contribution is meant to be nonzero.
 
-Set to `0` to reproduce the older (non-conserving) behavior. Note that enabling this changes trajectories slightly compared to runs tuned without it.
+**Default:** 1 (enabled; warmup only).
 
 **Default:** 1 (enabled)
 
@@ -508,8 +506,9 @@ fixed look-at the companion drifts out of frame, whereas following keeps it
 centred for the whole run.
 
 Note the target is the system's central body specifically, not its centre of mass.
-For a galaxy these nearly coincide, since `PinCentralBodies` holds the central
-body at the system's centre of mass each step.
+For a galaxy these stay close: the central body is a heavy particle near the halo
+centre, though the two can differ by a kpc or two once strong tidal debris shifts
+the system's barycentre away from the core.
 
 **Default:** inactive (uses `Camera_lookAt`)
 
@@ -627,7 +626,7 @@ Setting `Rh` equal to the galaxy's own `outer_radius` makes the enclosed mass be
 
 The velocity dispersion at each radius is computed from the Toomre criterion: `sigma_r = Q * 3.36 * G * Sigma(r) / kappa(r)`, where `Sigma(r)` is the local surface density (exponential disc, normalized to the truncated mass) and `kappa(r)` is the epicyclic frequency derived from the full rotation curve (baryons + halo). The tangential dispersion follows from epicyclic theory: `sigma_phi = sigma_r * kappa / (2*Omega)`, and the mean streaming velocity is reduced below the circular speed by the asymmetric-drift correction. The vertical dispersion is `sigma_z = sigma_z_ratio * sigma_r` (default ratio 0.7), and particle heights follow a sech² isothermal sheet of scale `z0 = sigma_z^2 / (2*pi*G*Sigma)`. Together this produces a self-consistent equilibrium that suppresses particle-noise-driven instabilities while allowing the desired level of spiral response.
 
-The dark matter halo applies a cored isothermal sphere potential: `a_halo = v_c^2 * r / (r^2 + r_c^2)`, centered on the mass-weighted barycenter of that system's particles (recomputed every derivative evaluation, not fixed to the central body). Every particle feels its own system's halo plus the halo of every other system, so multiple galaxies interact through their halos as well as their particles. The halo is a rigid analytic background — it never deforms, is never tidally stripped, and has no truncation radius; see `docs/dark-matter-halo.md` for what this does and does not model.
+The dark matter halo applies a cored isothermal sphere potential: `a_halo = v_c^2 * r / (r^2 + r_c^2)` (optionally truncated beyond `halo_truncation_radius`, see above), centred on an **inertial halo centre** — a dynamical point integrated under gravity, carrying the halo's mass, rather than re-derived from the particles each step. Every particle feels its own system's halo plus the halo of every other system, so multiple galaxies interact through their halos as well as their particles; the reaction of that force is applied back to each halo centre (the "disc back-action"), so momentum is conserved and tidal debris does not drag the halo off the galaxy core. The halo is a rigid analytic background — its spherical shape never deforms and it is never tidally stripped, so it supplies no Chandrasekhar friction; see `docs/dark-matter-halo.md` for what this does and does not model.
 
 **Example (Milky Way, disc in x-z plane).** `h_r` = 43.3 is the measured 2.6 kpc scale length, so `R / h_r` = 10.3:
 ```

@@ -177,15 +177,16 @@ Each body `i` has:
 ```cpp
 void Simulation::Step()
 {
-    CalcLeapFrogPositions();
-    PinCentralBodies();
-    CalcAccelerations();
-    CalcLeapFrogVelocitiesAndOutputs();
+    CalcLeapFrogPositions();           // also drifts the inertial halo centres
+    CalcAccelerations();               // includes IntegrateHaloCenters()
+    CalcLeapFrogVelocitiesAndOutputs(); // also kicks the inertial halo centres
 
     BuildOctree();  // rebuild spatial index for next step
     t += dt;
 }
 ```
+
+The halo centres are integrated with the same velocity-Verlet step as the particles: `CalcLeapFrogPositions()` drifts them, `IntegrateHaloCenters()` (called inside `CalcAccelerations()`) sets their acceleration from the disc back-reaction and the other halos, and `CalcLeapFrogVelocitiesAndOutputs()` applies the velocity kick. See `docs/dark-matter-halo.md`.
 
 ### Phase 1: Advance positions (`CalcLeapFrogPositionsRange`)
 

@@ -66,6 +66,18 @@ where `r_vec` is the position vector relative to the halo center and `r² = |r_v
 - **At small r** (`r << r_c`): `a ~ v_c² * r / r_c²` → solid body rotation (harmonic potential)
 - **At r = r_c**: transition between the two regimes
 
+### Truncation
+
+By default the profile above extends to all radii, so its enclosed mass grows without bound (the price of a flat rotation curve — `M ∝ r`). A halo can be **truncated** at a radius `Rh` via the `halo_truncation_radius` argument on `GalaxyDisc` / `SphericalUniverse` (Salo & Laurikainen 2000 set `Rh` equal to each galaxy's disc truncation `Rd`). Beyond `Rh` the enclosed mass is frozen at its value there and the field reverts to a point-mass `1/r²`:
+
+```
+r <= Rh :  a_halo = v_c² * r_vec / (r² + r_c²)          cored isothermal
+r >  Rh :  a_halo = M_halo(Rh) * r_vec / r³             enclosed mass frozen
+           M_halo(Rh) = v_c² * Rh³ / (Rh² + r_c²)
+```
+
+The two branches agree at `r = Rh`, so the force is continuous. This is what `HaloScale()` implements (returning the scale factor `s` with `a = s * r_vec` for either branch). Set `Rh = 0` to leave the halo untruncated. The M51 scripts truncate at `Rd`; the Milky Way / Andromeda scripts currently leave `Rh = 0`.
+
 ### Circular Velocity from the Halo
 
 For a particle on a circular orbit, centripetal acceleration equals gravitational pull:
@@ -166,26 +178,32 @@ vm = sqrt(vc_sq);
 
 Without this correction, particles initialized at Keplerian velocity would be too slow for the combined potential and would fall inward, causing the disc to collapse on the first few timesteps.
 
-### Halo Centering (ComputeHaloCenters)
+### Halo Centering (inertial halo centres)
 
-The halo is **not** anchored to the central body. `ComputeHaloCenters()` runs at the top of every
-derivative evaluation and places each halo at the mass-weighted centroid of all particles
-belonging to that system:
+The halo is **not** anchored to the central body, and it is **not** re-derived from the particles
+each step. Following Salo & Laurikainen (2000) — *"the coordinate grids are centred on the halo
+centres and the disc back-action is taken into account in the halo motion"* — each halo centre is a
+**dynamical body integrated under gravity**, carrying its own position, velocity and inertial mass
+(the total truncated halo mass). `IntegrateHaloCenters()` computes its acceleration every derivative
+evaluation, and it is advanced with the same velocity-Verlet step as the particles.
 
-```cpp
-halo_center[sys] = Σ mᵢ · pos_t[i] / Σ mᵢ        // i over that system's particle range only
-```
+Its acceleration has two contributions:
 
-Two consequences worth being explicit about:
+- **Disc back-reaction.** Every particle the halo pulls, pulls back on it (Newton's third law). The
+  net force the halo exerts on all particles is `Σ mᵢ · HaloScale_s · (hc_s − posᵢ)`, and the
+  reaction `−(that) / M_halo` accelerates the centre. This is the "disc back-action" the paper
+  refers to, and it makes the interaction momentum-conserving.
+- **Halo–halo.** Each centre falls in the field of every other halo exactly as a particle there
+  would; beyond the truncation radii the pair acts as equal-and-opposite point masses.
 
-- The centroid is computed from `pos_t`, the integrator's current intermediate state, so the
-  halo position is consistent within the step rather than lagging.
-- The halo has **no state of its own**. It carries no position or velocity variable, no inertia,
-  and no momentum. It is re-derived from the baryons every step. "How the halo moves" is
-  entirely a statement about how its member particles move.
+The centre therefore moves *because gravity moves it*, not because a centroid was recomputed — so
+tidal debris cannot drag the halo off the galaxy core. During warmup the systems are isolated and
+held in place, so the centre stays on the relaxing disc; it begins evolving freely at t = 0.
 
-`PinCentralBodies()` additionally snaps each central body onto this same centroid
-(position and velocity), so the central body and the halo center coincide.
+The central body (bulge) is a **free heavy particle — it is not pinned** to any centroid. It is
+massive enough (~10⁴ disc-particle masses) to be stable against N-body noise on its own, and
+pinning it to the barycentre would drag the nucleus toward tidal debris — the very artifact the
+inertial centre is designed to avoid.
 
 ### Force Computation (CalcAccelRangeOct / CalcAccelRangeP2P)
 
@@ -200,7 +218,7 @@ double *hc = &halo_center[sys * 3];
 r_halo = hc - pos_t[bi];                           // r_vec points from body toward halo center
 double rsq = vmagsq(r_halo);
 if (rsq > 1e-10) {                                 // skip a body sitting exactly at the center
-    double halo_scale = halo_vc[sys] * halo_vc[sys] / (rsq + halo_rc_sq[sys]);
+    double halo_scale = HaloScale(sys, rsq);       // cored isothermal, or frozen 1/r^2 beyond Rh
     vscaleadd(r_halo, halo_scale, acc_t[bi]);      // acc += halo_scale * r_vec
 }
 
@@ -210,47 +228,48 @@ for (int s = 0; s < N_Systems; s++) {
     double *hc2 = &halo_center[s * 3];
     r_halo = hc2 - pos_t[bi];
     rsq = vmagsq(r_halo);
-    double halo_scale = halo_vc[s] * halo_vc[s] / (rsq + halo_rc_sq[s]);
+    double halo_scale = HaloScale(s, rsq);
     vscaleadd(r_halo, halo_scale, acc_t[bi]);
 }
 ```
 
-This computes `a = v_c² * r_vec / (r² + r_c²)` toward each halo center. The sign is attractive
-because `r_halo` points from the body toward the center. No softening is needed: the `r_c²` term
-in the denominator already regularizes `r → 0`.
+This computes `a = v_c² * r_vec / (r² + r_c²)` toward each halo center (or the truncated `1/r²`
+form beyond `Rh`, see *Truncation*). The sign is attractive because `r_halo` points from the body
+toward the center. No softening is needed: the `r_c²` term in the denominator already regularizes
+`r → 0`.
 
 The **cross-halo term is what makes multi-galaxy encounters work**. Because a halo's field acts
-nearly uniformly across the other galaxy at large separation, and because each halo tracks its own
-galaxy's centroid, the relative acceleration of the pair comes out correct:
+nearly uniformly across the other galaxy at large separation, and because each halo centre moves
+with its own galaxy under gravity, the relative acceleration of the pair comes out correct:
 
 ```
 a_rel = G(M_baryA + M_haloA + M_baryB + M_haloB) / d²
 ```
 
-That is, the pair's two-body orbit is right even though neither halo is a dynamical object. This
-is the main thing the barycenter-tracking design buys over a halo anchored to a single particle.
+That is, the pair's two-body orbit is right, and — because each halo centre is a dynamical object
+that recoils under the disc back-reaction (see *Halo Centering* above) — momentum is conserved as
+well, so the orbit no longer decays spuriously.
 
-The central body is **no longer specially excluded**. The old `bi != halo_central[sys]` test has
-been replaced by the `rsq > 1e-10` guard against the halo center. Since `PinCentralBodies()` puts
-the central body exactly at the centroid, the central body is always at the halo center and
-receives zero halo force (as expected — a nucleus should not accelerate itself via its own halo).
+The central body is not specially excluded from the halo force; the `rsq > 1e-10` guard just skips
+a body sitting exactly at the centre. Since the free bulge sits near, but not exactly on, the halo
+centre (both move independently under gravity), it feels a negligible force from its own halo.
 
 ### Computational Cost
 
 The halo acceleration is O(N_Systems) per particle — for each halo, one subtraction, one dot
 product, one division, one scale-add. With the handful of systems these scripts use this is
 effectively O(1), so the added cost is O(N) per timestep against O(N log N) for the tree
-traversal. `ComputeHaloCenters()` adds one more O(N) pass per derivative evaluation. Both are
-negligible.
+traversal. `IntegrateHaloCenters()` adds one more O(N × N_Systems) pass per derivative evaluation to
+accumulate the disc back-reaction that drives each halo centre. Both are negligible.
 
-Note that `ComputeHaloCenters()` runs single-threaded between the two parallel phases of
-`CalcDerivatives`, since every worker thread needs all halo centers finalized before any body's
-force is computed.
+`IntegrateHaloCenters()` runs single-threaded after the parallel force phase: the halo centres are
+fixed while particle forces are computed, then updated once from the accumulated reaction.
 
 ### Design: Static vs. Live Halo
 
-This is a **rigid analytic halo whose center is slaved to its own system's baryonic barycenter**.
-The shape never changes; only the center moves, and it moves because its member particles moved.
+This is a **rigid analytic halo carried by an inertial centre**. The shape never changes; the
+centre moves as a dynamical body under gravity (the mutual halo field plus the disc back-reaction),
+not by being recomputed from the particles.
 
 Advantages:
 - Zero additional particles (no memory or tree cost)
@@ -261,54 +280,55 @@ Advantages:
 
 Limitations — these are ordered by how much they actually distort results:
 
-1. **No dynamical friction.** This is the dominant error for interacting systems. In reality an
+1. **No halo dynamical friction.** This is the dominant error for interacting systems. In reality an
    intruder raises a trailing density wake in the other galaxy's halo, and that overdensity pulls
-   backward — Chandrasekhar friction, which is the primary orbital-decay channel in a merger.
-   A rigid, spherical potential comoving with its own source is symmetric by construction and
-   exerts **zero net drag**. Some friction survives from the live baryonic particles, but in these
-   scripts the baryons are a minority of the mass. Consequence: **orbital decay is far too slow
-   and pairs do not sink on realistic timescales.**
+   backward — Chandrasekhar friction, the primary orbital-decay channel in a merger. A **rigid**
+   spherical potential cannot deform or hold that wake, so it exerts **zero halo drag** regardless of
+   how its centre moves. The friction that does survive is the tidal braking of the live baryonic
+   discs, a minority of the mass. Consequence: **orbital decay is underestimated and pairs sink more
+   slowly than in reality** — but the decay that *is* present is now physical, not the spurious
+   barycentre-dragging drag the earlier centring scheme produced.
 
-2. **Infinite extent, no truncation.** `M_halo(r) = (v_c²/G)(r − r_c·arctan(r/r_c))` grows without
-   bound — mass increases linearly with radius forever, with no virial radius at which the halo
-   ends. This is not a coding oversight; it is forced by the profile. A flat rotation curve
-   *requires* `v² = GM(r)/r = const`, hence `M ∝ r`. The isothermal sphere buys its flat rotation
-   curve by paying with unbounded mass. Real halos stop near the virial radius r_200, beyond which
-   the field reverts to `1/r²`.
+2. **Unbounded mass when left untruncated.** The cored isothermal profile has `M_halo(r) =
+   (v_c²/G)(r − r_c·arctan(r/r_c))`, which grows linearly with radius forever — the price a flat
+   rotation curve pays (`v² = GM/r = const` requires `M ∝ r`). This is now **optional**: setting
+   `halo_truncation_radius = Rh` freezes the enclosed mass beyond `Rh` and reverts the field to
+   `1/r²`, mimicking the virial cutoff of a real halo. The M51 scripts use this (`Rh = Rd` for each
+   galaxy, following Salo & Laurikainen); the Milky Way / Andromeda scripts currently leave `Rh = 0`
+   (untruncated).
 
-   Magnitude of the error: in `Milky_Way_Andromeda_Collision.sim` the two halos supply ~3e8
-   code-mass at the initial 3000-unit separation against ~1.6e7 of baryons, so the encounter is
-   ~95% halo-driven. That fraction is roughly correct — halos really do dominate at these radii,
-   and it should not by itself be read as an error. The actual overestimate is milder: 3000 code
-   units is ~180 kpc, still near the real virial radius, where the SIS overshoots the MW's
-   enclosed mass by only ~1.5x. The overshoot grows linearly with separation, so it is modest for
-   these scripts and becomes severe for any setup started farther apart. The more damaging
-   companion problem is (3) — this mass can never be removed once it is there.
+   Where it still bites — an *untruncated* run overestimates long-range attraction. In
+   `Milky_Way_Andromeda_Collision.sim` the two halos supply ~3e8 code-mass at the initial 3000-unit
+   (~180 kpc) separation against ~1.6e7 of baryons, so the encounter is ~95% halo-driven — roughly
+   right, since halos really do dominate at these radii. The SIS overshoots the MW's enclosed mass
+   by only ~1.5× at 180 kpc, but the overshoot grows linearly with separation, so a setup started
+   farther apart attracts too strongly. Setting `Rh ~ r_200` on those scripts would remove it.
 
-3. **No tidal stripping.** `v_c` is read from the script once and is constant for all time, so a
-   satellite's halo survives intact no matter how deeply it plunges. M51b retains `v_c = 130` even
-   after passing through M51a's disc, when in reality it would lose most of its outer halo on the
-   first passage. Note this error and (2) push in opposite directions — too much binding at large
-   radius, too much survival at small radius — so they do not usefully cancel.
+3. **No tidal stripping.** `v_c` and the truncation radius `Rh` are read from the script once and
+   held constant, so a satellite's halo keeps its full mass and extent no matter how deeply it
+   plunges. M51b retains `v_c = 186.6` and its `Rh = Rd` truncation even after passing through
+   M51a's disc, when in reality it would lose much of its outer halo on the first passage — so a
+   deeply-plunging companion stays more bound than it should. Truncation (2) caps the *initial*
+   extent but does not shrink dynamically as mass is stripped.
 
-4. **Centroid slaving becomes a feedback pathology once tails form.** The centroid is taken over
-   *all* of a system's particles, including debris, and `body_system` is never reassigned. In
-   `M51.sim` the primary has `Mfrac = 4.90`, so the disc outweighs the central body ~5:1 and the
-   disc particles — not the nucleus — dominate the centroid. A long asymmetric tidal tail therefore
-   drags the entire halo off the nucleus, and stars stripped by the companion keep pulling their
-   original halo toward the companion for the rest of the run.
+4. **Centroid slaving (resolved).** An earlier scheme placed each halo at the mass-weighted
+   centroid of *all* its system's particles, recomputed every step. Because the disc outweighs the
+   nucleus several-to-one, a long asymmetric tidal tail dragged the entire halo off the core, and
+   stripped stars kept pulling their original halo toward the companion — a spurious drag that
+   spiralled a close pair into an artificial merger. This is now fixed: the halo centre is an
+   inertial body integrated under gravity (see *Halo Centering*), so tidal debris no longer moves it.
 
-5. **Conservation laws are violated.** The halo acts on particles and nothing acts back on it, so
-   there is no third-law partner and linear momentum is not conserved. Because the center moves,
-   `Φ` is explicitly time-dependent and energy is not conserved either. Both are negligible for an
-   isolated galaxy (the centroid barely moves) and grow precisely during close encounters. Note
-   the code currently computes no energy or momentum diagnostic — `Data_Log` writes only `pos_sq`
-   — so this drift is entirely unmonitored. If such a diagnostic is ever added, it must include
-   the halo potential `Φ = (v_c²/2)ln(r² + r_c²)` for every system, and should be expected to
-   drift at pericenter for reasons that are *not* integrator error.
+5. **Momentum conservation (now enforced).** Because the halo centre is inertial, the force it
+   exerts on the particles has a third-law partner — the reaction is applied back to the centre — so
+   linear momentum is conserved (exactly for particle–halo pairs, and for halo–halo pairs beyond the
+   truncation radii). Energy is not strictly conserved, because the rigid shape cannot absorb tidal
+   work, but there is no longer the systematic bulk drift the old centring produced. The
+   `OrbitDiagnostic` command (see `script-format.md`) logs the two-galaxy orbit and its specific
+   orbital energy so this can be monitored directly, and `scripts/analyze_orbit_diagnostic.py`
+   compares it against the conservative analytic orbit.
 
-6. **The post-merger state is not meaningful.** Once the populations mix, both centroids converge
-   and you have two coincident rigid wells giving `v_c,eff² = v_cA² + v_cB²`, arrived at
+6. **The post-merger state is not meaningful.** Once the populations mix, the two halo centres
+   converge and you have two coincident rigid wells giving `v_c,eff² = v_cA² + v_cB²`, arrived at
    instantaneously with no violent relaxation and no mass loss.
 
 7. **Other missing physics.** The halo is spherical and non-rotating, so there is no halo spin, no
@@ -322,11 +342,13 @@ the well ~2× so that κ rises, Toomre Q clears 1, and the disc sustains coheren
 analytic well does that perfectly well.
 
 For **mergers** the model fails in a way that changes the outcome rather than merely blurring it,
-because the missing physics (friction, stripping) *is* the physics of a merger. The practical
+because the missing physics (halo friction, stripping) *is* the physics of a merger. The practical
 boundary: trust the simulation while the halos remain distinguishable and the encounter is a
 perturbation; stop trusting it once the halos interpenetrate. Full fidelity there requires live DM
-particles, though adding a truncation radius and a stripping-driven decay in `v_c` would be far
-cheaper and would move merger timescales substantially toward reality.
+particles; the cheaper partial fixes are already partly in place — halo truncation is available
+(see *Truncation*) and the inertial halo centres remove the old spurious drag — leaving a
+stripping-driven decay in `v_c`/`Rh` and an explicit Chandrasekhar friction term as the remaining
+inexpensive improvements toward realistic merger timescales.
 
 ## Physical Significance
 

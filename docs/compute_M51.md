@@ -370,9 +370,9 @@ The halos play one critical role and conspicuously fail to play a second.
 
 1. **Tidal mass** (modeled): the effective gravitating mass at the interaction distance is halo-dominated, setting the orbital velocity and encounter timescale. The cross-halo term carries this correctly.
 
-2. **Dynamical friction** (NOT modeled): in reality M51b would raise a trailing wake in M51a's halo and lose orbital energy (Chandrasekhar friction). The analytic halos here are rigid spherical potentials comoving with their own galaxy's barycenter, symmetric by construction, so they exert no net drag. The cross-halo term is a conservative central force and does no secular work. The only friction present comes from the live baryonic particles, a minority of the mass.
+2. **Dynamical friction** (partly modeled): a rigid analytic halo cannot deform or hold a trailing wake, so it produces no Chandrasekhar drag — the dominant orbital-decay channel in a real merger is therefore missing. What *is* captured is the braking from the live baryonic discs: as they are tidally shocked and exchange orbital energy for internal motion, the orbit loses some energy self-consistently. The halo centres are integrated as inertial bodies under gravity (section 10.3), so the mutual orbit is momentum-conserving and tracks the analytic orbit, decaying only through this real (weak) disc friction — not through the spurious drag that an earlier barycentre-tracking halo produced.
 
-   Consequence: orbital decay is badly underestimated. The first passage is unaffected, since friction has had no time to act, but do not trust the long-term orbit or any eventual merger.
+   Consequence: orbital decay is *underestimated* relative to reality (the halo channel is absent) but it is physical, not spurious. Measured on the halo centres, M51b loses only ~10% of its orbital energy per orbit at apocentre, consistent with disc tidal braking. To reconstruct the deeper past, add explicit Chandrasekhar friction as the paper does in its section 4.
 
 ### 5.2 Halo Parameters
 
@@ -538,7 +538,7 @@ With the halo truncated every crossing occurs at the same radius, 1.200 Rd.
 | Vertical structure | sech^2, σz/σr = 0.7 | sech^2, σz/σr = 0.7 | yes |
 | Asymmetric drift correction | yes | yes | yes |
 | Gas component | 65,000 sticky particles | none | **no** |
-| Dynamical friction | modelled (sect 4) | none | **no** |
+| Dynamical friction | modelled (sect 4) | live-disc only (no halo wake) | **partial** |
 
 All the mass, geometry and orbital rows agree by construction. The remaining differences are missing code features, covered in section 9.3.
 
@@ -552,7 +552,7 @@ This collisionless simulation should reproduce the stellar arm morphology but no
 
 Ordered by how much the paper suggests each matters.
 
-1. **No dynamical friction.** In reality M51b raises a trailing wake in M51a's halo and loses orbital energy (Chandrasekhar friction), so earlier passages were *more distant and weaker*. The analytic halos here are rigid spherical potentials comoving with their own galaxy's barycenter, symmetric by construction, so they exert no net drag; the only friction present comes from the live baryonic particles, a minority of the mass. The orbit therefore does not shrink between passages.
+1. **No halo dynamical friction.** In reality M51b raises a trailing wake in M51a's halo and loses orbital energy (Chandrasekhar friction), so earlier passages were *more distant and weaker*. The analytic halos here are rigid, so they cannot deform or hold that wake and contribute no drag; the only friction present is the tidal braking of the live baryonic discs, a minority of the mass. The orbit therefore shrinks only slightly between passages (~10% of the orbital energy per orbit here), far less than a live-halo merger would.
 
    This is **not** a departure from the paper's nominal model, which is likewise frictionless: *"only the discs were self-gravitating, [so] the orbital energy could not be transformed to the halo deformation and the amount of friction was thus strongly underestimated."* Section 4 adds friction separately — via the Chandrasekhar formula and via live-halo runs — to reconstruct the *past* orbital history, using a companion *"modelled only by a halo"* and much larger halo extents (`Rh` = 2–4 length units versus 1 here). Its conclusion is that with a sufficiently extended halo the previous passages are distant enough that *"the effects of the previous passages on the final morphology are almost negligible"* — which is what justifies the frictionless nominal model going forward.
 
@@ -560,7 +560,7 @@ Ordered by how much the paper suggests each matters.
 
 2. **No gas.** The paper runs 50,000 + 15,000 dissipative "sticky" gas particles with fully inelastic collisions (α = 0), reaching 5–10 km/s radial dispersion. Gas produces sharp arm contrast, and the paper's morphological comparisons are largely made on the *gas* particles. Arms here will look smoother and more diffuse than the published figures.
 
-3. **Rigid analytic halos.** Both this code and the paper's main runs use inert analytic halos, so this is not a divergence — but the paper *validates* against live self-consistent halo runs in section 4, which is how they confirm the friction result. Additionally, each halo center here tracks the mass-weighted centroid of all its member particles, so a long tidal tail drags the halo center off the nucleus. Momentum is conserved (section 10.4) but the field shape is affected.
+3. **Rigid analytic halos.** Both this code and the paper's main runs use inert (non-deforming) analytic halos, so this is not a divergence — but the paper *validates* against live self-consistent halo runs in section 4, which is how they confirm the friction result. The rigid halo's *centre* is a full inertial degree of freedom here (section 10.3), integrated under gravity rather than pinned to the particle barycentre, so tidal debris no longer drags it off the nucleus; only its fixed spherical *shape* is an approximation — a real halo would flatten and lag during the encounter.
 
 4. **No separate bulge in the paper's sense.** The bulge/disc split here (17% primary, 40% companion) is this project's own choice; the paper works with disc + halo.
 
@@ -580,25 +580,30 @@ Ordered by how much the paper suggests each matters.
 
 Note that an isolated disc heats through two-body relaxation, which raises effective Q and makes it slightly less responsive to the tidal perturbation. Prefer shorter warmups if chasing maximum arm contrast.
 
-### 10.3 PinCentralBodies
+### 10.3 Inertial Halo Centres
 
-Each galaxy's central body is pinned to its system's center of mass every step (for systems with `halo_vc > 0`), preventing it from wandering due to N-body noise or recoiling from discrete particle encounters. The correction is momentum-conserving: the equal and opposite shift is spread over the system's other particles. The central body still feels and transmits the tidal field from the other galaxy.
+Each rigid halo is carried by a **centre that is a dynamical body integrated under gravity**, following Salo & Laurikainen (2000): *"the coordinate grids are centred on the halo centres and the disc back-action is taken into account in the halo motion."* The centre has a position, velocity and inertial mass (the total truncated halo mass), and is advanced with the same velocity-Verlet step as the particles. Its acceleration has two parts:
+
+- **Disc back-reaction.** Every particle the halo pulls, pulls back on it (Newton's third law). The net force the halo exerts on all particles is `sum_i m_i * HaloScale_s * (hc_s − pos_i)`; the reaction, `−(that)/M_halo`, accelerates the centre. Applying it conserves momentum with no separate correction — this is what replaces the old halo-monopole subtraction (section 10.5).
+- **Halo–halo.** Each centre falls in the field of every other halo exactly as a particle there would; beyond the truncation radii the pair acts as equal-and-opposite point masses.
+
+This reproduces the analytic relative orbit while leaving decay only to the live-disc friction. Crucially the centre is **not** re-derived from the particle barycentre, so a tidal tail cannot drag it off the core — the failure mode that previously spiralled M51b into a spurious merger (its specific orbital energy fell ~3500%; with inertial centres the true, halo-centre decay is ~24% over the run).
+
+The central body (bulge) is left as a **free heavy particle — it is not pinned** to the barycentre. It is heavy enough (~10⁴ disc-particle masses) to be stable against N-body noise on its own, and pinning it to the barycentre would reintroduce the same tail-dragging artifact. During warmup, while the systems are isolated and held in place, the halo centre stays on the relaxing disc; it begins evolving under gravity at t = 0.
 
 ### 10.4 Cross-Halo Gravity
 
 Every body feels its own system's halo plus the halo of every other system, so M51a's particles feel M51b's halo and vice versa. This creates the correct tidal field for arm excitation.
 
-Each halo is centered on its own system's mass-weighted particle barycenter, recomputed every derivative evaluation by `ComputeHaloCenters()`. Because a halo's field is nearly uniform across the other galaxy at these separations, the pair's relative acceleration comes out correct at `G(M_totA + M_totB)/d^2` including halo mass — which is why the analytic orbit of section 4 is reproduced by the simulation.
+Each halo is centred on its inertial centre (section 10.3), which moves with the galaxy under gravity. Because a halo's field is nearly uniform across the other galaxy at these separations, the pair's relative acceleration comes out correct at `G(M_totA + M_totB)/d^2` including halo mass — which is why the analytic orbit of section 4 is reproduced by the simulation.
 
-What the cross-halo term does **not** do is produce dynamical friction (section 5.1). It is a conservative central force between two rigid symmetric potentials.
+What the rigid cross-halo term does **not** do is produce *Chandrasekhar* friction (section 5.1): a non-deforming spherical potential holds no trailing wake. It does, however, transmit the disc's reaction back onto the halo centre, so the interaction is momentum-conserving.
 
-### 10.5 Halo Monopole Removal
+### 10.5 Momentum Conservation
 
-A rigid analytic halo has no inertia, so it cannot obey Newton's third law: particles are pulled toward the halo center and nothing pulls back. For an axisymmetric disc the per-particle forces cancel in the sum, but any asymmetry — above all an m=1 lopsided mode, or a tidal tail dragging the halo centroid off the nucleus — leaves a net force that accelerates the whole system off the origin.
+A rigid analytic halo has no inertia of its own, so historically it could not obey Newton's third law — particles were pulled toward the halo centre and nothing pulled back, and any asymmetry (an m=1 lopsided mode, or a tail) left a net force that drifted the whole system. That was patched by subtracting the net halo force uniformly from every particle (`RemoveHaloMonopole`), which cancelled the drift but left the halo centre defined by the tail-shiftable barycentre.
 
-The simulation subtracts the net halo force (divided by total mass) uniformly from every particle each step. Because the subtraction is uniform, every difference `a_i - a_j` is unchanged, so the relative orbit is preserved exactly and only the spurious bulk drift is cancelled. The correction is global, not per-system; a per-system correction would cancel the real mutual attraction between the galaxies.
-
-This fixes the drift symptom, not the underlying halo-center definition: the halo center remains the mass-weighted centroid of all of that system's particles, so a long tidal tail still pulls it off the nucleus and distorts the field the disc feels (section 9.3).
+With the inertial halo centre (section 10.3) the patch is unnecessary: the net force the halo exerts on the particles is applied back onto the halo centre as its reaction, so the halo **recoils** instead of the force being deleted. Momentum is then conserved exactly for every particle–halo pair, and for halo–halo pairs beyond the truncation radii. The uniform-subtraction band-aid survives only during warmup, where the systems are isolated and the halo centres are held static (`RemoveHaloMonopole` script flag, default on).
 
 ---
 
