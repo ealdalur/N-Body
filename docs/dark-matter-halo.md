@@ -200,10 +200,12 @@ The centre therefore moves *because gravity moves it*, not because a centroid wa
 tidal debris cannot drag the halo off the galaxy core. During warmup the systems are isolated and
 held in place, so the centre stays on the relaxing disc; it begins evolving freely at t = 0.
 
-The central body (bulge) is a **free heavy particle — it is not pinned** to any centroid. It is
-massive enough (~10⁴ disc-particle masses) to be stable against N-body noise on its own, and
-pinning it to the barycentre would drag the nucleus toward tidal debris — the very artifact the
-inertial centre is designed to avoid.
+The central body is a **free particle — it is not pinned** to any centroid;
+pinning it to the barycentre would drag the nucleus toward tidal debris (the very
+artifact the inertial centre is designed to avoid). Its mass is script-dependent:
+some setups (e.g. the Milky Way / Andromeda) use it as a real bulge, while the M51
+scripts fold all baryon into the disc and reduce it to a token ~1-particle anchor.
+Either way it moves under gravity like any other particle.
 
 ### Force Computation (CalcAccelRangeOct / CalcAccelRangeP2P)
 
@@ -251,7 +253,7 @@ that recoils under the disc back-reaction (see *Halo Centering* above) — momen
 well, so the orbit no longer decays spuriously.
 
 The central body is not specially excluded from the halo force; the `rsq > 1e-10` guard just skips
-a body sitting exactly at the centre. Since the free bulge sits near, but not exactly on, the halo
+a body sitting exactly at the centre. Since the free central body sits near, but not exactly on, the halo
 centre (both move independently under gravity), it feels a negligible force from its own halo.
 
 ### Computational Cost

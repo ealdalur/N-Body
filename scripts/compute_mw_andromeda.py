@@ -85,7 +85,7 @@ mw_R = mw_radius_kpc / du
 mw_h_r = mw_h_r_kpc / du
 mw_Ri = mw_inner_kpc / du
 mw_M_central = mw_bulge_msun / mu
-mw_Mfrac = mw_disc_msun / mw_bulge_msun
+mw_M_disc = mw_disc_msun / mu
 mw_haloVc = mw_vc_kms / vu
 mw_haloRc = mw_haloRc_kpc / du
 mw_haloRh = mw_haloRh_kpc / du
@@ -95,7 +95,7 @@ print(f"  Disc radius:     {mw_R:.1f} code units ({mw_radius_kpc} kpc)")
 print(f"  Scale length:    {mw_h_r:.1f} code units ({mw_h_r_kpc} kpc), R/h_r = {mw_R/mw_h_r:.2f}")
 print(f"  Inner radius:    {mw_Ri:.1f} code units ({mw_inner_kpc} kpc)")
 print(f"  Central mass:    {mw_M_central:.1f} code units ({mw_bulge_msun:.1e} Msun)")
-print(f"  Mass fraction:   {mw_Mfrac:.2f}")
+print(f"  Disc mass:       {mw_M_disc:.1f} code units ({mw_disc_msun:.1e} Msun)")
 print(f"  Particle mass:   ~{mw_particle_msun:.0f} Msun each")
 print(f"  Halo Vc:         {mw_haloVc:.1f} code units ({mw_vc_kms} km/s)")
 print(f"  Halo Rc:         {mw_haloRc:.1f} code units ({mw_haloRc_kpc} kpc)")
@@ -108,7 +108,7 @@ and_R = and_radius_kpc / du
 and_h_r = and_h_r_kpc / du
 and_Ri = and_inner_kpc / du
 and_M_central = and_bulge_msun / mu
-and_Mfrac = and_disc_msun / and_bulge_msun
+and_M_disc = and_disc_msun / mu
 and_haloVc = and_vc_kms / vu
 and_haloRc = and_haloRc_kpc / du
 and_haloRh = and_haloRh_kpc / du
@@ -118,7 +118,7 @@ print(f"  Disc radius:     {and_R:.1f} code units ({and_radius_kpc} kpc)")
 print(f"  Scale length:    {and_h_r:.1f} code units ({and_h_r_kpc} kpc), R/h_r = {and_R/and_h_r:.2f}")
 print(f"  Inner radius:    {and_Ri:.1f} code units ({and_inner_kpc} kpc)")
 print(f"  Central mass:    {and_M_central:.1f} code units ({and_bulge_msun:.1e} Msun)")
-print(f"  Mass fraction:   {and_Mfrac:.2f}")
+print(f"  Disc mass:       {and_M_disc:.1f} code units ({and_disc_msun:.1e} Msun)")
 print(f"  Particle mass:   ~{and_particle_msun:.0f} Msun each")
 print(f"  Halo Vc:         {and_haloVc:.1f} code units ({and_vc_kms} km/s)")
 print(f"  Halo Rc:         {and_haloRc:.1f} code units ({and_haloRc_kpc} kpc)")
@@ -150,9 +150,9 @@ print(f"  (Very long! For faster interaction, reduce initial separation)")
 print("\n--- Script lines ---")
 print(f"N_SystemBodies  40000  40000")
 print(f"# Milky Way at origin, disc in x-z plane")
-print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {mw_M_central:.1f} {mw_Mfrac:.2f} {mw_R:.1f} {mw_Ri:.1f} {mw_h_r:.1f} 1.2  {mw_haloVc:.1f} {mw_haloRc:.1f} {mw_haloRh:.1f}  {mw_sigmaZ_ratio:.2f}")
+print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {mw_M_central:.1f} {mw_M_disc:.1f} {mw_R:.1f} {mw_Ri:.1f} {mw_h_r:.1f} 1.2  {mw_haloVc:.1f} {mw_haloRc:.1f} {mw_haloRh:.1f}  {mw_sigmaZ_ratio:.2f}")
 print(f"# Andromeda along +x axis")
-print(f"GalaxyDisc  1   {sep:.1f} 0.0 0.0   {v_radial_kms:.1f} {v_transverse_kms:.1f} 0.0   {nx:.4f} {ny:.4f} {nz:.4f}   {and_M_central:.1f} {and_Mfrac:.2f} {and_R:.1f} {and_Ri:.1f} {and_h_r:.1f} 1.2  {and_haloVc:.1f} {and_haloRc:.1f} {and_haloRh:.1f}  {and_sigmaZ_ratio:.2f}")
+print(f"GalaxyDisc  1   {sep:.1f} 0.0 0.0   {v_radial_kms:.1f} {v_transverse_kms:.1f} 0.0   {nx:.4f} {ny:.4f} {nz:.4f}   {and_M_central:.1f} {and_M_disc:.1f} {and_R:.1f} {and_Ri:.1f} {and_h_r:.1f} 1.2  {and_haloVc:.1f} {and_haloRc:.1f} {and_haloRh:.1f}  {and_sigmaZ_ratio:.2f}")
 
 # Rotation directions:
 print("\n--- Rotation directions ---")

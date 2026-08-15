@@ -41,8 +41,9 @@ of the total rotational support at the disc edge and the halo ~2/3, giving
 M_halo/M_disc ~ 2 within the disc radius. The COMPANION is treated differently
 (sect 2.2): as the fainter galaxy it is made more halo-dominated, with the paper
 setting M_disc = 0.13 and M_halo = 0.42 (M_halo/M_disc = 3.23). The baryonic
-(disc+bulge) masses used here are rotation-curve-decomposed values, not
-photometric stellar masses.
+masses used here are rotation-curve-decomposed values, not photometric stellar
+masses, and (following the paper's nominal model) are placed entirely in the
+exponential disc with no separate bulge component.
 This is standard for N-body tidal interaction studies — the dynamically cold
 disc mass that participates in spiral arm formation is lower than the total
 photometric mass (which includes dynamically hot thick-disc and bulge stars).
@@ -97,6 +98,16 @@ mu = du * 1.0e3 / G_pc       # 1 code mass unit in Msun = 60 pc / G = 1.395e4
 distance_Mpc = 9.6                  # Scoville & Young 1983, as adopted by S&L
 arcsec_to_kpc = distance_Mpc * 1.0e3 / 206265.0
 
+# === Particle counts (also set the token central-anchor mass) ===
+# The paper's nominal model is disc + halo with NO separate bulge (sect 2.2), so
+# all baryonic mass is folded into the exponential disc. The code still needs a
+# central body, so it is given a token ~1-particle mass (baryon / N) and the disc
+# carries the rest. GalaxyDisc takes the central and disc masses directly (code
+# units); N below only sets the token-anchor scale, not the run's particle count.
+n_m51a = 40000
+n_m51b = 10000
+n_total = n_m51a + n_m51b
+
 # === NGC 5194 (M51a) — Grand-design spiral ===
 # Salo & Laurikainen (2000) section 2.2, verbatim:
 #   Re = 100 arcsec (exponential scalelength)
@@ -112,7 +123,7 @@ m51a_Vtotal_kms = 220               # observed flat rotation velocity; Salo &
                                     # velocity unit (sect 2.2 / 2.3)
 m51a_radius_kpc = m51a_Rd_arcsec * arcsec_to_kpc      # Rd, the truncation
 m51a_h_r_kpc = m51a_Re_arcsec * arcsec_to_kpc         # Re, the scale length
-m51a_inner_kpc = 0.3                # inner bulge region (no disc particles)
+m51a_inner_kpc = 0.3                # inner hole (no disc particles)
 m51a_haloRc_kpc = m51a_haloRc_arcsec * arcsec_to_kpc
 
 # Rotation curve decomposition
@@ -125,11 +136,11 @@ m51a_h_r_code = m51a_h_r_kpc / du
 m51a_baryon_code = m51a_Vbaryon**2 * m51a_R_code
 m51a_baryon_msun = m51a_baryon_code * mu
 
-# Bulge/disc decomposition: bulge ~ 17% of baryonic (typical for Sbc)
-m51a_bulge_frac = 0.17
-m51a_bulge_code = round(m51a_baryon_code * m51a_bulge_frac / 10000) * 10000
-m51a_disc_code = m51a_baryon_code - m51a_bulge_code
-m51a_Mfrac = m51a_disc_code / m51a_bulge_code
+# No separate bulge (paper sect 2.2: nominal model is disc + halo). Fold all
+# baryonic mass into the exponential disc. GalaxyDisc still needs a central body,
+# so give it a token ~1-particle mass and put the rest of the baryon in the disc.
+m51a_central_code = m51a_baryon_code / n_m51a       # token central mass (not a bulge)
+m51a_disc_code = m51a_baryon_code - m51a_central_code
 
 # Halo: cored isothermal V_halo(r) = haloVc * r / sqrt(r^2 + Rc^2)
 # At disc edge, V_halo = haloVc * R / sqrt(R^2 + Rc^2) should equal m51a_Vhalo
@@ -200,11 +211,10 @@ m51b_Vbaryon = math.sqrt(m51b_baryon_code / m51b_R_code)
 m51b_Vhalo = m51b_haloVc * m51b_R_code / math.sqrt(m51b_R_code**2 + m51b_haloRc_code**2)
 m51b_Vtotal_kms = math.sqrt(m51b_Vbaryon**2 + m51b_Vhalo**2)
 
-# Bulge/disc decomposition: bulge ~ 40% for SB0 lenticular
-m51b_bulge_frac = 0.40
-m51b_bulge_code = round(m51b_baryon_code * m51b_bulge_frac / 10000) * 10000
-m51b_disc_code = m51b_baryon_code - m51b_bulge_code
-m51b_Mfrac = m51b_disc_code / m51b_bulge_code
+# No separate bulge for the companion either (see M51a above): fold all baryon
+# into the disc, token central mass.
+m51b_central_code = m51b_baryon_code / n_m51b       # token central mass (not a bulge)
+m51b_disc_code = m51b_baryon_code - m51b_central_code
 
 # === Interaction geometry (Salo & Laurikainen 2000, Table 2 + Fig. 1 caption) ===
 #
@@ -242,18 +252,24 @@ m51b_Mfrac = m51b_disc_code / m51b_bulge_code
 # primary Rd), so it is the INPUT and the pericenter is solved to match it.
 # Pericenter is not independently meaningful in the paper's framework.
 #
-# Set to 1.20, the LOW end of the range and therefore the strongest perturbation
-# the paper allows: "passages with Mp < 0.55 or Rcross > 1.4 seem to be too weak
-# to account for the observations".
-#   Rcross = 1.20 -> S = Mp*(Rd/r)^3 = 0.318
-#   Rcross = 1.30 -> S = 0.250
-#   Rcross = 1.40 -> S = 0.200  (the paper's stated weak limit)
+# This target is the CONSERVATIVE crossing radius (the pericenter is solved to hit
+# it in a frictionless orbit). The LIVE run loses some crossing radius to disc
+# tidal braking, so the target is set wider than the paper's 1.2 floor so the
+# DECAYED crossings still land in the paper's ranges (Rcross 1.2-1.4 principal,
+# Rdown 1.2-1.3 most-recent). Calibrated with scripts/analyze_orbit_diagnostic.py:
+#   target 1.20 -> live Rdown ~1.05 (below floor; decay ~15% at this tight orbit)
+#   target 1.37 -> live Rcross ~1.42, Rdown ~1.30 (decay only ~2.4%: the wider
+#                  orbit has weaker pericentres, so both crossings sit high)
+#   target 1.32 -> live Rcross ~1.37, Rdown ~1.25 (both centred in range)
+# The decay is NOT a fixed fraction -- widening the orbit softens the pericentre
+# passages and reduces it, so the two crossings move together with the target.
+# Tidal strength at the chosen target S = Mp*(Rd/r)^3 = 0.239.
 # Toomre Q for both discs: the paper's standard value. Gives a warm disc, stable
 # against noise-driven multi-arm structure while still responsive to the m=2
 # tidal forcing.
 toomre_Q = 1.5                      # Salo & Laurikainen section 2.2
 
-target_Rcross = 1.20                # units of primary Rd; paper range 1.2-1.4
+target_Rcross = 1.32                # conservative crossing; live crossings centred in range
 orbital_eccentricity = 0.2          # bound model (Fig. 1 caption)
 orbital_inclination_deg = 80.0      # Table 2 range 75-85, mid-range
 
@@ -274,10 +290,9 @@ print(f"  Disc radius Rd:    {m51a_R_code:.1f} code units ({m51a_radius_kpc:.2f}
 print(f"  Scale length Re:   {m51a_h_r_code:.1f} code units ({m51a_h_r_kpc:.2f} kpc) = {m51a_Re_arcsec:.0f} arcsec")
 print(f"  Rd / Re:           {m51a_Rd_arcsec/m51a_Re_arcsec:.2f}")
 print(f"  Inner radius:      {m51a_inner_kpc/du:.1f} code units ({m51a_inner_kpc} kpc)")
-print(f"  Bulge mass (M):    {m51a_bulge_code:.0f} code units ({m51a_bulge_code*mu:.2e} Msun)")
+print(f"  Central anchor (M): {m51a_central_code:.1f} code units ({m51a_central_code*mu:.2e} Msun, ~1 particle; no bulge)")
 print(f"  Disc mass:         {m51a_disc_code:.0f} code units ({m51a_disc_code*mu:.2e} Msun)")
 print(f"  Total baryonic:    {m51a_baryon_code:.0f} code units ({m51a_baryon_msun:.2e} Msun)")
-print(f"  Mfrac:             {m51a_Mfrac:.2f}")
 print(f"  Halo Vc:           {m51a_haloVc:.1f} km/s")
 print(f"  Halo Rc:           {m51a_haloRc_code:.1f} code units ({m51a_haloRc_kpc:.3f} kpc)")
 
@@ -302,10 +317,9 @@ print(f"  Scale length Re:   {m51b_h_r_code:.1f} code units ({m51b_h_r_kpc:.2f} 
 print(f"  Rd / Re:           {m51b_Rd_arcsec/m51b_Re_arcsec:.2f}  (NOT 4 -- must be passed explicitly)")
 print(f"  Re(comp)/Re(prim): {m51b_Re_arcsec/m51a_Re_arcsec:.3f}  (paper 33/100; was 0.60 when h_r=Rd/4)")
 print(f"  Inner radius:      {m51b_inner_kpc/du:.1f} code units ({m51b_inner_kpc} kpc)")
-print(f"  Bulge mass (M):    {m51b_bulge_code:.0f} code units ({m51b_bulge_code*mu:.2e} Msun)")
+print(f"  Central anchor (M): {m51b_central_code:.1f} code units ({m51b_central_code*mu:.2e} Msun, ~1 particle; no bulge)")
 print(f"  Disc mass:         {m51b_disc_code:.0f} code units ({m51b_disc_code*mu:.2e} Msun)")
 print(f"  Total baryonic:    {m51b_baryon_code:.0f} code units ({m51b_baryon_msun:.2e} Msun)")
-print(f"  Mfrac:             {m51b_Mfrac:.2f}")
 print(f"  Halo Vc:           {m51b_haloVc:.1f} km/s")
 print(f"  Halo Rc:           {m51b_haloRc_code:.1f} code units ({m51b_haloRc_kpc:.3f} kpc)")
 
@@ -637,11 +651,7 @@ print(f"  Line of nodes along +/-x; orbit circulates in the same sense as the")
 print(f"    M51a disc (L_orb . L_disc > 0), i.e. prograde, not the 100 deg mirror")
 print(f"  Argument of pericenter: 90 deg (apocenter between the disc crossings)")
 
-# === Particle counts ===
-n_m51a = 40000
-n_m51b = 10000
-n_total = n_m51a + n_m51b
-
+# === Particle counts === (n_m51a / n_m51b / n_total are defined near the top)
 print(f"\n--- Particle counts ---")
 print(f"  M51a: {n_m51a} ({n_m51a-1} disc + 1 central)")
 print(f"  M51b: {n_m51b} ({n_m51b-1} disc + 1 central)")
@@ -679,10 +689,10 @@ print(f"{'='*65}")
 print(f"N_SystemBodies  {n_m51a}  {n_m51b}")
 print(f"")
 print(f"# M51a (NGC 5194) at origin, disc in x-z plane")
-print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {m51a_bulge_code:.1f} {m51a_Mfrac:.2f} {m51a_R_code:.1f} {m51a_Ri_code:.1f} {m51a_h_r_code:.1f} {toomre_Q:.1f}  {m51a_haloVc:.1f} {m51a_haloRc_code:.1f} {m51a_haloRh_code:.1f}")
+print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {m51a_central_code:.1f} {m51a_disc_code:.1f} {m51a_R_code:.1f} {m51a_Ri_code:.1f} {m51a_h_r_code:.1f} {toomre_Q:.1f}  {m51a_haloVc:.1f} {m51a_haloRc_code:.1f} {m51a_haloRh_code:.1f}")
 print(f"")
 print(f"# M51b (NGC 5195) at apocenter, near-polar bound orbit (iorb={orbital_inclination_deg:.0f} deg)")
-print(f"GalaxyDisc  1   {pos_x:.1f} {pos_y:.1f} {pos_z:.1f}   {vel_x:.1f} {vel_y:.1f} {vel_z:.1f}   {m51b_normal_x:.4f} {m51b_normal_y:.4f} {m51b_normal_z:.4f}   {m51b_bulge_code:.1f} {m51b_Mfrac:.2f} {m51b_R_code:.1f} {m51b_Ri_code:.1f} {m51b_h_r_code:.1f} {toomre_Q:.1f}  {m51b_haloVc:.1f} {m51b_haloRc_code:.1f} {m51b_haloRh_code:.1f}")
+print(f"GalaxyDisc  1   {pos_x:.1f} {pos_y:.1f} {pos_z:.1f}   {vel_x:.1f} {vel_y:.1f} {vel_z:.1f}   {m51b_normal_x:.4f} {m51b_normal_y:.4f} {m51b_normal_z:.4f}   {m51b_central_code:.1f} {m51b_disc_code:.1f} {m51b_R_code:.1f} {m51b_Ri_code:.1f} {m51b_h_r_code:.1f} {toomre_Q:.1f}  {m51b_haloVc:.1f} {m51b_haloRc_code:.1f} {m51b_haloRh_code:.1f}")
 
 # === Orbit integration: verify and report the actual event sequence ===
 # The analytic v_t solution guarantees the pericenter/apocenter radii, but the

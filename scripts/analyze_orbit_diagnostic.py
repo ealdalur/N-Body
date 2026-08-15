@@ -53,11 +53,13 @@ def parse_galaxy_discs(path):
                 continue
             tok = s.split()
             # tok[0]=GalaxyDisc, [1]=sys, [2:5]=pos, [5:8]=vel, [8:11]=normal,
-            # [11]=M, [12]=Mfrac, [13]=R, [14]=Ri, [15]=h_r, [16]=Q,
+            # [11]=centralMass, [12]=discMass, [13]=R, [14]=Ri, [15]=h_r, [16]=Q,
             # [17]=haloVc, [18]=haloRc, [19]=haloRh, [20]=sigma_z_ratio (opt)
-            M = float(tok[11]); Mfrac = float(tok[12])
+            M_central = float(tok[11]); M_disc = float(tok[12])
             discs.append(dict(
-                M_baryon=M * (1.0 + Mfrac),
+                M_baryon=M_central + M_disc,
+                R=float(tok[13]),
+                normal=(float(tok[8]), float(tok[9]), float(tok[10])),
                 haloVc=float(tok[17]), haloRc=float(tok[18]), haloRh=float(tok[19]),
             ))
     return discs
@@ -68,6 +70,14 @@ if len(discs) < 2:
     sys.exit(f"Expected >=2 GalaxyDisc lines in {sim_path}, found {len(discs)}")
 
 M_baryon_total = sum(d["M_baryon"] for d in discs[:2])
+
+# Primary disc geometry, for the disc-plane crossings the paper actually
+# constrains: Rd sets the units, and the normal defines the plane the companion
+# crosses (a crossing is where (companion - primary) . n_primary changes sign).
+Rd_primary = discs[0]["R"]
+_nn = discs[0]["normal"]
+_nmag = math.sqrt(sum(c * c for c in _nn)) or 1.0
+n_primary = tuple(c / _nmag for c in _nn)
 
 
 def M_halo(r, Vc, Rc, Rh):
@@ -118,9 +128,14 @@ with open(csv_path, newline="") as f:
     for row in csv.DictReader(f):
         rows.append({k: float(v) for k, v in row.items()})
 
-post = [r for r in rows if r["t"] >= 0.0]
+# Keep only post-warmup rows. Use a small positive threshold rather than >= 0.0:
+# the warmup->active transition logs a row at t = -0.0 (negative zero, which
+# passes ">= 0") where the bulk velocity has not yet been applied, so its
+# relative velocity is zero. Seeding the analytic orbit from that row would give
+# a v=0 radial plunge. The first genuinely post-bulk row is one log-interval later.
+post = [r for r in rows if r["t"] > 1e-6]
 if len(post) < 2:
-    sys.exit("No post-warmup (t >= 0) rows in the CSV.")
+    sys.exit("No post-warmup (t > 0) rows in the CSV.")
 
 # The halo centres are the paper's orbital coordinates and, unlike the particle
 # barycentres, are not dragged by tidal debris -- so prefer them for the true
@@ -168,6 +183,7 @@ t_end = post[-1]["t"]
 t = r0["t"]
 a = accel(p)
 ana_t, ana_sep = [t], [math.sqrt(sum(c * c for c in p))]
+ana_plane = [sum(p[k] * n_primary[k] for k in range(3))]
 while t < t_end:
     for k in range(3):
         p[k] += v[k] * dt + 0.5 * a[k] * dt * dt
@@ -178,6 +194,7 @@ while t < t_end:
     t += dt
     ana_t.append(t)
     ana_sep.append(math.sqrt(sum(c * c for c in p)))
+    ana_plane.append(sum(p[k] * n_primary[k] for k in range(3)))
 
 
 def interp(xs, ys, x):
@@ -243,6 +260,75 @@ for i in range(0, n, max(1, n // 25)):
     r = post[i]
     sa = interp(ana_t, ana_sep, r["t"])
     print(f"  {r['t']:7.2f} {r[SEPK]*du:9.2f} {sa*du:9.2f} {(r[SEPK]-sa)*du:9.2f}")
+
+# ---- disc-plane crossings (the quantity the paper constrains) ---------------
+# A crossing is where the companion passes through the primary's disc plane,
+# i.e. where (companion - primary) . n_primary changes sign. The paper puts the
+# principal crossing (Rcross) at 1.2-1.4 Rd and the most recent (Rdown) at
+# 1.2-1.3 Rd. With decay the live crossings tighten over time; this is what item 4
+# (orbit re-tuning) checks -- if the later crossings fall below 1.2 Rd, widen
+# target_Rcross in compute_M51.py so the decayed orbit lands back in range.
+def find_crossings(times, planes, seps):
+    out = []
+    for i in range(1, len(times)):
+        p0, p1 = planes[i - 1], planes[i]
+        if p0 == 0.0 or p0 * p1 >= 0.0:
+            continue
+        f = p0 / (p0 - p1)                       # linear interp to plane = 0
+        tc = times[i - 1] + f * (times[i] - times[i - 1])
+        rc = seps[i - 1] + f * (seps[i] - seps[i - 1])
+        out.append((tc, rc))
+    return out
+
+sim_times = [r["t"] for r in post]
+sim_seps = [r[SEPK] for r in post]
+if have_halo:
+    sim_planes = [sum((r["h1" + ax] - r["h0" + ax]) * n_primary[k]
+                      for k, ax in enumerate("xyz")) for r in post]
+else:
+    sim_planes = [sum((r["c1" + ax] - r["c0" + ax]) * n_primary[k]
+                      for k, ax in enumerate("xyz")) for r in post]
+sim_cross = find_crossings(sim_times, sim_planes, sim_seps)
+ana_cross = find_crossings(ana_t, ana_plane, ana_sep)
+
+print()
+print("  Disc-plane crossings (paper: Rcross 1.2-1.4 Rd, Rdown 1.2-1.3 Rd):")
+if not sim_cross:
+    print("    none detected in the run window.")
+else:
+    print(f"    {'#':>2} {'t':>7} {'sim R/Rd':>9} {'kpc':>7} {'analytic R/Rd':>14}  in-range")
+    for i, (tc, rc) in enumerate(sim_cross):
+        ac = (min(ana_cross, key=lambda x: abs(x[0] - tc))[1] / Rd_primary
+              if ana_cross else float("nan"))
+        rrd = rc / Rd_primary
+        flag = "yes" if 1.2 <= rrd <= 1.4 else ("LOW" if rrd < 1.2 else "high")
+        print(f"    {i+1:>2} {tc:7.2f} {rrd:9.3f} {rc*du:7.2f} {ac:14.3f}  {flag}")
+    # Rcross/Rdown are the crossing pair that BRACKETS an apocentre (paper Fig. 1:
+    # "the apocentre is between the two disc crossings"), matching compute_M51.py.
+    # This is robust to the orbit changing, unlike a hardcoded observation time.
+    apo_times = [tt for tt, _, _ in apo_E]
+    pair = None
+    for i in range(len(sim_cross) - 1):
+        ta, tb = sim_cross[i][0], sim_cross[i + 1][0]
+        if any(ta < at < tb for at in apo_times):
+            pair = (sim_cross[i], sim_cross[i + 1])
+            break
+    if pair:
+        (t_rc, r_rc), (t_rd, r_rd) = pair
+        rc_rd, rd_rd = r_rc / Rd_primary, r_rd / Rd_primary
+        print(f"    Rcross (principal, before apocentre): {rc_rd:.3f} Rd at t={t_rc:.2f}"
+              f"   [paper 1.2-1.4]")
+        print(f"    Rdown  (most recent, after apocentre): {rd_rd:.3f} Rd at t={t_rd:.2f}"
+              f"   [paper 1.2-1.3]")
+        rc_ok = 1.2 <= rc_rd <= 1.4
+        rd_ok = 1.2 <= rd_rd <= 1.3
+        if rc_ok and rd_ok:
+            print("    -> both crossings in the paper's ranges; retune converged.")
+        else:
+            print(f"    -> scale target_Rcross by ~{1.25/rd_rd:.3f} to centre Rdown at "
+                  f"1.25 Rd (Rcross moves with it) and re-run.")
+    else:
+        print("    (no crossing pair brackets an apocentre in the run window)")
 
 # ---- optional plot ----------------------------------------------------------
 try:

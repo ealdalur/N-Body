@@ -266,13 +266,13 @@ void Simulation::LoadScript(const std::string &path)
 			int system;
 			double px, py, pz, vx, vy, vz;
 			double nx, ny, nz;
-			double M, Mfrac, R, Ri, h_r, Q, haloVc, haloRc, haloRh;
+			double M_central, M_disc, R, Ri, h_r, Q, haloVc, haloRc, haloRh;
 			if (!(iss >> system >> px >> py >> pz >> vx >> vy >> vz
-			          >> nx >> ny >> nz >> M >> Mfrac >> R >> Ri >> h_r
+			          >> nx >> ny >> nz >> M_central >> M_disc >> R >> Ri >> h_r
 			          >> Q >> haloVc >> haloRc >> haloRh)) {
 				std::cerr << "Error: malformed GalaxyDisc command." << std::endl;
 				std::cerr << "Expected 19 values: system posX posY posZ velX velY velZ"
-				          << " normalX normalY normalZ mass massFrac R Ri h_r Q"
+				          << " normalX normalY normalZ centralMass discMass R Ri h_r Q"
 				          << " haloVc haloRc haloRh" << std::endl;
 				std::cerr << "  (optional 20th value: sigma_z/sigma_r ratio, default 0.7)" << std::endl;
 				std::cerr << "  got: " << line << std::endl;
@@ -306,13 +306,23 @@ void Simulation::LoadScript(const std::string &path)
 				          << sigmaZratio << std::endl;
 				exit(1);
 			}
+			if (M_disc <= 0.0) {
+				std::cerr << "Error: GalaxyDisc disc mass must be > 0, got "
+				          << M_disc << std::endl;
+				exit(1);
+			}
+			if (M_central < 0.0) {
+				std::cerr << "Error: GalaxyDisc central body mass must be >= 0, got "
+				          << M_central << std::endl;
+				exit(1);
+			}
 
 			if (pos_data.empty()) Allocate();
 
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
 			double discNormal[3] = {nx, ny, nz};
-			LoadGalaxyDiscState(system, sysPos, sysVel, discNormal, M, Mfrac, R, Ri, h_r, Q, haloVc, haloRc, haloRh, sigmaZratio);
+			LoadGalaxyDiscState(system, sysPos, sysVel, discNormal, M_central, M_disc, R, Ri, h_r, Q, haloVc, haloRc, haloRh, sigmaZratio);
 		} else if (key == "SphericalUniverse") {
 			int system;
 			double px, py, pz, vx, vy, vz;
@@ -423,7 +433,7 @@ void Simulation::LoadScript(const std::string &path)
 	}
 }
 
-void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double h_r, double Q, double haloVc, double haloRc, double haloRh, double sigmaZratio){
+void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M_central, double M_disc, double R, double Ri, double h_r, double Q, double haloVc, double haloRc, double haloRh, double sigmaZratio){
 
 	double m,r,theta;
 	double p[3],v[3];
@@ -472,8 +482,8 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	for (int i=0; i<N_System_Bodies[system]; i++)
 		body_system[sysIdx+i] = system;
 
-	m = Mfrac*M/(N_System_Bodies[system]-1);
-	mass[sysIdx] = M;
+	m = M_disc/(N_System_Bodies[system]-1);
+	mass[sysIdx] = M_central;
 	has_gravity[sysIdx] = true;
 	vcopy(sysPos, pos[sysIdx]);
 
@@ -506,9 +516,6 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	// M_enc(r) / M_disc = [1 - (1 + r/h_r)*exp(-r/h_r)] / [1 - (1 + R/h_r)*exp(-R/h_r)]
 	double enc_denom = 1.0 - (1.0 + R/h_r)*exp(-R/h_r);
 
-	// Total disc mass for surface density computation
-	double M_disc = Mfrac * M;
-
 	// Gaussian RNG for velocity dispersion
 	std::mt19937 gen(42 + system);
 	std::normal_distribution<double> normal(0.0, 1.0);
@@ -525,7 +532,7 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	auto discProps = [&](double rr, double &vc_sq, double &Omega, double &Sigma,
 	                     double &kappa, double &sig_r, double &sig_phi){
 		double enc = (1.0 - (1.0 + rr/h_r)*exp(-rr/h_r)) / enc_denom;
-		double morb = M + M_disc*enc;
+		double morb = M_central + M_disc*enc;
 		vc_sq = G*morb/rr + haloVc*haloVc*rr*rr/(rr*rr + haloRc_sq);
 		Omega = sqrt(vc_sq) / rr;
 		// Sigma_0 = M_disc / (2*pi*h_r^2 * enc_denom): the /enc_denom factor makes

@@ -83,7 +83,7 @@ The circular velocity squared is:
 v_c^2(r) = G * M_enc(r) / r + Vc^2 * r^2 / (r^2 + Rc^2)
 ```
 
-where M_enc(r) is the enclosed baryonic mass (bulge + disc interior to r), and the second term is the halo contribution.
+where M_enc(r) is the enclosed baryonic mass (central body + disc interior to r), and the second term is the halo contribution.
 
 Taking the derivative:
 
@@ -143,7 +143,7 @@ Sigma(r) = (M_disc / (2 * pi * h_r^2)) * exp(-r / h_r)
 ```
 
 where h_r is the disc scale length (a required `GalaxyDisc` input, independent of
-the truncation radius R) and M_disc = Mfrac * M is the total disc mass.
+the truncation radius R) and M_disc is the total disc mass (a direct `GalaxyDisc` input).
 
 ### 5.2 Why Sigma Matters
 

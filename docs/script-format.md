@@ -506,7 +506,7 @@ fixed look-at the companion drifts out of frame, whereas following keeps it
 centred for the whole run.
 
 Note the target is the system's central body specifically, not its centre of mass.
-For a galaxy these stay close: the central body is a heavy particle near the halo
+For a galaxy these stay close: the central body sits near the halo
 centre, though the two can differ by a kpc or two once strong tidal debris shifts
 the system's barycentre away from the core.
 
@@ -571,7 +571,7 @@ Body  0   1.0 0.0 0.0   0.0 0.0 -6.28  3.0e-6      # Earth
 ### `GalaxyDisc` — Procedural Galaxy Disc
 
 ```
-GalaxyDisc  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <normalX> <normalY> <normalZ>  <total_mass> <mass_fraction> <outer_radius> <inner_radius> <disc_scale_length> <toomre_Q>  <halo_circular_velocity> <halo_core_radius> <halo_truncation_radius>  [<sigma_z_ratio>]
+GalaxyDisc  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <normalX> <normalY> <normalZ>  <central_body_mass> <disc_mass> <outer_radius> <inner_radius> <disc_scale_length> <toomre_Q>  <halo_circular_velocity> <halo_core_radius> <halo_truncation_radius>  [<sigma_z_ratio>]
 ```
 
 Generates a flattened disc of particles with approximately circular orbits, representing a spiral galaxy. The disc plane is defined by the normal vector; particles orbit counter-clockwise when viewed from the direction the normal points.
@@ -582,8 +582,8 @@ Generates a flattened disc of particles with approximately circular orbits, repr
 | `posX`, `posY`, `posZ` | Position of the galaxy center |
 | `velX`, `velY`, `velZ` | Bulk velocity of the entire galaxy |
 | `normalX`, `normalY`, `normalZ` | Disc normal vector (defines orientation of the disc plane). Does not need to be unit length. Particles orbit counter-clockwise when viewed from the direction this vector points. Use `(0, 1, 0)` for a disc in the x-z plane |
-| `total_mass` | Total mass of the central body (the galaxy core) |
-| `mass_fraction` | Fraction of the total mass distributed among disc particles. `0.5` means disc particles collectively have half the central body's mass |
+| `central_body_mass` | Mass of the central body (the galaxy core / bulge), in code units. May be `0` for a pure disc; for a bulgeless model set it to a small token mass so it acts only as a centre marker |
+| `disc_mass` | Total mass of the disc particles, in code units (must be `> 0`). Split evenly among the `N−1` disc particles at load time, so it is independent of the particle count |
 | `outer_radius` | Maximum radius of the disc |
 | `inner_radius` | Minimum radius of the disc (creates a central hole) |
 | `disc_scale_length` | Exponential scale length of the disc, `h_r`. **Required**, and must satisfy `0 < h_r < outer_radius`. See below |
@@ -630,17 +630,17 @@ The dark matter halo applies a cored isothermal sphere potential: `a_halo = v_c^
 
 **Example (Milky Way, disc in x-z plane).** `h_r` = 43.3 is the measured 2.6 kpc scale length, so `R / h_r` = 10.3:
 ```
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 43.3 1.2  220.0 166.7 0.0
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 4500000.0 446.7 5.0 43.3 1.2  220.0 166.7 0.0
 ```
 
 The same disc with an explicit, cooler vertical structure (`sigma_z/sigma_r` = 0.5, closer to the solar neighbourhood) appends the optional 20th field:
 ```
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 3.0 446.7 5.0 43.3 1.2  220.0 166.7 0.0  0.5
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1500000.0 4500000.0 446.7 5.0 43.3 1.2  220.0 166.7 0.0  0.5
 ```
 
 **Example (M51b), a disc truncated at 7.3 scale lengths:**
 ```
-GalaxyDisc  1   0.0 458.4 80.8   200.0 0.0 0.0   0.5373 0.8434 0.0000   780000.0 1.50 186.2 3.3 25.6 1.5  186.6 31.0 186.2
+GalaxyDisc  1   0.0 458.4 80.8   200.0 0.0 0.0   0.5373 0.8434 0.0000   780000.0 1170000.0 186.2 3.3 25.6 1.5  186.6 31.0 186.2
 ```
 
 ---
@@ -694,8 +694,8 @@ N_SystemBodies  30000  10000
 Camera          0.0  500.0  500.0
 Camera_lookAt   150.0  0.0  -250.0
 
-GalaxyDisc  0   0.0 0.0 0.0       0.0 0.0 0.0       0.0 1.0 0.0    1.0e7 0.5 250.0 25.0 62.5 1.2  200.0 50.0
-GalaxyDisc  1   300.0 0.0 -500.0  -150.0 0.0 0.0    0.0 1.0 0.0    6.0e6 0.5 125.0 25.0 31.3 1.2  155.0 25.0
+GalaxyDisc  0   0.0 0.0 0.0       0.0 0.0 0.0       0.0 1.0 0.0    1.0e7 5.0e6 250.0 25.0 62.5 1.2  200.0 50.0 0.0
+GalaxyDisc  1   300.0 0.0 -500.0  -150.0 0.0 0.0    0.0 1.0 0.0    6.0e6 3.0e6 125.0 25.0 31.3 1.2  155.0 25.0 0.0
 ```
 
 ---

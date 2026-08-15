@@ -21,11 +21,11 @@ G_pc = 4.300917e-3
 mu = du * 1.0e3 / G_pc   # 1 code mass unit in Msun = 60 pc / G = 1.395e4
 
 # Galaxy parameters (same as Milky_Way_Andromeda.sim)
-mw_M = 1075229.2       # MW central body (code units); 1.5e10 Msun / 1.395e4
-mw_Mfrac = 3.0
+mw_M_central = 1075229.2   # MW central body (code units); 1.5e10 Msun / 1.395e4
+mw_M_disc = 3225687.6      # MW disc mass (code units); 4.5e10 Msun / 1.395e4
 mw_R = 446.7
-and_M = 2150458.5      # Andromeda central body (code units); 3.0e10 Msun / 1.395e4
-and_Mfrac = 2.33
+and_M_central = 2150458.5  # Andromeda central body (code units); 3.0e10 Msun / 1.395e4
+and_M_disc = 5017738.0     # Andromeda disc mass (code units); 7.0e10 Msun / 1.395e4
 and_R = 558.3
 
 # Halo parameters
@@ -43,8 +43,8 @@ r_close = 2500.0       # 150 kpc in code units
 # M_halo(r) ~ v_c^2 * r / G (with G=1)
 mw_halo_enclosed = mw_haloVc**2 * r_close
 and_halo_enclosed = and_haloVc**2 * r_close
-mw_baryonic = mw_M * (1 + mw_Mfrac)
-and_baryonic = and_M * (1 + and_Mfrac)
+mw_baryonic = mw_M_central + mw_M_disc
+and_baryonic = and_M_central + and_M_disc
 M_total = mw_halo_enclosed + and_halo_enclosed + mw_baryonic + and_baryonic
 
 print("=== Mass estimates ===")

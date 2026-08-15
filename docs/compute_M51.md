@@ -132,9 +132,8 @@ The paper is explicit for the companion: *"take Rd = 240 arcsec ≈ 7Re for the 
 | V_baryon at Rd | 127.0 km/s | = 220/sqrt(3) | — |
 | V_halo at Rd | 179.6 km/s | = 220*sqrt(2/3) | — |
 | Total baryonic mass | 6.98 × 10^10 M☉ | = V_b^2 * Rd / G | 5,005,858 |
-| Bulge mass (M) | 1.19 × 10^10 M☉ | 17% of baryonic (Sbc) | 850,000 |
-| Disc mass | 5.80 × 10^10 M☉ | baryonic − bulge | 4,155,858 |
-| Mfrac (disc/bulge) | 4.89 | — | — |
+| Disc mass | 6.98 × 10^10 M☉ | all baryon in the disc (no bulge) | 5,005,733 |
+| Central anchor (M) | 1.75 × 10^6 M☉ | ~1 particle (not a bulge) | 125.1 |
 | DM halo Vc | 179.7 km/s | corrected for core | — |
 | DM halo core Rc | 8 arcsec = 0.372 kpc | S&L sect 2.2 | 6.2 |
 | M_halo within Rd | 1.40 × 10^11 M☉ | cored isothermal | 10,011,716 |
@@ -156,9 +155,8 @@ The companion's mass is set by the paper's mass ratio `Mp`, not by an assumed ro
 | Mass ratio Mp | 0.55 | S&L Table 1 caption | — |
 | Total mass within Rd | 1.15 × 10^11 M☉ | = Mp × M_prim | 8,259,666 |
 | Total baryonic mass | 2.72 × 10^10 M☉ | Mdisc = 0.13 (0.236 of Mp) | 1,952,285 |
-| Bulge mass (M) | 1.09 × 10^10 M☉ | 40% of baryonic (SB0) | 780,000 |
-| Disc mass | 1.64 × 10^10 M☉ | baryonic − bulge | 1,172,285 |
-| Mfrac (disc/bulge) | 1.50 | — | — |
+| Disc mass | 2.72 × 10^10 M☉ | all baryon in the disc (no bulge) | 1,952,089 |
+| Central anchor (M) | 2.72 × 10^6 M☉ | ~1 particle (not a bulge) | 195.2 |
 | DM halo Vc | 186.6 km/s | inverted from M_halo target | — |
 | DM halo core Rc | 40 arcsec = 1.862 kpc | S&L sect 2.2 | 31.0 |
 | M_halo within Rd | 8.80 × 10^10 M☉ | Mhalo = 0.42 (0.764 of Mp) | 6,307,381 |
@@ -280,54 +278,54 @@ These are easy to conflate but are set separately:
 ### 4.5 Computed Parameters
 
 ```
-target Rcross = 1.20 Rd                <- input
-  -> pericenter = 18.62 kpc            <- solved by bisection
-  -> apocenter  = r_peri * (1+e)/(1-e) = 27.93 kpc
+target Rcross = 1.32 Rd                <- input (conservative, decay-compensated)
+  -> pericenter = 20.48 kpc            <- solved by bisection
+  -> apocenter  = r_peri * (1+e)/(1-e) = 30.72 kpc
 ```
 
 | Parameter | Value |
 |-----------|-------|
-| Target Rcross | 1.20 Rd (22.34 kpc) |
+| Target Rcross (conservative) | 1.32 Rd (24.57 kpc) |
 | Halo truncation Rh | Rd for each galaxy (paper sect 2.2) |
-| Pericenter (solved) | 310.3 code units (18.62 kpc) |
-| Apocenter (derived) | 465.4 code units (27.93 kpc) |
+| Pericenter (solved) | 341.3 code units (20.48 kpc) |
+| Apocenter (derived) | 512.0 code units (30.72 kpc) |
 | Eccentricity | 0.200 |
 | Orbital inclination | 80 deg |
 | Argument of pericenter | 90 deg |
-| Tidal strength S = Mp*(Rd/r)^3 | 0.318 |
-| Tangential velocity at apocenter | 200.0 km/s |
-| Velocity at pericenter | 300.0 km/s |
-| v_circular at apocenter | 286.2 km/s |
-| v_t / v_circ | 0.699 |
-| Orbital period | ~9.95 code units (~584 Myr radial) |
+| Tidal strength S = Mp*(Rd/r)^3 | 0.239 |
+| Tangential velocity at apocenter | 190.7 km/s |
+| Velocity at pericenter | 286.1 km/s |
+| v_circular at apocenter | 283.8 km/s |
+| v_t / v_circ | 0.672 |
+| Orbital period | ~11.5 code units (~674 Myr radial) |
 
-`Rcross` = 1.20 is the low end of the paper's range and therefore the strongest perturbation it allows: *"passages with Mp < 0.55 or Rcross > 1.4 seem to be too weak to account for the observations."* For reference, `Rcross` = 1.30 gives S = 0.250 and 1.40 gives S = 0.200.
+The target is the **conservative** (frictionless) crossing radius. It is set to 1.32 rather than the paper's 1.2 floor because the live run loses crossing radius to disc tidal braking between the principal crossing and the most recent one: with target 1.32 the live principal crossing comes out ~1.37 Rd and the live `Rdown` ~1.25 Rd, both centred in the paper's ranges (Rcross 1.2–1.4, Rdown 1.2–1.3). A naive target of 1.20 let the live `Rdown` decay to ~1.05 (below the floor); 1.37 overshot to ~1.30/1.42. The decay is **not** a fixed fraction — a wider orbit has weaker pericentres and decays less, so the two crossings move together with the target. Measure the live crossings with `scripts/analyze_orbit_diagnostic.py`.
 
 ### 4.6 Numerical Verification
 
-The crossing radius is not a closed-form function of pericenter — it depends on node geometry, and the apsides precess in a logarithmic potential. The script bisects on pericenter, integrating the relative orbit each iteration (velocity Verlet, dt = 5e-5).
+The crossing radius is not a closed-form function of pericenter — it depends on node geometry. The script bisects on pericenter, integrating the frictionless relative orbit each iteration (velocity Verlet, dt = 5e-5).
 
 | Quantity | Target | Achieved |
 |---|---|---|
-| First crossing | 1.200 Rd | 1.200 Rd |
+| First crossing (frictionless) | 1.320 Rd | 1.320 Rd |
 | Eccentricity | 0.200 | 0.200 |
 | Apocenter between crossings | required | confirmed |
 
-Event sequence:
+Event sequence (frictionless orbit — the live run's crossings tighten over time from disc braking):
 
 | Event | t | Myr | r (kpc) | r / Rd |
 |---|---|---|---|---|
-| **crossing #1** | 3.12 | 183 | 22.34 | **1.200** |
-| pericenter | 4.97 | 292 | 18.62 | 1.000 |
-| **crossing** (`Rcross`) | 6.83 | 401 | 22.34 | **1.200** |
-| apocenter | 9.95 | 584 | 27.93 | 1.500 |
-| **crossing** (`Rdown`) | 13.06 | 767 | 22.34 | **1.200** |
-| pericenter | 14.92 | 876 | 18.62 | 1.000 |
-| **crossing** | 16.78 | 985 | 22.34 | **1.200** |
+| **crossing #1** | 3.59 | 211 | 24.57 | **1.320** |
+| pericenter | 5.74 | 337 | 20.48 | 1.100 |
+| **crossing** (`Rcross`) | 7.88 | 463 | 24.57 | **1.320** |
+| apocenter | 11.48 | 674 | 30.72 | 1.650 |
+| **crossing** (`Rdown`) | 15.07 | 885 | 24.57 | **1.320** |
+| pericenter | 17.21 | 1010 | 20.48 | 1.100 |
+| **crossing** | 19.36 | 1136 | 24.57 | **1.320** |
 
-Every close crossing lands at exactly 1.200 Rd, inside the paper's `Rcross` = 1.2–1.4 and `Rdown` = 1.2–1.3. This is an independent check: pericenter was the targeted quantity and the crossing radius follows.
+Every frictionless crossing lands at 1.320 Rd. In the **live** run these decay over time (principal ~1.37, `Rdown` ~1.25), landing centred inside the paper's `Rcross` = 1.2–1.4 and `Rdown` = 1.2–1.3.
 
-**Why every crossing is at the same radius.** Solving `Rcross` = 1.20 Rd with e = 0.2 puts the pericenter at exactly 1.000 Rd = 18.62 kpc — the primary's halo truncation radius `Rh`. The whole orbit therefore lies in the truncated regime, where both halos act as point masses and the potential is Keplerian. A Kepler ellipse does not precess, so with the argument of pericenter fixed at 90 deg the two nodes sit symmetrically at true anomaly ±90 deg from pericenter, both at the semi-latus rectum `r = r_peri(1+e)` = 18.62 × 1.2 = **22.34 kpc = 1.200 Rd**. Successive crossings repeat that radius exactly rather than alternating close/grazing as they would in a precessing (untruncated, logarithmic) potential.
+**Why every frictionless crossing is at the same radius.** Solving `Rcross` = 1.32 Rd with e = 0.2 puts the pericenter at 1.100 Rd = 20.48 kpc — outside the primary's halo truncation radius `Rh` = 1.000 Rd. The whole orbit therefore lies in the truncated regime, where both halos act as point masses and the potential is Keplerian. A Kepler ellipse does not precess, so with the argument of pericenter fixed at 90 deg the two nodes sit symmetrically at true anomaly ±90 deg from pericenter, both at the semi-latus rectum `r = r_peri(1+e)` = 20.48 × 1.2 = **24.57 kpc = 1.320 Rd**. Successive frictionless crossings repeat that radius exactly; in the live run disc braking then shrinks them over time.
 
 ### 4.7 Best-Morphology Epoch
 
@@ -338,9 +336,9 @@ The paper anchors its observation epoch `Tobs` to the **principal disc-plane cro
 - `Tobs` ~ 7 — that arm "would be opened into a new bridge during the second crossing," overshooting.
 - `Tobs` > 6 — the spiral becomes too tightly wound.
 
-Applying `Tobs - Tdown` = 0.5–1.0 (40–80 Myr, i.e. 0.68–1.36 of this project's 58.7 Myr unit) after the most recent crossing `Rdown` at t = 13.06:
+Applying `Tobs - Tdown` = 0.5–1.0 (40–80 Myr, i.e. 0.68–1.36 of this project's 58.7 Myr unit) after the most recent crossing `Rdown` at t = 15.07:
 
-**Observe at t = 13.74 to 14.43, centre ~14.09.**
+**Observe at t = 15.75 to 16.43, centre ~16.09.**
 
 **Crossing-to-crossing timing.** The target is `Tdown` = 4.5–6.0 of the paper's 80 Myr unit = **360–480 Myr**. Note `Tobs` (440–520 Myr) and `Tobs − Tdown` (40–80 Myr) are both crossing-to-*observation* intervals, not this quantity.
 
@@ -348,11 +346,11 @@ Identifying the right pair of crossings matters. A near-polar orbit crosses the 
 
 | Crossing pair | Gap | Apsis between |
 |---|---|---|
-| t = 3.12 → 6.83 | 218 Myr | pericenter |
-| **t = 6.83 → 13.06** | **366 Myr** | **apocenter** ← the paper's pair |
-| t = 13.06 → 16.78 | 218 Myr | pericenter |
+| t = 3.59 → 7.88 | 252 Myr | pericenter |
+| **t = 7.88 → 15.07** | **422 Myr** | **apocenter** ← the paper's pair |
+| t = 15.07 → 19.36 | 252 Myr | pericenter |
 
-The paper's Fig. 1 caption fixes which pair it means: *"in the multiple-passage model the apocentre is between the two disc crossings."* So `Rcross` = t 6.83 and `Rdown` = t 13.06, giving **366 Myr — inside the 360–480 Myr target.**
+The paper's Fig. 1 caption fixes which pair it means: *"in the multiple-passage model the apocentre is between the two disc crossings."* So `Rcross` = t 7.88 and `Rdown` = t 15.07, giving **422 Myr — inside the 360–480 Myr target.**
 
 ### 4.8 Coordinate System
 
@@ -474,25 +472,25 @@ normal = (sin(32.5deg), cos(32.5deg), 0) = (0.5373, 0.8434, 0.0)
 
 ### 8.1 Timeline
 
-From the orbit integration (section 4.6). `Rd` = 18.62 kpc, `Re` = 4.65 kpc, halos truncated at each galaxy's own `Rd`.
+From the frictionless orbit integration (section 4.6). `Rd` = 18.62 kpc, `Re` = 4.65 kpc, halos truncated at each galaxy's own `Rd`. The live run's crossings tighten from disc braking (principal ~1.37 Rd, `Rdown` ~1.25 Rd).
 
 | Phase | Sim time | Physical time | What happens |
 |-------|----------|---------------|--------------|
-| Approach | t = 0–3 | 0–176 Myr | M51b falls in from apocenter, descending toward the disc plane from above (y = +458.4). |
-| Crossing | t ~ 3.12 | ~183 Myr | Crosses at 22.34 kpc = 1.200 Rd. |
-| Pericenter | t ~ 4.97 | ~292 Myr | 18.62 kpc, below the plane. |
-| **`Rcross`** | t ~ 6.83 | ~401 Myr | Principal crossing, 1.200 Rd — the paper's spiral-inducing passage. |
-| Apocenter | t ~ 9.95 | ~584 Myr | 27.93 kpc, **between** the `Rcross`/`Rdown` pair. |
-| **`Rdown`** | t ~ 13.06 | ~767 Myr | Most recent crossing, 1.200 Rd. 366 Myr after `Rcross`. |
-| **Best morphology** | **t = 13.74–14.43** | **807–847 Myr** | 40–80 Myr after `Rdown`, per `Tobs − Tdown`. |
-| Pericenter | t ~ 14.92 | ~876 Myr | |
-| Crossing | t ~ 16.78 | ~985 Myr | 1.200 Rd. |
+| Approach | t = 0–3.6 | 0–211 Myr | M51b falls in from apocenter, descending toward the disc plane from above (y = +504.2). |
+| Crossing | t ~ 3.59 | ~211 Myr | Crosses at 24.57 kpc = 1.320 Rd (frictionless). |
+| Pericenter | t ~ 5.74 | ~337 Myr | 20.48 kpc, below the plane. |
+| **`Rcross`** | t ~ 7.88 | ~463 Myr | Principal crossing (frictionless 1.320 Rd, live ~1.37) — the paper's spiral-inducing passage. |
+| Apocenter | t ~ 11.48 | ~674 Myr | 30.72 kpc, **between** the `Rcross`/`Rdown` pair. |
+| **`Rdown`** | t ~ 15.07 | ~885 Myr | Most recent crossing (live ~1.25 Rd). 422 Myr after `Rcross`. |
+| **Best morphology** | **t = 15.75–16.43** | **924–964 Myr** | 40–80 Myr after `Rdown`, per `Tobs − Tdown`. |
+| Pericenter | t ~ 17.21 | ~1010 Myr | |
+| Crossing | t ~ 19.36 | ~1136 Myr | frictionless 1.320 Rd. |
 
-With the halo truncated every crossing occurs at the same radius, 1.200 Rd.
+Every frictionless crossing occurs at the same radius, 1.320 Rd; the live run decays them toward the paper's ranges.
 
-`End_Time` in `M51.sim` is 16.0, covering the best-morphology window.
+`End_Time` in `M51.sim` is 20.0, covering the best-morphology window (t ≈ 16).
 
-**Choosing the pair matters.** The orbit crosses the plane twice per revolution, and the two arcs (218 Myr containing pericenter, 366 Myr containing apocenter) sum to the radial period. Only the apocenter-bracketing pair is the paper's `Rcross`/`Rdown`, so the earlier crossing at t = 3.12 and the pair t = 3.12 → 6.83 are not the constrained quantity.
+**Choosing the pair matters.** The orbit crosses the plane twice per revolution, and the two arcs (252 Myr containing pericenter, 422 Myr containing apocenter) sum to the radial period. Only the apocenter-bracketing pair is the paper's `Rcross`/`Rdown`, so the earlier crossing at t = 3.59 and the pair t = 3.59 → 7.88 are not the constrained quantity.
 
 ### 8.2 What to Look For
 
@@ -521,7 +519,7 @@ With the halo truncated every crossing occurs at the same radius, 1.200 Rd.
 | Orbit class | Bound, multiple passage | Bound, multiple passage | yes |
 | Eccentricity | ~0.2 | 0.200 | yes |
 | Orbital inclination `iorb` | 75–85 deg | 80.0 deg (verified) | yes |
-| Crossing distance `Rcross` | 1.2–1.4 Rd | 1.200 Rd (all crossings) | yes |
+| Crossing distance `Rcross` | 1.2–1.4 Rd | ~1.37 Rd principal, ~1.25 Rd `Rdown` (live) | yes |
 | Apocenter between crossings | required | confirmed | yes |
 | Mass ratio `Mp` | 0.5–0.7 (nom. 0.55) | 0.550 | yes |
 | Rotation velocity (primary) | 220 km/s | 220 km/s | yes |
@@ -533,7 +531,7 @@ With the halo truncated every crossing occurs at the same radius, 1.200 Rd.
 | Halo Rc (primary / companion) | 8" / 40" | 8" / 40" | yes |
 | Companion disc tilt | 32.5 deg | 32.5 deg | yes |
 | Distance assumed | 9.6 Mpc | 9.6 Mpc | yes |
-| Crossing-to-crossing (`Tdown`) | 360–480 Myr | 366 Myr | yes |
+| Crossing-to-crossing (`Tdown`) | 360–480 Myr | 422 Myr | yes |
 | Halo truncation `Rh` | Rd (400" primary) | Rd (400" primary) | yes |
 | Vertical structure | sech^2, σz/σr = 0.7 | sech^2, σz/σr = 0.7 | yes |
 | Asymmetric drift correction | yes | yes | yes |
@@ -562,7 +560,7 @@ Ordered by how much the paper suggests each matters.
 
 3. **Rigid analytic halos.** Both this code and the paper's main runs use inert (non-deforming) analytic halos, so this is not a divergence — but the paper *validates* against live self-consistent halo runs in section 4, which is how they confirm the friction result. The rigid halo's *centre* is a full inertial degree of freedom here (section 10.3), integrated under gravity rather than pinned to the particle barycentre, so tidal debris no longer drags it off the nucleus; only its fixed spherical *shape* is an approximation — a real halo would flatten and lag during the encounter.
 
-4. **No separate bulge in the paper's sense.** The bulge/disc split here (17% primary, 40% companion) is this project's own choice; the paper works with disc + halo.
+4. **Bulge — now folded into the disc.** The paper's nominal model is disc + halo with no separate bulge (sect 2.2). Earlier versions of this project put 17% (primary) / 40% (companion) of the baryon in a central point mass; that mass is now folded entirely into the exponential disc, and the code's mandatory central body is reduced to a token ~1-particle mass. The baryon distribution therefore now matches the paper — a fully self-gravitating exponential disc with no central concentration beyond the halo core. (`GalaxyDisc` takes the central and disc masses directly, in code units.)
 
 ---
 
@@ -589,7 +587,7 @@ Each rigid halo is carried by a **centre that is a dynamical body integrated und
 
 This reproduces the analytic relative orbit while leaving decay only to the live-disc friction. Crucially the centre is **not** re-derived from the particle barycentre, so a tidal tail cannot drag it off the core — the failure mode that previously spiralled M51b into a spurious merger (its specific orbital energy fell ~3500%; with inertial centres the true, halo-centre decay is ~24% over the run).
 
-The central body (bulge) is left as a **free heavy particle — it is not pinned** to the barycentre. It is heavy enough (~10⁴ disc-particle masses) to be stable against N-body noise on its own, and pinning it to the barycentre would reintroduce the same tail-dragging artifact. During warmup, while the systems are isolated and held in place, the halo centre stays on the relaxing disc; it begins evolving under gravity at t = 0.
+The central body is left as a **free particle — it is not pinned** to the barycentre (pinning it there would reintroduce the same tail-dragging artifact). With the bulge folded into the disc (section 9.3) it now carries only a token ~1-particle mass, so it is effectively just another disc particle near the centre rather than a massive nucleus; sitting in a roughly symmetric potential it stays near the core under gravity alone. During warmup, while the systems are isolated and held in place, the halo centre stays on the relaxing disc; it begins evolving under gravity at t = 0.
 
 ### 10.4 Cross-Halo Gravity
 
@@ -633,9 +631,9 @@ With the inertial halo centre (section 10.3) the patch is unnecessary: the net f
 Load `M51.sim`. The camera is positioned along +y, face-on to M51a's disc.
 
 - **t = −2 to 0** — warmup. Systems isolated and settling; not recorded to video.
-- **t ~ 3.1** — first close crossing. Arm excitation begins.
-- **t ~ 3–5** — good morphology on a clean disc.
-- **t ~ 13.1** — most recent close crossing (`Rdown`).
-- **t = 13.7–14.4** — the paper's nominal observation epoch, the closest analogue to M51 as seen today.
+- **t ~ 3.6** — first close crossing. Arm excitation begins.
+- **t ~ 4–7** — good morphology on a clean disc.
+- **t ~ 15.1** — most recent close crossing (`Rdown`).
+- **t = 15.8–16.4** — the paper's nominal observation epoch, the closest analogue to M51 as seen today.
 
 For comparison against observations, note that M51a is seen from Earth at an inclination of ~20 deg from face-on with position angle ~170 deg (Tully 1974), which the paper uses for its projected figures. The default camera here is exactly face-on.

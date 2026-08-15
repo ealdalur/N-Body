@@ -82,14 +82,14 @@ The ratio is not universal, so it cannot be derived from `R`:
 Both are measured values rather than assumptions. Note the Milky Way's disc is
 considerably more centrally concentrated than Andromeda's relative to its extent.
 
-### Mass Fraction (Mfrac)
+### Central and Disc Masses
 
-The GalaxyDisc generator in the simulator creates N-1 disc particles whose total mass equals Mfrac times the central body mass M:
+`GalaxyDisc` takes the central body mass and the total disc mass directly, both in code units (`= Msun / 1.395e4`). The disc mass is split evenly among the `N−1` disc particles at load time, so it is independent of the particle count.
 
 ```
-Mfrac = disc_mass / central_mass
-MW: Mfrac = 4.5e10 / 1.5e10 = 3.0
-And: Mfrac = 7.0e10 / 3.0e10 = 2.33
+                central body        disc
+MW:   1.5e10 Msun = 1075229 code    4.5e10 Msun = 3225688 code
+And:  3.0e10 Msun = 2150459 code    7.0e10 Msun = 5017737 code
 ```
 
 The central body mass represents the bulge (which subsumes the SMBH — the SMBH mass is negligible compared to the bulge).

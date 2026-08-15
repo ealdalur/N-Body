@@ -211,7 +211,7 @@ public:
 	// independent of the truncation radius R because R/h_r is not universal:
 	// Salo & Laurikainen (2000) truncate M51a at 4 h_r and M51b at 7.3 h_r.
 	// Caller must ensure 0 < h_r < R.
-	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M, double Mfrac, double R, double Ri, double h_r, double Q, double haloVc, double haloRc, double haloRh, double sigmaZratio = 0.7);
+	void LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M_central, double M_disc, double R, double Ri, double h_r, double Q, double haloVc, double haloRc, double haloRh, double sigmaZratio = 0.7);
 	void LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc, double haloRh);
 	void BuildOctree();
 	void Step();

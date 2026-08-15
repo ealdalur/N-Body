@@ -26,8 +26,8 @@ Determine the initial separation and approach velocity for a Milky Way - Androme
 
 | Parameter | MW | Andromeda |
 |-----------|-----|-----------|
-| Central mass (code) | 1,500,000 | 3,000,000 |
-| Mfrac | 3.0 | 2.33 |
+| Central mass (code) | 1,075,229 | 2,150,459 |
+| Disc mass (code) | 3,225,688 | 5,017,737 |
 | Disc truncation R | 446.7 code (26.8 kpc) | 558.3 code (33.5 kpc) |
 | Disc scale length h_r | 43.3 code (2.6 kpc) | 88.3 code (5.3 kpc) |
 | Halo v_c | 220 km/s | 225 km/s |
@@ -176,12 +176,12 @@ A transverse component of 50 km/s is added to produce a slightly off-center (gra
 ```python
 mw_halo_enclosed = mw_haloVc**2 * r_close
 and_halo_enclosed = and_haloVc**2 * r_close
-mw_baryonic = mw_M * (1 + mw_Mfrac)
-and_baryonic = and_M * (1 + and_Mfrac)
+mw_baryonic = mw_M_central + mw_M_disc
+and_baryonic = and_M_central + and_M_disc
 M_total = mw_halo_enclosed + and_halo_enclosed + mw_baryonic + and_baryonic
 ```
 
-The halo mass formula is the SIS enclosed mass with G=1. The baryonic mass includes both the central body (bulge) and disc particles (bulge * (1 + Mfrac) = total baryonic).
+The halo mass formula is the SIS enclosed mass with G=1. The baryonic mass is the sum of the central body (bulge) and disc masses.
 
 ### Velocity Calculation
 

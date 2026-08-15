@@ -27,7 +27,9 @@
 #     Rd is the dynamical disc truncation and the paper's unit of
 #     length, larger than the R25 optical radius (11.2 kpc).
 #   - Baryonic mass: 6.98e10 Msun (rotation-curve-decomposed)
-#   - Bulge: 1.19e10 Msun, Disc: 5.80e10 Msun
+#   - No separate bulge (paper sect 2.2 nominal model is disc+halo);
+#     all baryon is in the exponential disc. The central body is a token
+#     ~1-particle anchor, not a bulge.
 #   - Flat rotation curve: 220 km/s (baryon 127 + halo 180)
 #   - DM halo: Vc=179.7 km/s, Rc=8" =0.372 kpc, M_halo/M_baryon=2.0
 #     halo mass 1.40e11 Msun; TRUNCATED at Rh = Rd = 400" (paper sect 2.2)
@@ -42,7 +44,8 @@
 #   - Mass set by the paper's ratio Mp = 0.55 (its primary mass
 #     constraint), NOT by an assumed rotation curve. Paper range
 #     0.5-0.7; "passages with Mp < 0.55 seem to be too weak".
-#   - Baryonic mass: 2.72e10 Msun, Bulge 1.09e10, Disc 1.64e10
+#   - Baryonic mass: 2.72e10 Msun, all in the exponential disc (no separate
+#     bulge; central body is a token ~1-particle anchor)
 #   - Implied rotation curve: 211 km/s (derived, not assumed)
 #   - DM halo: Vc=186.6 km/s, Rc=40" =1.862 kpc, M_halo/M_baryon=3.23
 #     halo mass 8.80e10 Msun; TRUNCATED at Rh = Rd = 240" (paper sect 2.2)
@@ -59,15 +62,20 @@
 #   Baryonic masses are the dynamically cold component only.
 #
 # Interaction: BOUND, HIGH-INCLINATION multiple-encounter orbit
-#   - Rcross = 1.20 Rd, the LOW end of the paper's 1.2-1.4 range and so
-#     the strongest perturbation it allows: "passages with Mp < 0.55 or
-#     Rcross > 1.4 seem to be too weak to account for the
-#     observations". Tidal strength S = Mp*(Rd/r)^3 = 0.318.
-#   - Pericenter 18.62 kpc (310.3 code units) -- SOLVED to hit the
-#     target Rcross, not assumed. Rcross is the paper's constraint;
-#     pericenter is not independently meaningful in its framework.
-#   - Apocenter 27.93 kpc (465.4 code units) -- DERIVED from
-#     pericenter and eccentricity, not chosen independently
+#   - Rcross target = 1.32 Rd (this is the CONSERVATIVE, frictionless crossing).
+#     The paper constrains the LIVE crossings to Rcross = 1.2-1.4 Rd (principal)
+#     and Rdown = 1.2-1.3 Rd (most recent). Because the live orbit loses crossing
+#     radius to disc tidal braking, the frictionless target is set WIDER than 1.2
+#     so the decayed crossings land centred in range: the live principal crossing
+#     comes out ~1.37 Rd and the live Rdown ~1.25 Rd (both centred). Tidal strength
+#     at the target S = Mp*(Rd/r)^3 = 0.239. (A naive 1.20 target let the live
+#     Rdown decay to ~1.05, below the paper's floor; 1.37 overshot to ~1.30/1.42.
+#     The decay is not a fixed fraction -- a wider orbit has weaker pericentres and
+#     decays less, so the two crossings move together with the target.)
+#   - Pericenter 20.48 kpc (341.3 code units) -- SOLVED to hit the target Rcross,
+#     not assumed. Rcross is the paper's constraint; pericenter is not
+#     independently meaningful in its framework.
+#   - Apocenter 30.72 kpc (512.0 code units) -- DERIVED from pericenter and e
 #   - Eccentricity e = 0.2 (paper Fig. 1 caption, bound model)
 #   - Orbital inclination 80 deg (paper Table 2: iorb = 75-85 deg)
 #     This is a near-POLAR orbit. The paper treats the high
@@ -81,40 +89,39 @@
 #     and M51b's is tilted 32.5 deg from it, both spinning the same way.
 #   - Argument of pericenter 90 deg, so the APOCENTER SITS BETWEEN
 #     the disc-plane crossings (paper Fig. 1 caption). M51b therefore
-#     starts at maximum height ABOVE the disc plane (y = +458.4), with
+#     starts at maximum height ABOVE the disc plane (y = +504.2), with
 #     the line of nodes along +/-x. It descends through the plane on
 #     the way in, not out.
-#   - v_tangential at apocenter: 200.0 km/s (v_t/v_circ = 0.70)
-#   - v_pericenter: 300.0 km/s
+#   - v_tangential at apocenter: 190.7 km/s (v_t/v_circ = 0.67)
+#   - v_pericenter: 286.1 km/s
 #
-# Verified by numerical integration of the relative orbit
+# Verified by numerical integration of the FRICTIONLESS relative orbit
 # (see the ORBIT EVENTS section of scripts/compute_M51.py output):
-#   pericenter 18.62 kpc, apocenter 27.93 kpc, e = 0.200
+#   pericenter 20.48 kpc, apocenter 30.72 kpc, e = 0.200
 #   apocenter confirmed to fall between two crossings
-#   all close crossings at exactly 1.200 Rd -- inside the paper's
-#   Rcross = 1.2-1.4 and Rdown = 1.2-1.3
+#   all frictionless crossings at exactly 1.320 Rd -- the live run decays these
+#   toward the paper's ranges (principal ~1.37, Rdown ~1.25)
 #
-# Event sequence (t in code units, 58.7 Myr each):
-#   t =  3.12   crossing, 22.34 kpc = 1.200 Rd
-#   t =  4.97   pericenter, 18.62 kpc
-#   t =  6.83   crossing  <- Rcross (principal)
-#   t =  9.95   apocenter, 27.93 kpc  <- BETWEEN the Rcross/Rdown pair
-#   t = 13.06   crossing  <- Rdown (most recent)
-#   t = 14.92   pericenter
-#   t = 16.78   crossing, 22.34 kpc = 1.200 Rd
-#
-# With the halo truncated every crossing is at the SAME radius, 1.200 Rd.
+# Event sequence (t in code units, 58.7 Myr each; FRICTIONLESS orbit -- the live
+# run's crossings tighten over time from disc braking):
+#   t =  3.59   crossing, 24.57 kpc = 1.320 Rd
+#   t =  5.74   pericenter, 20.48 kpc
+#   t =  7.88   crossing  <- Rcross (principal)
+#   t = 11.48   apocenter, 30.72 kpc  <- BETWEEN the Rcross/Rdown pair
+#   t = 15.07   crossing  <- Rdown (most recent)
+#   t = 17.21   pericenter
+#   t = 19.36   crossing, 24.57 kpc = 1.320 Rd
 #
 # WHICH PAIR IS Rcross/Rdown: a near-polar orbit crosses the plane twice
 # per orbit, splitting it into two unequal arcs -- one containing
-# pericenter (218 Myr here), one containing apocenter (366 Myr). They
+# pericenter (252 Myr here), one containing apocenter (422 Myr). They
 # sum to the full radial period. The paper's pair is the one BRACKETING
-# APOCENTER (Fig. 1 caption), so Rcross = t 6.83 and Rdown = t 13.06,
-# giving 366 Myr against the paper's Tdown = 360-480 Myr -- IN RANGE.
+# APOCENTER (Fig. 1 caption), so Rcross = t 7.88 and Rdown = t 15.07,
+# giving 422 Myr against the paper's Tdown = 360-480 Myr -- IN RANGE.
 #
-# BEST MORPHOLOGY: t = 13.74 to 14.43 (centre ~14.09).
+# BEST MORPHOLOGY: t = 15.75 to 16.43 (centre ~16.09).
 #   The observation epoch is Tobs - Tdown = 0.5-1.0 of the paper's
-#   80 Myr unit (40-80 Myr) after Rdown, here t = 13.06.
+#   80 Myr unit (40-80 Myr) after Rdown, here t = 15.07.
 #
 # This is the paper's central claim: M51's present structure reflects
 # MULTIPLE crossings, not a single parabolic flyby, and the most
@@ -138,7 +145,7 @@ DataLog         0
 # Orbit-decay diagnostic: append the two galaxies' barycentre separation and
 # relative velocity to orbit_diagnostic.csv every N steps (0 = off). Analyse
 # with scripts/analyze_orbit_diagnostic.py to compare against the analytic orbit.
-#OrbitDiagnostic 20
+OrbitDiagnostic 20
 RecordVideo     1
 Display         1920  1080
 accel_sq_color_thresh 2000000.0
@@ -153,11 +160,11 @@ accel_sq_color_thresh 2000000.0
 InitializationTime  2.0
 
 # ── Systems ────────────────────────────────────────────────────
-N_SystemBodies  640000  160000
+#N_SystemBodies  640000  160000
 #N_SystemBodies  256000  64000
 #N_SystemBodies  100000  25000
 #N_SystemBodies  64000  16000
-#N_SystemBodies  16000  4000
+N_SystemBodies  16000  4000
 
 # ── Camera ─────────────────────────────────────────────────────
 # Face-on view of M51a disc (normal along +y), distant enough
@@ -166,13 +173,15 @@ Camera          0.0  1600.0  -1.0
 Camera_lookAt_System   0
 
 # ── Initial Conditions ─────────────────────────────────────────
-# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  M  Mfrac  R  Ri  h_r  Q  haloVc  haloRc  haloRh
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  centralMass  discMass  R  Ri  h_r  Q  haloVc  haloRc  haloRh
 
 # M51a (NGC 5194) at origin, disc in x-z plane (normal +y)
-# h_r is the exponential scale length Re = 100" (see header).
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   850000.0 4.89 310.3 5.0 77.6 1.5  179.7 6.2 310.3
+# h_r is the exponential scale length Re = 100" (see header). No separate bulge
+# (paper sect 2.2): the disc carries all 6.98e10 Msun of baryon and the central
+# body is a token ~1-particle mass. Both masses are in code units.
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   125.1 5005733.0 310.3 5.0 77.6 1.5  179.7 6.2 310.3
 
-# M51b (NGC 5195) at apocenter, ABOVE M51a's disc plane (y = +458.4).
+# M51b (NGC 5195) at apocenter, ABOVE M51a's disc plane (y = +504.2).
 # Velocity is purely tangential there, directed along +x (in the disc plane),
 # which is the line of nodes. This puts the apocenter a quarter-orbit from each
 # crossing -- the paper's "apocentre between the two disc crossings".
@@ -180,6 +189,6 @@ GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   850000.0 4.89 310.3 5.
 # orbital angular momentum and M51a's disc angular momentum equal iorb = 80 deg.
 # Reversing it gives the 180-iorb = 100 deg mirror, the same near-polar geometry
 # but counter-circulating, outside the paper's 75-85 deg range.
-# |pos| = 465.4 must equal the apocenter the velocity was solved for.
+# |pos| = 512.0 must equal the apocenter the velocity was solved for.
 # h_r = 25.6 (= Re = 33"); note Rd/Re = 7.27 here, not 4.
-GalaxyDisc  1   0.0 458.4 80.8   200.0 0.0 0.0   0.5373 0.8434 0.0000   780000.0 1.50 186.2 3.3 25.6 1.5  186.6 31.0 186.2
+GalaxyDisc  1   0.0 504.2 88.9   190.7 0.0 0.0   0.5373 0.8434 0.0000   195.2 1952089.5 186.2 3.3 25.6 1.5  186.6 31.0 186.2
