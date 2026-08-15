@@ -258,18 +258,20 @@ m51b_disc_code = m51b_baryon_code - m51b_central_code
 # DECAYED crossings still land in the paper's ranges (Rcross 1.2-1.4 principal,
 # Rdown 1.2-1.3 most-recent). Calibrated with scripts/analyze_orbit_diagnostic.py:
 #   target 1.20 -> live Rdown ~1.05 (below floor; decay ~15% at this tight orbit)
-#   target 1.37 -> live Rcross ~1.42, Rdown ~1.30 (decay only ~2.4%: the wider
-#                  orbit has weaker pericentres, so both crossings sit high)
-#   target 1.32 -> live Rcross ~1.37, Rdown ~1.25 (both centred in range)
+#   target 1.37 -> live Rcross ~1.42, Rdown ~1.30 (both high)
+#   target 1.32 -> live Rcross ~1.37, Rdown ~1.23 (both in range, centred)
+#   target 1.30 -> live Rcross ~1.34, Rdown ~1.20 (Rdown at the strong edge, the
+#                  paper's 1.2 floor -- the chosen target: strongest most-recent
+#                  crossing the paper allows, with Rcross still comfortably in range)
 # The decay is NOT a fixed fraction -- widening the orbit softens the pericentre
-# passages and reduces it, so the two crossings move together with the target.
-# Tidal strength at the chosen target S = Mp*(Rd/r)^3 = 0.239.
+# passages and reduces it, so the two crossings move together with the target
+# (dRdown/dtarget ~ 1.5 near here). Tidal strength S = Mp*(Rd/r)^3 = 0.251.
 # Toomre Q for both discs: the paper's standard value. Gives a warm disc, stable
 # against noise-driven multi-arm structure while still responsive to the m=2
 # tidal forcing.
 toomre_Q = 1.5                      # Salo & Laurikainen section 2.2
 
-target_Rcross = 1.32                # conservative crossing; live crossings centred in range
+target_Rcross = 1.30                # conservative crossing; live Rdown ~1.20 (paper floor)
 orbital_eccentricity = 0.2          # bound model (Fig. 1 caption)
 orbital_inclination_deg = 80.0      # Table 2 range 75-85, mid-range
 
