@@ -469,9 +469,11 @@ Camera_lookAt  0.0  100.0  0.0      # Look at a point above the orbital plane
 Camera_lookAt_System  <system_index>
 ```
 
-Retargets the camera's look-at point onto the given system's **central body**
-every frame, so a moving galaxy stays centred in view. `system_index` is 0-based
-and must be a valid index into `N_SystemBodies`.
+Retargets the camera's look-at point onto the given system's **centre** every
+frame, so a moving galaxy stays centred in view. `system_index` is 0-based and
+must be a valid index into `N_SystemBodies`. For a system with a halo the target
+is its **inertial halo centre**; for a halo-less system it is the system's
+**centre of mass**.
 
 Only the look-at point moves. The camera's spherical offset from it — `phi`,
 `theta` and radius — is preserved exactly, so:
@@ -505,10 +507,13 @@ Useful for an interaction where one galaxy has significant bulk motion: with a
 fixed look-at the companion drifts out of frame, whereas following keeps it
 centred for the whole run.
 
-Note the target is the system's central body specifically, not its centre of mass.
-For a galaxy these stay close: the central body sits near the halo
-centre, though the two can differ by a kpc or two once strong tidal debris shifts
-the system's barycentre away from the core.
+The target is a **smooth** centre by design. Following the single central-body
+particle instead makes the view jitter, because that particle is a free, low-mass
+anchor sitting in the noisy central field (it is not pinned, and with the bulge
+folded into the disc the central potential is shallow). The halo centre is a
+smooth dynamical point — its shot noise is damped by the large halo mass and by
+double integration — and it stays locked on the galaxy core rather than drifting
+with tidal debris, so the followed view is steady.
 
 **Default:** inactive (uses `Camera_lookAt`)
 

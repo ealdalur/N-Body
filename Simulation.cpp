@@ -1546,7 +1546,8 @@ void Simulation::Step()
 
 void Simulation::UpdateCameraFollow()
 {
-	// Retarget the look-at point onto the followed system's central body.
+	// Retarget the look-at point onto the followed system's centre (its inertial
+	// halo centre, or its centre of mass if the system has no halo).
 	//
 	// The camera position is moved by the SAME delta as the look-at point, which
 	// keeps the relative offset vector (Cam.pos - Cam.lookAt) exactly unchanged.
@@ -1558,9 +1559,35 @@ void Simulation::UpdateCameraFollow()
 	// input and accumulate drift through the acos/atan2 round trip.
 	if (CamFollowSystem < 0) return;
 
-	int ci = halo_central[CamFollowSystem];
+	int sys = CamFollowSystem;
+	double target[3];
+	if (halo_mass[sys] > 0.0) {
+		// Follow the inertial halo centre, not the central-body particle. The halo
+		// centre is a smooth dynamical point -- its shot noise is damped by the
+		// large halo mass and by double integration -- and it stays locked on the
+		// galaxy core rather than drifting with tidal debris. Following the single
+		// (now free, low-mass) central particle instead made the view jitter.
+		target[0] = halo_center[sys*3+0];
+		target[1] = halo_center[sys*3+1];
+		target[2] = halo_center[sys*3+2];
+	} else {
+		// No halo: fall back to the system's mass-weighted centre of mass.
+		int sysIdx = 0;
+		for (int s = 0; s < sys; s++) sysIdx += N_System_Bodies[s];
+		double cx = 0.0, cy = 0.0, cz = 0.0, m_tot = 0.0;
+		for (int i = 0; i < N_System_Bodies[sys]; i++) {
+			double mi = mass[sysIdx + i];
+			cx += mi * pos[sysIdx + i][0];
+			cy += mi * pos[sysIdx + i][1];
+			cz += mi * pos[sysIdx + i][2];
+			m_tot += mi;
+		}
+		double inv = (m_tot > 0.0) ? 1.0 / m_tot : 0.0;
+		target[0] = cx * inv; target[1] = cy * inv; target[2] = cz * inv;
+	}
+
 	double delta[3];
-	vsub(pos[ci], Cam.lookAt, delta);
+	vsub(target, Cam.lookAt, delta);
 
 	vadd(Cam.lookAt, delta, Cam.lookAt);
 	vadd(Cam.pos, delta, Cam.pos);
