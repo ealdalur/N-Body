@@ -2,6 +2,8 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
+#include <algorithm>
 
 Simulation::Simulation(const std::string &scriptPath)
 {
@@ -33,6 +35,15 @@ Simulation::Simulation(const std::string &scriptPath)
 	totalPE = 0.0;
 	totalE = 0.0;
 	Remove_Halo_Monopole = true;
+	// Gas defaults: fully inelastic (paper's alpha=0) and a collision radius of
+	// 0.155 code units = 0.0005 primary Rd (Salo & Laurikainen's gas radius).
+	// gasEnabled flips on only if a system actually declares gas particles.
+	gas_alpha = 0.0;
+	gas_radius = 0.155;
+	gas_cell_size = 6.0;
+	gas_softening = 0.0;
+	gasEnabled = false;
+	gasRng.seed(20250820u);       // fixed seed: reproducible collision sampling
 	InitializationTime = 0.0;
 	warmupActive = false;
 	bulkVelocityApplied = true;   // nothing withheld unless warmup is enabled
@@ -46,6 +57,7 @@ Simulation::Simulation(const std::string &scriptPath)
 
 	LoadScript(scriptPath);
 	Allocate();
+	UpdateSofteningSq();   // cache r_soft^2 / gas_softening^2 for the force kernels
 
 	if (warmupActive) {
 		std::cout << "Warmup enabled: starting at t = " << t
@@ -100,7 +112,6 @@ Simulation::~Simulation()
 	delete[] clrBuf;
 
 	if (Data_Log) fclose(DataLog);
-	if (orbitLog) fclose(orbitLog);
 }
 
 void Simulation::Allocate()
@@ -138,6 +149,7 @@ void Simulation::Allocate()
 	}
 
 	has_gravity.resize(N_Bodies, true);
+	is_gas.resize(N_Bodies, 0);   // 0 = collisionless star; set per system at load
 
 	pos_sq.resize(N_Bodies, 0.0);
 	vel_sq.resize(N_Bodies, 0.0);
@@ -217,7 +229,15 @@ void Simulation::LoadScript(const std::string &path)
 		} else if (key == "dt") {
 			iss >> dt;
 		} else if (key == "r_soft") {
+			// Gravitational softening LENGTH (code units) for the collisionless
+			// component; the force kernels use its square (SoftSq). Sets the smallest
+			// resolved gravitational scale ~ r_soft.
 			iss >> r_soft;
+		} else if (key == "Gas_Softening") {
+			// Gravitational softening LENGTH (code units) applied to GAS sinks only
+			// (SoftSq). Set larger than r_soft to smooth gas self-gravity and stop it
+			// fragmenting into balls, while stars keep the sharp r_soft. 0 = use r_soft.
+			iss >> gas_softening;
 		} else if (key == "BH_Opening_Theta") {
 			iss >> BH_Opening_Theta;
 		} else if (key == "DisplayScale") {
@@ -232,9 +252,6 @@ void Simulation::LoadScript(const std::string &path)
 		} else if (key == "DataLog") {
 			int val; iss >> val;
 			Data_Log = (val != 0);
-		} else if (key == "OrbitDiagnostic") {
-			// Steps between orbit-diagnostic CSV rows; 0 (or absent) disables.
-			iss >> orbitLogEvery;
 		} else if (key == "RecordVideo") {
 			int val; iss >> val;
 			Record_Video = (val != 0);
@@ -244,6 +261,22 @@ void Simulation::LoadScript(const std::string &path)
 		} else if (key == "RemoveHaloMonopole") {
 			int val; iss >> val;
 			Remove_Halo_Monopole = (val != 0);
+		} else if (key == "Gas_Restitution") {
+			// Restitution coefficient for gas-gas collisions (0 = fully inelastic,
+			// the paper's value). Only matters if a system declares gas particles.
+			iss >> gas_alpha;
+		} else if (key == "Gas_Radius") {
+			// Per-gas-particle collision radius in code units (default 0.155 =
+			// 0.0005 primary Rd). Sets the collision cross-section sigma=pi*(2r)^2,
+			// hence the collision rate; calibrate against the sigma_gas diagnostic.
+			iss >> gas_radius;
+		} else if (key == "Gas_Cell_Size") {
+			// Edge length (code units) of the DSMC collision cells. Must be large
+			// enough to contain several in-plane gas neighbours (so in-plane
+			// collisions occur) yet small compared with the disc/arm scale. The
+			// collision RATE is independent of this (rate ~ local density); it only
+			// sets the spatial locality of collision partners.
+			iss >> gas_cell_size;
 		} else if (key == "InitializationTime") {
 			iss >> InitializationTime;
 			if (InitializationTime > 0.0) {
@@ -274,7 +307,8 @@ void Simulation::LoadScript(const std::string &path)
 				std::cerr << "Expected 19 values: system posX posY posZ velX velY velZ"
 				          << " normalX normalY normalZ centralMass discMass R Ri h_r Q"
 				          << " haloVc haloRc haloRh" << std::endl;
-				std::cerr << "  (optional 20th value: sigma_z/sigma_r ratio, default 0.7)" << std::endl;
+				std::cerr << "  (optional 20th value: sigma_z/sigma_r ratio, default 0.7;" << std::endl;
+				std::cerr << "   optional 21st/22nd: gas disc mass and gas fraction (0..1), default 0)" << std::endl;
 				std::cerr << "  got: " << line << std::endl;
 				exit(1);
 			}
@@ -285,6 +319,17 @@ void Simulation::LoadScript(const std::string &path)
 			// C++11, so read into a temp and keep the default when no token is present.
 			double sigmaZratio = 0.7;
 			{ double tmp; if (iss >> tmp) sigmaZratio = tmp; }
+			// Optional 21st/22nd fields: gas disc mass and gas FRACTION -- the
+			// fraction (0..1) of this system's bodies that are dissipative gas
+			// (the rest are collisionless stars). Both default 0 (no gas). They are
+			// positional, so to set them the 20th sigma_z field must also be present.
+			// A fraction (rather than an absolute count) is resolution-independent:
+			// change N_SystemBodies and the gas count scales automatically. The gas
+			// particles are the LAST round(gasFraction*N) bodies of this system.
+			double gasMass = 0.0;
+			double gasFraction = 0.0;
+			{ double tmp; if (iss >> tmp) gasMass = tmp; }
+			{ double tmp; if (iss >> tmp) gasFraction = tmp; }
 			if (h_r <= 0.0) {
 				std::cerr << "Error: GalaxyDisc scale length (h_r) must be > 0, got "
 				          << h_r << std::endl;
@@ -316,13 +361,25 @@ void Simulation::LoadScript(const std::string &path)
 				          << M_central << std::endl;
 				exit(1);
 			}
+			if (gasFraction < 0.0 || gasFraction > 1.0 || gasMass < 0.0) {
+				std::cerr << "Error: GalaxyDisc gas mass must be >= 0 and gas fraction"
+				          << " in [0,1], got gasMass=" << gasMass
+				          << " gasFraction=" << gasFraction << std::endl;
+				exit(1);
+			}
+			if ((gasFraction > 0.0) != (gasMass > 0.0)) {
+				std::cerr << "Error: GalaxyDisc gas mass and gas fraction must both"
+				          << " be positive or both zero, got gasMass=" << gasMass
+				          << " gasFraction=" << gasFraction << std::endl;
+				exit(1);
+			}
 
 			if (pos_data.empty()) Allocate();
 
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
 			double discNormal[3] = {nx, ny, nz};
-			LoadGalaxyDiscState(system, sysPos, sysVel, discNormal, M_central, M_disc, R, Ri, h_r, Q, haloVc, haloRc, haloRh, sigmaZratio);
+			LoadGalaxyDiscState(system, sysPos, sysVel, discNormal, M_central, M_disc, R, Ri, h_r, Q, haloVc, haloRc, haloRh, sigmaZratio, gasMass, gasFraction);
 		} else if (key == "SphericalUniverse") {
 			int system;
 			double px, py, pz, vx, vy, vz;
@@ -433,9 +490,9 @@ void Simulation::LoadScript(const std::string &path)
 	}
 }
 
-void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M_central, double M_disc, double R, double Ri, double h_r, double Q, double haloVc, double haloRc, double haloRh, double sigmaZratio){
+void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel, double *discNormal, double M_central, double M_disc, double R, double Ri, double h_r, double Q, double haloVc, double haloRc, double haloRh, double sigmaZratio, double gasMass, double gasFraction){
 
-	double m,r,theta;
+	double r,theta;
 	double p[3],v[3];
 
 	// Build orthonormal frame from disc normal
@@ -482,8 +539,24 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	for (int i=0; i<N_System_Bodies[system]; i++)
 		body_system[sysIdx+i] = system;
 
-	m = M_disc/(N_System_Bodies[system]-1);
-	mass[sysIdx] = M_central;
+	// Gas ("sticky") particles are the LAST nGas bodies of this system's sub-array,
+	// so the central body (index sysIdx, first) becomes gas only if nGas == N. The
+	// count is derived from the gas FRACTION so it scales with the particle count.
+	// The disc mass M_disc is the STAR budget and gasMass the GAS budget; both trace
+	// the same exponential profile, so the disc's gravitating mass is their sum.
+	int Nsys = N_System_Bodies[system];
+	int nGas = (int)llround(gasFraction * Nsys);
+	if (nGas < 0) nGas = 0;
+	if (nGas > Nsys) nGas = Nsys;
+	int gasStart = sysIdx + Nsys - nGas;                 // first gas index
+	int nStarDisc = (Nsys - nGas - 1 > 0) ? (Nsys - nGas - 1) : 0;
+	double m_star = (nStarDisc > 0) ? M_disc / nStarDisc : 0.0;
+	double m_gas  = (nGas > 0) ? gasMass / nGas : 0.0;
+	if (nGas > 0) gasEnabled = true;
+
+	bool centralIsGas = (nGas >= Nsys);
+	mass[sysIdx] = centralIsGas ? m_gas : M_central;
+	is_gas[sysIdx] = centralIsGas ? 1 : 0;
 	has_gravity[sysIdx] = true;
 	vcopy(sysPos, pos[sysIdx]);
 
@@ -528,18 +601,22 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	//   Sigma   exponential surface density, normalized to the TRUNCATED disc mass
 	//   kappa   epicyclic frequency from the full rotation curve
 	//   sig_r   Toomre-Q radial dispersion; sig_phi = sig_r*kappa/(2*Omega)
+	// Total disc mass driving the rotation curve and surface density: stars plus
+	// gas (both sampled from the same exponential profile), so the disc gravity
+	// and Toomre-Q dispersions see the full disc, not just the star budget.
+	double M_disc_total = M_disc + gasMass;
 	double haloRc_sq = haloRc * haloRc;
 	auto discProps = [&](double rr, double &vc_sq, double &Omega, double &Sigma,
 	                     double &kappa, double &sig_r, double &sig_phi){
 		double enc = (1.0 - (1.0 + rr/h_r)*exp(-rr/h_r)) / enc_denom;
-		double morb = M_central + M_disc*enc;
+		double morb = M_central + M_disc_total*enc;
 		vc_sq = G*morb/rr + haloVc*haloVc*rr*rr/(rr*rr + haloRc_sq);
 		Omega = sqrt(vc_sq) / rr;
-		// Sigma_0 = M_disc / (2*pi*h_r^2 * enc_denom): the /enc_denom factor makes
-		// the surface density integrate to M_disc over the truncated disc, and
-		// keeps it consistent with dMenc_dr (which already carries it).
-		Sigma = (M_disc / (2.0*M_PI*h_r*h_r*enc_denom)) * exp(-rr/h_r);
-		double dMenc_dr = M_disc * (rr/(h_r*h_r))*exp(-rr/h_r) / enc_denom;
+		// Sigma_0 = M_disc_total / (2*pi*h_r^2 * enc_denom): the /enc_denom factor
+		// makes the surface density integrate to the total disc mass over the
+		// truncated disc, consistent with dMenc_dr (which carries the same factor).
+		Sigma = (M_disc_total / (2.0*M_PI*h_r*h_r*enc_denom)) * exp(-rr/h_r);
+		double dMenc_dr = M_disc_total * (rr/(h_r*h_r))*exp(-rr/h_r) / enc_denom;
 		double dvc_sq_dr = -G*morb/(rr*rr) + G*dMenc_dr/rr
 		                   + haloVc*haloVc * 2.0*rr*haloRc_sq
 		                     / ((rr*rr + haloRc_sq)*(rr*rr + haloRc_sq));
@@ -552,7 +629,10 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 
 	for (int i=1; i<N_System_Bodies[system]; i++)
 	{
-		mass[sysIdx+i] = m;
+		// Star vs gas: the last nGas bodies (index >= gasStart) are gas particles,
+		// carrying the gas per-particle mass; the rest are collisionless stars.
+		is_gas[sysIdx+i] = (sysIdx+i >= gasStart) ? 1 : 0;
+		mass[sysIdx+i] = is_gas[sysIdx+i] ? m_gas : m_star;
 		has_gravity[sysIdx+i] = true;
 
 		// Sample radius from the exponential disc profile, r ~ Gamma(2, h_r),
@@ -721,12 +801,13 @@ void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
 		vscaleadd(pos[i],FDE,acc[i]);
 
 		double pot = 0.0;
+		double softI = SoftSq(i);          // sink-based: constant over the j-loop
 		for (int j=0; j<N_Bodies; j++)
 		{
 			if (j != i)
 			{
 				vsub(pos[j],pos[i],a);
-				double dsq = vmagsqsoft(a, r_soft);
+				double dsq = vmagsqsoft(a, softI);
 				double r_inv = 1.0 / sqrt(dsq);
 				double r3_inv = r_inv / dsq;
 				vscaleadd(a, G * mass[j] * r3_inv, acc[i]);
@@ -774,7 +855,7 @@ void Simulation::CalcAccelRangeOct(int iStart, int iEnd) {
 		pf[1] = (float)pos[bi][1];
 		pf[2] = (float)pos[bi][2];
 		double pot;
-		Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft, (float)(BH_Opening_Theta * BH_Opening_Theta), a, &pot);
+		Octree.CalcAcceleration(pf, bi, (float)G, (float)SoftSq(bi), (float)(BH_Opening_Theta * BH_Opening_Theta), a, &pot);
 		vadd(acc[bi],a,acc[bi]);
 		body_pot[bi] = pot * mass[bi];
 
@@ -1066,69 +1147,132 @@ void Simulation::CalcEnergy() {
 	totalE = totalKE + totalPE;
 }
 
-// Orbit-decay diagnostic. For a >=2-system run, periodically append one CSV row
-// with the two galaxies' barycentre positions/velocities, their separation, and
-// the radial/tangential split of the relative velocity. The conservative
-// analytic orbit (see compute_M51.py) fixes the specific orbital energy
-// 0.5*v_rel^2 + Phi(sep); a steady decline of that quantity in the live run is
-// the signature of spurious orbital-energy loss. Phi is formed in the Python
-// analyzer so the C++ side only logs kinematics.
-void Simulation::LogOrbitDiagnostic() {
-	if (orbitLogEvery <= 0 || N_Systems < 2) return;
-	if ((orbitStepCount++ % orbitLogEvery) != 0) return;
+// Dissipative "sticky particle" gas collisions (Salo & Laurikainen 2000 sect 2.1),
+// implemented as a kinetic Monte-Carlo (DSMC-style, Bird 1994) step -- conceptually
+// the same scheme the paper uses. Rather than detecting instantaneous geometric
+// overlaps (which in a thin disc are almost all VERTICAL, so they cool sigma_z but
+// barely touch sigma_r), we bin the gas into collision cells and, per cell, select
+// collision pairs STOCHASTICALLY at the physical rate 0.5*N*(N-1)*sigma*v_rel*dt/V
+// (No-Time-Counter method), accepting each candidate with probability
+// |v_rel|/v_rel_max. The line of centres for each accepted impact is SAMPLED from
+// the hard-sphere distribution instead of read off instantaneous positions, which
+// makes the cooling isotropic -- so sigma_r relaxes toward equilibrium along with
+// sigma_z. On impact the line-of-centres velocity component is reversed and scaled
+// by gas_alpha (0 = fully inelastic, the paper's value) via a momentum-conserving
+// impulse. Operator-split after the gravity kick; modifies velocities only. Stars
+// never collide. Runs during warmup too, so isolated gas reaches its cool
+// equilibrium (sigma_gas ~ 5-10 km/s) before t=0.
+void Simulation::ProcessGasCollisions()
+{
+	if (!gasEnabled || gas_radius <= 0.0 || gas_cell_size <= 0.0) return;
 
-	// Barycentre position and velocity of the first two systems.
-	double c[2][3] = {{0,0,0},{0,0,0}};
-	double vc[2][3] = {{0,0,0},{0,0,0}};
-	int idx = 0;
-	for (int sys = 0; sys < 2; sys++) {
-		double m_tot = 0.0;
-		for (int i = 0; i < N_System_Bodies[sys]; i++) {
-			double mi = mass[idx + i];
+	const double PI = 3.14159265358979323846;
+	const double L = gas_cell_size;
+	const double inv_cell = 1.0 / L;
+	const double sigma = PI * (2.0*gas_radius) * (2.0*gas_radius);   // pi*(2r)^2
+	const double floorLen = 2.0 * gas_radius;   // min bounding-box edge per axis
+	const long long B = 1LL << 20;
+	auto cellKey = [B](long long ix, long long iy, long long iz) -> long long {
+		return ((ix + B) & 0x1FFFFF) | (((iy + B) & 0x1FFFFF) << 21)
+		     | (((iz + B) & 0x1FFFFF) << 42);
+	};
+
+	// Bin gas particles into collision cells.
+	std::unordered_map<long long, std::vector<int>> grid;
+	for (int i = 0; i < N_Bodies; i++) {
+		if (!is_gas[i]) continue;
+		double *p = pos[i];
+		grid[cellKey((long long)floor(p[0]*inv_cell),
+		             (long long)floor(p[1]*inv_cell),
+		             (long long)floor(p[2]*inv_cell))].push_back(i);
+	}
+	if (grid.empty()) return;
+
+	std::uniform_real_distribution<double> U01(0.0, 1.0);
+
+	for (auto &kv : grid) {
+		std::vector<int> &cell = kv.second;
+		int Nc = (int)cell.size();
+		if (Nc < 2) continue;
+
+		// Cell mean velocity, an upper bound on pairwise |v_rel| (2 * max deviation),
+		// and the bounding box of the occupied volume. Using the bounding box rather
+		// than a fixed cubic L^3 lets the local density n = Nc/V reflect a thin disc:
+		// a pancake of points has a small box, so n is not underestimated (which
+		// would spuriously suppress the collision rate).
+		double vm[3] = {0,0,0};
+		double lo[3] = { 1e300, 1e300, 1e300 }, hi[3] = { -1e300, -1e300, -1e300 };
+		for (int idx : cell)
 			for (int k = 0; k < 3; k++) {
-				c[sys][k]  += mi * pos[idx + i][k];
-				vc[sys][k] += mi * vel[idx + i][k];
+				vm[k] += vel[idx][k];
+				if (pos[idx][k] < lo[k]) lo[k] = pos[idx][k];
+				if (pos[idx][k] > hi[k]) hi[k] = pos[idx][k];
 			}
-			m_tot += mi;
+		double invN = 1.0 / Nc;
+		for (int k = 0; k < 3; k++) vm[k] *= invN;
+		double maxdev = 0.0;
+		for (int idx : cell) {
+			double a0 = vel[idx][0]-vm[0], a1 = vel[idx][1]-vm[1], a2 = vel[idx][2]-vm[2];
+			double d = sqrt(a0*a0 + a1*a1 + a2*a2);
+			if (d > maxdev) maxdev = d;
 		}
-		double inv = 1.0 / m_tot;
-		for (int k = 0; k < 3; k++) { c[sys][k] *= inv; vc[sys][k] *= inv; }
-		idx += N_System_Bodies[sys];
+		double vrel_max = 2.0 * maxdev;
+		if (vrel_max <= 0.0) continue;
+		double Vc = std::max(hi[0]-lo[0], floorLen)
+		          * std::max(hi[1]-lo[1], floorLen)
+		          * std::max(hi[2]-lo[2], floorLen);
+
+		// NTC candidate count, with the fractional part carried stochastically.
+		double Mreal = 0.5 * (double)Nc * (Nc - 1) * sigma * vrel_max * dt / Vc;
+		long Mcand = (long)Mreal;
+		if (U01(gasRng) < (Mreal - (double)Mcand)) Mcand++;
+		long Mmax = 4L * Nc;                        // safety cap against tiny Vc
+		if (Mcand > Mmax) Mcand = Mmax;
+
+		for (long c = 0; c < Mcand; c++) {
+			int a = (int)(U01(gasRng) * Nc);
+			int b2 = (int)(U01(gasRng) * (Nc - 1));
+			if (b2 >= a) b2++;                      // distinct partner
+			if (a  >= Nc) a  = Nc - 1;
+			if (b2 >= Nc) b2 = Nc - 1;
+			int i = cell[a], j = cell[b2];
+			double *vi = vel[i], *vj = vel[j];
+			double g[3] = { vi[0]-vj[0], vi[1]-vj[1], vi[2]-vj[2] };
+			double grel = sqrt(g[0]*g[0] + g[1]*g[1] + g[2]*g[2]);
+			if (grel <= 0.0) continue;
+			if (U01(gasRng) * vrel_max > grel) continue;   // NTC acceptance ~ |v_rel|
+
+			// Hard-sphere line of centres n̂: angle theta from -ĝ has
+			// p(theta) ~ sin(theta)cos(theta), so mu = cos(theta) = sqrt(U); azimuth
+			// uniform. Built in a frame about ĝ, giving g·n̂ = -mu*grel < 0.
+			double gh[3] = { g[0]/grel, g[1]/grel, g[2]/grel };
+			double seed[3] = { 1.0, 0.0, 0.0 };
+			if (fabs(gh[0]) > 0.9) { seed[0]=0.0; seed[1]=1.0; seed[2]=0.0; }
+			double e1[3] = { seed[1]*gh[2]-seed[2]*gh[1],
+			                 seed[2]*gh[0]-seed[0]*gh[2],
+			                 seed[0]*gh[1]-seed[1]*gh[0] };
+			double e1n = sqrt(e1[0]*e1[0]+e1[1]*e1[1]+e1[2]*e1[2]);
+			e1[0]/=e1n; e1[1]/=e1n; e1[2]/=e1n;
+			double e2[3] = { gh[1]*e1[2]-gh[2]*e1[1],
+			                 gh[2]*e1[0]-gh[0]*e1[2],
+			                 gh[0]*e1[1]-gh[1]*e1[0] };
+			double mu = sqrt(U01(gasRng));
+			double st = sqrt(std::max(0.0, 1.0 - mu*mu));
+			double eps = 2.0 * PI * U01(gasRng);
+			double ce = cos(eps), se = sin(eps);
+			double nrm[3];
+			for (int k = 0; k < 3; k++)
+				nrm[k] = -mu*gh[k] + st*(ce*e1[k] + se*e2[k]);
+
+			double dvn = g[0]*nrm[0] + g[1]*nrm[1] + g[2]*nrm[2];   // = -mu*grel < 0
+			double mi = mass[i], mj = mass[j];
+			double mred = (mi*mj) / (mi + mj);
+			double Jn = -(1.0 + gas_alpha) * dvn * mred;
+			double ji = Jn/mi, jj = Jn/mj;
+			vi[0] += ji*nrm[0]; vi[1] += ji*nrm[1]; vi[2] += ji*nrm[2];
+			vj[0] -= jj*nrm[0]; vj[1] -= jj*nrm[1]; vj[2] -= jj*nrm[2];
+		}
 	}
-
-	double dr[3] = { c[1][0]-c[0][0], c[1][1]-c[0][1], c[1][2]-c[0][2] };
-	double dv[3] = { vc[1][0]-vc[0][0], vc[1][1]-vc[0][1], vc[1][2]-vc[0][2] };
-	double sep = sqrt(dr[0]*dr[0] + dr[1]*dr[1] + dr[2]*dr[2]);
-	double vrel = sqrt(dv[0]*dv[0] + dv[1]*dv[1] + dv[2]*dv[2]);
-	double vrad = (sep > 0.0) ? (dr[0]*dv[0] + dr[1]*dv[1] + dr[2]*dv[2]) / sep : 0.0;
-	double vtan_sq = vrel*vrel - vrad*vrad;
-	double vtan = (vtan_sq > 0.0) ? sqrt(vtan_sq) : 0.0;
-
-	// Halo-centre orbit: the inertial centres are the paper's actual orbital
-	// coordinates and, unlike the particle barycentres, are not shifted by tidal
-	// debris -- so this is the clean measure of true orbital decay.
-	double *h0 = &halo_center[0], *h1 = &halo_center[3];
-	double *hv0 = &halo_vel[0], *hv1 = &halo_vel[3];
-	double hdr[3] = { h1[0]-h0[0], h1[1]-h0[1], h1[2]-h0[2] };
-	double hsep = sqrt(hdr[0]*hdr[0] + hdr[1]*hdr[1] + hdr[2]*hdr[2]);
-
-	if (!orbitLog) {
-		orbitLog = fopen("orbit_diagnostic.csv", "w");
-		if (!orbitLog) { orbitLogEvery = 0; return; }
-		fprintf(orbitLog, "t,sep,c0x,c0y,c0z,c1x,c1y,c1z,"
-		        "v0x,v0y,v0z,v1x,v1y,v1z,vrel,vrad,vtan,KE,PE,E,"
-		        "hsep,h0x,h0y,h0z,h1x,h1y,h1z,hv0x,hv0y,hv0z,hv1x,hv1y,hv1z\n");
-	}
-	fprintf(orbitLog,
-	    "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,"
-	    "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6e,%.6e,%.6e,"
-	    "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n",
-	    t, sep, c[0][0],c[0][1],c[0][2], c[1][0],c[1][1],c[1][2],
-	    vc[0][0],vc[0][1],vc[0][2], vc[1][0],vc[1][1],vc[1][2],
-	    vrel, vrad, vtan, totalKE, totalPE, totalE,
-	    hsep, h0[0],h0[1],h0[2], h1[0],h1[1],h1[2],
-	    hv0[0],hv0[1],hv0[2], hv1[0],hv1[1],hv1[2]);
-	fflush(orbitLog);
 }
 
 void Simulation::ZeroNetMomentum(int system) {
@@ -1311,7 +1455,7 @@ void Simulation::CalcAccelIsolated() {
 							float pf[3] = {(float)pos[bi][0], (float)pos[bi][1],
 							               (float)pos[bi][2]};
 							double a[3], pot;
-							Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft,
+							Octree.CalcAcceleration(pf, bi, (float)G, (float)SoftSq(bi),
 							        (float)(BH_Opening_Theta*BH_Opening_Theta), a, &pot);
 							vadd(acc[bi], a, acc[bi]);
 							body_pot[bi] = pot * mass[bi];
@@ -1325,7 +1469,7 @@ void Simulation::CalcAccelIsolated() {
 					int bi = sortedIdx[k];
 					float pf[3] = {(float)pos[bi][0], (float)pos[bi][1], (float)pos[bi][2]};
 					double a[3], pot;
-					Octree.CalcAcceleration(pf, bi, (float)G, (float)r_soft,
+					Octree.CalcAcceleration(pf, bi, (float)G, (float)SoftSq(bi),
 					                        (float)(BH_Opening_Theta*BH_Opening_Theta),
 					                        a, &pot);
 					vadd(acc[bi], a, acc[bi]);
@@ -1338,10 +1482,11 @@ void Simulation::CalcAccelIsolated() {
 			for (int i = sysStart; i < sysStart + n; i++) {
 				vscaleadd(pos[i], FDE, acc[i]);
 				double pot = 0.0, d[3];
+				double softI = SoftSq(i);      // sink-based: constant over the j-loop
 				for (int j = sysStart; j < sysStart + n; j++) {
 					if (j == i) continue;
 					vsub(pos[j], pos[i], d);
-					double dsq = vmagsqsoft(d, r_soft);
+					double dsq = vmagsqsoft(d, softI);
 					double r_inv = 1.0 / sqrt(dsq);
 					vscaleadd(d, G * mass[j] * (r_inv/dsq), acc[i]);
 					pot += -G * mass[j] * r_inv;
@@ -1526,9 +1671,13 @@ void Simulation::Step()
 
 	CalcLeapFrogVelocitiesAndOutputs();
 
-	CalcEnergy();
+	// Operator-split gas dissipation: after the gravity velocity kick, resolve
+	// inelastic gas-gas collisions (no-op unless a system declared gas particles).
+	// Runs during warmup too, so an isolated gas disc relaxes to its cool
+	// equilibrium (Salo & Laurikainen: sigma_gas ~ 5-10 km/s) before t = 0.
+	ProcessGasCollisions();
 
-	LogOrbitDiagnostic();
+	CalcEnergy();
 
 	if (Data_Log)
 	{
@@ -2181,6 +2330,8 @@ bool Simulation::ReadState()
 	(void)result;
 
 	fclose(StateFile);
+
+	UpdateSofteningSq();   // r_soft may have changed on restore
 
 	return true;
 }

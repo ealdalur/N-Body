@@ -132,8 +132,10 @@ The paper is explicit for the companion: *"take Rd = 240 arcsec ≈ 7Re for the 
 | V_baryon at Rd | 127.0 km/s | = 220/sqrt(3) | — |
 | V_halo at Rd | 179.6 km/s | = 220*sqrt(2/3) | — |
 | Total baryonic mass | 6.98 × 10^10 M☉ | = V_b^2 * Rd / G | 5,005,858 |
-| Disc mass | 6.98 × 10^10 M☉ | all baryon in the disc (no bulge) | 5,005,733 |
-| Central anchor (M) | 1.75 × 10^6 M☉ | ~1 particle (not a bulge) | 125.1 |
+| Star disc mass | 5.59 × 10^10 M☉ | 80% of the disc, collisionless | 4,004,667 |
+| Gas disc mass | 1.40 × 10^10 M☉ | 20% of the disc, dissipative (sect 2.1) | 1,001,172 |
+| Gas particles | 50,000 | gas_fraction 0.20 × N (paper's Ngas primary) | — |
+| Central anchor (M) | 2.79 × 10^5 M☉ | ~1 particle (not a bulge) | 20.0 |
 | DM halo Vc | 179.7 km/s | corrected for core | — |
 | DM halo core Rc | 8 arcsec = 0.372 kpc | S&L sect 2.2 | 6.2 |
 | M_halo within Rd | 1.40 × 10^11 M☉ | cored isothermal | 10,011,716 |
@@ -155,8 +157,10 @@ The companion's mass is set by the paper's mass ratio `Mp`, not by an assumed ro
 | Mass ratio Mp | 0.55 | S&L Table 1 caption | — |
 | Total mass within Rd | 1.15 × 10^11 M☉ | = Mp × M_prim | 8,259,666 |
 | Total baryonic mass | 2.72 × 10^10 M☉ | Mdisc = 0.13 (0.236 of Mp) | 1,952,285 |
-| Disc mass | 2.72 × 10^10 M☉ | all baryon in the disc (no bulge) | 1,952,089 |
-| Central anchor (M) | 2.72 × 10^6 M☉ | ~1 particle (not a bulge) | 195.2 |
+| Star disc mass | 2.18 × 10^10 M☉ | 80% of the disc, collisionless | 1,561,802 |
+| Gas disc mass | 5.45 × 10^9 M☉ | 20% of the disc, dissipative (sect 2.1) | 390,457 |
+| Gas particles | 15,000 | gas_fraction 0.20 × N (paper's Ngas companion) | — |
+| Central anchor (M) | 3.63 × 10^5 M☉ | ~1 particle (not a bulge) | 26.0 |
 | DM halo Vc | 186.6 km/s | inverted from M_halo target | — |
 | DM halo core Rc | 40 arcsec = 1.862 kpc | S&L sect 2.2 | 31.0 |
 | M_halo within Rd | 8.80 × 10^10 M☉ | Mhalo = 0.42 (0.764 of Mp) | 6,307,381 |
@@ -299,7 +303,7 @@ target Rcross = 1.30 Rd                <- input (conservative, decay-compensated
 | v_t / v_circ | 0.676 |
 | Orbital period | ~11.2 code units (~658 Myr radial) |
 
-The target is the **conservative** (frictionless) crossing radius, set wider than the paper's 1.2 floor because the live run loses crossing radius to disc tidal braking between the principal crossing and the most recent one. It is tuned so the live `Rdown` lands at the **1.2 Rd floor** — the strongest most-recent crossing the paper allows — with the live principal crossing ~1.34 Rd (still well inside 1.2–1.4). Calibration (from `scripts/analyze_orbit_diagnostic.py`): target 1.20 → live Rdown ~1.05 (below floor); 1.32 → ~1.23 (centred); 1.30 → ~1.20 (floor). The decay is **not** a fixed fraction — a wider orbit has weaker pericentres and decays less, so both crossings move with the target (dRdown/dtarget ≈ 1.5 near here). The calibration is resolution-robust: the crossings shift <0.01 Rd between N = 16k and N = 125k.
+The target is the **conservative** (frictionless) crossing radius, set wider than the paper's 1.2 floor because the live run loses crossing radius to disc tidal braking between the principal crossing and the most recent one. It is tuned so the live `Rdown` lands at the **1.2 Rd floor** — the strongest most-recent crossing the paper allows — with the live principal crossing ~1.34 Rd (still well inside 1.2–1.4). Calibration: target 1.20 → live Rdown ~1.05 (below floor); 1.32 → ~1.23 (centred); 1.30 → ~1.20 (floor). The decay is **not** a fixed fraction — a wider orbit has weaker pericentres and decays less, so both crossings move with the target (dRdown/dtarget ≈ 1.5 near here). The calibration is resolution-robust: the crossings shift <0.01 Rd between N = 16k and N = 125k.
 
 ### 4.6 Numerical Verification
 
@@ -425,30 +429,33 @@ See `docs/toomre-q-velocity-dispersion.md` for the full derivation.
 
 ### 7.1 Counts and Resolution
 
-`M51.sim` carries four commented resolution tiers; uncomment one.
+`M51.sim` uses the paper's resolution by default: **250,000 (primary) + 75,000 (companion)**, i.e. 200,000 star + 50,000 gas and 60,000 star + 15,000 gas — exactly Salo & Laurikainen's `Nstar` and `Ngas`. Of each system's bodies, **20% are gas** (the last `nGas` in the sub-array) and the rest are collisionless stars plus the token central anchor.
 
-| Tier | M51a | M51b | Total | Use |
-|---|---|---|---|---|
-| Minimal | 16,000 | 4,000 | 20,000 | Quick parameter checks |
-| Low | 64,000 | 16,000 | 80,000 | Fast iteration |
-| Medium | 256,000 | 64,000 | 320,000 | Reasonable morphology |
-| High | 640,000 | 160,000 | 800,000 | Final renders |
+| Component | M51a | M51b | Total |
+|---|---|---|---|
+| Stars (collisionless) | 200,000 | 60,000 | 260,000 |
+| Gas (dissipative) | 50,000 | 15,000 | 65,000 |
+| **Per system** | **250,000** | **75,000** | **325,000** |
 
-M51a gets 4× the companion's count: it is the galaxy whose arms must be resolved, and its disc covers a larger area.
+M51a gets ~3.3× the companion's count: it is the galaxy whose arms must be resolved, and its disc covers a larger area.
 
-For reference, Salo & Laurikainen used 200,000 + 60,000 star particles plus 50,000 + 15,000 gas particles, noting this "rather coarse resolution ... [is] sufficient for the study of the gross features excited by tidal perturbation."
+**Resolution scales freely.** Gas is specified on each `GalaxyDisc` line as a **fraction** (`gas_fraction = 0.20`), not an absolute count, so it is resolution-independent: change `N_SystemBodies` and the gas count follows as `round(0.20 × N)` automatically, with the 20% gas fraction and equal-mass particles preserved. (Re-run `scripts/compute_M51.py` only if you also want the masses re-derived.) The paper notes this "rather coarse resolution ... [is] sufficient for the study of the gross features excited by tidal perturbation."
 
 ### 7.2 Softening
 
-Softening should scale roughly as 1/sqrt(N) to keep two-body relaxation consistent:
+`r_soft` is a physical softening **length** in code units (the force kernel uses `(r² + r_soft²)^(3/2)`). As a relaxation heuristic it should scale roughly as 1/√N:
 
 | N (M51a) | Suggested r_soft |
 |---|---|
 | 64,000 | 0.3 |
-| 256,000 | 0.15 |
+| 250,000 | 0.15 |
 | 640,000 | 0.095 |
 
-`M51.sim` sets r_soft = 0.3. Reduce it when moving to a higher tier.
+For reference, Salo & Laurikainen use ε = 20 arcsec = 0.05 simulation units = **15.5 code units ≈ 0.93 kpc** — far larger than the relaxation heuristic, because their coarse polar grid deliberately smooths the potential on ~kpc scales to study "gross features" without small-scale collapse.
+
+`M51.sim` sets `r_soft = 3.873` for the collisionless **stars** (sharp arms) and a separate, much larger `Gas_Softening = 15.5` (= 0.93 kpc, the paper's value) for the **gas**, so cold gas self-gravity cannot fragment into clumps ("balls") while the stellar arms stay sharp. See `docs/script-format.md` for the per-species softening mechanism.
+
+> Units note: earlier versions applied the `r_soft` value directly as ε² (softening *squared*), so a script value of 0.3 meant ε = √0.3 ≈ 0.55 code, not 0.3. This was corrected so `r_soft` is a true length; existing scripts had their values replaced by their square roots to preserve the previous effective softening.
 
 ### 7.3 Disc Generation
 
@@ -535,7 +542,7 @@ Every frictionless crossing occurs at the same radius, 1.300 Rd; the live run de
 | Halo truncation `Rh` | Rd (400" primary) | Rd (400" primary) | yes |
 | Vertical structure | sech^2, σz/σr = 0.7 | sech^2, σz/σr = 0.7 | yes |
 | Asymmetric drift correction | yes | yes | yes |
-| Gas component | 65,000 sticky particles | none | **no** |
+| Gas component | 65,000 sticky particles (α=0) | 65,000 sticky particles (α=0) | yes |
 | Dynamical friction | modelled (sect 4) | live-disc only (no halo wake) | **partial** |
 
 All the mass, geometry and orbital rows agree by construction. The remaining differences are missing code features, covered in section 9.3.
@@ -544,7 +551,7 @@ All the mass, geometry and orbital rows agree by construction. The remaining dif
 
 Their SPH + N-body model adds gas physics. They find `M_halo/M_disc` ~ 2.46, spiral arms visible ~200 Myr before pericenter, strongest arm-interarm contrast ~100–200 Myr after, with pericenter 25 kpc and mass ratio 1:3.
 
-This collisionless simulation should reproduce the stellar arm morphology but not gas features (HII regions, dust lanes).
+This simulation now includes a dissipative gas component (sticky particles), so it reproduces the gas response — the bridge, tail, and sharper arm/interarm contrast — alongside the stellar arms. It still does not model detailed ISM physics (HII regions, dust lanes, star formation, or gas pressure/shocks beyond the pairwise collision term).
 
 ### 9.3 Limitations
 
@@ -556,7 +563,7 @@ Ordered by how much the paper suggests each matters.
 
    What it does cost: all passages occur at the same distance rather than progressively closer, so the cumulative disc heating is higher than in reality and the far tail comes out more dispersed. The paper finds the observed well-defined far tail requires previous passages "at least 30 per cent more distant than the latest two crossings."
 
-2. **No gas.** The paper runs 50,000 + 15,000 dissipative "sticky" gas particles with fully inelastic collisions (α = 0), reaching 5–10 km/s radial dispersion. Gas produces sharp arm contrast, and the paper's morphological comparisons are largely made on the *gas* particles. Arms here will look smoother and more diffuse than the published figures.
+2. **Gas — now modeled (kinetic sticky particles).** The disc's baryon is split 80/20 into collisionless stars and dissipative gas (the paper's Nstar:Ngas = 4:1), and the gas undergoes inelastic collisions via a **kinetic Monte-Carlo (DSMC-style) scheme** — conceptually the same method as the paper — with the paper's parameters (α = 0, radius 0.0005 Rd). Each step, gas is binned into collision cells (`Gas_Cell_Size`); within each cell, pairs are drawn stochastically at the physical rate `½·N·(N−1)·σ·v_rel·dt/V` and, on impact, the relative velocity along a **sampled** line of centres is scaled by −α. Sampling the impact geometry (rather than reading it off instantaneous positions) makes the cooling **isotropic**, so σ_r cools along with σ_z toward the paper's σ_gas ≈ 5–10 km/s. An earlier geometric-overlap implementation cooled only σ_z (in a thin disc almost all overlaps are vertical), leaving the in-plane gas warm at ~30–40 km/s; the DSMC rewrite fixed that with no departure from the paper's stated parameters. This reproduces the cool gas disc and the sharper bridge/tail/arm contrast the paper's morphological comparisons rely on. Caveats: the sticky-particle scheme is a phenomenological stand-in for gas hydrodynamics (no pressure or shocks beyond the collision term); because the tree resolves the gas's own self-gravity, cold gas can otherwise fragment into small clumps ("balls") a coarse grid code would suppress — a larger `Gas_Softening` (a gravitational softening applied to gas only, leaving the stars sharp at `r_soft`) is the primary control for this, with a nonzero `Gas_Restitution` (α) available as a secondary lever. The local density used for the collision rate is estimated from the occupied (bounding-box) volume per cell, an approximation that can be calibrated via `Gas_Radius`.
 
 3. **Rigid analytic halos.** Both this code and the paper's main runs use inert (non-deforming) analytic halos, so this is not a divergence — but the paper *validates* against live self-consistent halo runs in section 4, which is how they confirm the friction result. The rigid halo's *centre* is a full inertial degree of freedom here (section 10.3), integrated under gravity rather than pinned to the particle barycentre, so tidal debris no longer drags it off the nucleus; only its fixed spherical *shape* is an approximation — a real halo would flatten and lag during the encounter.
 
@@ -569,14 +576,21 @@ Ordered by how much the paper suggests each matters.
 ### 10.1 Time Step and Softening
 
 - **dt = 0.0005** — required for the fast orbital velocities near M51a's center. At r = 78 code units the orbital period is ~2.3 code time units, so dt/T ~ 0.0002.
-- **r_soft = 0.3** — gravitational softening (18 pc), preventing close-encounter singularities. Minimum resolved scale ~2 r_soft = 36 pc.
+- **r_soft = 3.873** — gravitational softening *length* for the stars (≈0.23 kpc). Gas uses a separate larger `Gas_Softening = 15.5` (≈0.93 kpc, the paper's value) to prevent cold-gas fragmentation.
 - **BH_Opening_Theta = 0.5** — Barnes-Hut opening angle, giving force errors under ~1%.
 
 ### 10.2 Warmup
 
-`InitializationTime 2.0` starts the run at t = −2.0 with the systems dynamically isolated, letting each disc relax out of its initial particle-noise transients before the interaction begins. Bulk velocities are applied at t = 0, so every orbital parameter above still refers to t = 0. See `docs/script-format.md`.
+`InitializationTime 7.0` starts the run at t = −7.0 with the systems dynamically isolated, letting each disc relax out of its initial particle-noise transients **and** letting the dissipative gas cool toward its collisional equilibrium before the interaction begins. Bulk velocities are applied at t = 0, so every orbital parameter above still refers to t = 0. See `docs/script-format.md`.
 
-Note that an isolated disc heats through two-body relaxation, which raises effective Q and makes it slightly less responsive to the tidal perturbation. Prefer shorter warmups if chasing maximum arm contrast.
+7.0 code units ≈ 5.1 primary crossing times (1 crossing = 1.36 units), matching the several-crossing-time isolation Salo & Laurikainen use to reach `sigma_gas ~ 5–10 km/s` (their self-consistent runs relax even longer, but those also settle a *live* halo, which we do not need with rigid halos). This is a large increase over the earlier 2.0, motivated by the gas: the gas is initialised **warm** (Q = 1.5, same as the stars — the paper does *not* start it cold), and only the collisions cool it, which takes time.
+
+Two trade-offs of the longer warmup:
+
+1. It is pure pre-t=0 compute — 7.0 units = 14,000 steps at dt = 0.0005 (vs 4,000 at the old 2.0), so the encounter takes ~3.5× longer to appear.
+2. Two-body relaxation also slowly **heats the collisionless stars** over this time, raising effective Q and making the disc slightly less responsive to the tidal perturbation. Large N keeps this small but not zero.
+
+If the inner gas has not cooled near 5–10 km/s by t = 0, raise `InitializationTime`; if the stellar disc looks over-heated or you are chasing maximum arm contrast, lower it. The orbit is unaffected either way (bulk velocity is applied at t = 0).
 
 ### 10.3 Inertial Halo Centres
 
@@ -630,7 +644,7 @@ With the inertial halo centre (section 10.3) the patch is unnecessary: the net f
 
 Load `M51.sim`. The camera is positioned along +y, face-on to M51a's disc.
 
-- **t = −2 to 0** — warmup. Systems isolated and settling; not recorded to video.
+- **t = −7 to 0** — warmup. Systems isolated and settling, gas cooling toward equilibrium; not recorded to video.
 - **t ~ 3.5** — first close crossing. Arm excitation begins.
 - **t ~ 4–7** — good morphology on a clean disc.
 - **t ~ 14.7** — most recent close crossing (`Rdown`).

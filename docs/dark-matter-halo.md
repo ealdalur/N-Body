@@ -324,10 +324,7 @@ Limitations — these are ordered by how much they actually distort results:
    exerts on the particles has a third-law partner — the reaction is applied back to the centre — so
    linear momentum is conserved (exactly for particle–halo pairs, and for halo–halo pairs beyond the
    truncation radii). Energy is not strictly conserved, because the rigid shape cannot absorb tidal
-   work, but there is no longer the systematic bulk drift the old centring produced. The
-   `OrbitDiagnostic` command (see `script-format.md`) logs the two-galaxy orbit and its specific
-   orbital energy so this can be monitored directly, and `scripts/analyze_orbit_diagnostic.py`
-   compares it against the conservative analytic orbit.
+   work, but there is no longer the systematic bulk drift the old centring produced.
 
 6. **The post-merger state is not meaningful.** Once the populations mix, the two halo centres
    converge and you have two coincident rigid wells giving `v_c,eff² = v_cA² + v_cB²`, arrived at

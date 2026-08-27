@@ -55,7 +55,7 @@
 G               1.0
 FDE             0.10
 dt              0.001
-r_soft          0.5
+r_soft          0.707107
 BH_Opening_Theta  0.7
 
 Gravity         Octree

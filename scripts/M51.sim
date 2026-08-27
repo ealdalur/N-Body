@@ -30,6 +30,8 @@
 #   - No separate bulge (paper sect 2.2 nominal model is disc+halo);
 #     all baryon is in the exponential disc. The central body is a token
 #     ~1-particle anchor, not a bulge.
+#   - Disc split into stars 5.59e10 Msun + dissipative gas 1.40e10 Msun (20% by
+#     mass and count: 50000 gas of 250000, paper's Ngas/Nstar; see gas note below)
 #   - Flat rotation curve: 220 km/s (baryon 127 + halo 180)
 #   - DM halo: Vc=179.7 km/s, Rc=8" =0.372 kpc, M_halo/M_baryon=2.0
 #     halo mass 1.40e11 Msun; TRUNCATED at Rh = Rd = 400" (paper sect 2.2)
@@ -45,7 +47,8 @@
 #     constraint), NOT by an assumed rotation curve. Paper range
 #     0.5-0.7; "passages with Mp < 0.55 seem to be too weak".
 #   - Baryonic mass: 2.72e10 Msun, all in the exponential disc (no separate
-#     bulge; central body is a token ~1-particle anchor)
+#     bulge; central body is a token ~1-particle anchor). Split into stars
+#     2.18e10 Msun + gas 5.45e9 Msun (20%: 15000 gas of 75000)
 #   - Implied rotation curve: 211 km/s (derived, not assumed)
 #   - DM halo: Vc=186.6 km/s, Rc=40" =1.862 kpc, M_halo/M_baryon=3.23
 #     halo mass 8.80e10 Msun; TRUNCATED at Rh = Rd = 240" (paper sect 2.2)
@@ -60,6 +63,20 @@
 #     in units of the primary total (Persic & Salucci 1990), i.e.
 #     M_halo/M_baryon = 3.23, summing to Mp = 0.55.
 #   Baryonic masses are the dynamically cold component only.
+#
+# Gas (dissipative "sticky particles", paper sect 2.1):
+#   Each disc's baryon is split into collisionless STARS and dissipative GAS at
+#   the paper's ratio Nstar:Ngas = 4:1, i.e. gas = 20% by count AND (equal
+#   per-particle mass) by mass. Gas gravitates like stars but additionally
+#   undergoes inelastic gas-gas collisions handled by a kinetic Monte-Carlo (DSMC)
+#   scheme: within collision cells, pairs are drawn at the physical rate
+#   n*sigma*v_rel and, on impact, the relative velocity along a stochastically
+#   sampled line of centres is scaled by -alpha (alpha=0, fully inelastic). The
+#   cross-section sigma = pi*(2*Gas_Radius)^2 uses the paper's radius 0.0005 Rd.
+#   Sampling the impact geometry makes the cooling isotropic, so sigma_r cools with
+#   sigma_z to the paper's sigma_gas ~ 5-10 km/s, sharpening the tidal bridge/tail/arms.
+#   Gas particles are the LAST round(gasFraction*N) bodies of each system (see the
+#   GalaxyDisc lines). Splitting the baryon this way leaves the rotation curve unchanged.
 #
 # Interaction: BOUND, HIGH-INCLINATION multiple-encounter orbit
 #   - Rcross target = 1.30 Rd (this is the CONSERVATIVE, frictionless crossing).
@@ -136,36 +153,76 @@
 G               1.0
 FDE             0.0
 dt              0.0005
-r_soft          0.3
+# r_soft is now a physical softening LENGTH (code units); the force uses its square.
+# 3.873 = sqrt of the previous run's value (15.0 was applied as epsilon^2 before the
+# units fix), so the STELLAR softening is unchanged at ~0.23 kpc -- keeps arms sharp.
+# Gas is softened separately (Gas_Softening below).
+r_soft          3.873
 BH_Opening_Theta  0.5
+
+# Dissipative "sticky particle" gas (Salo & Laurikainen 2000 sect 2.1). The gas
+# particles themselves are declared on the GalaxyDisc lines (gasMass, nGas below);
+# these globals set the collision physics. Collisions use a kinetic Monte-Carlo
+# (DSMC) scheme -- the same conceptual method as the paper -- so the cooling is
+# isotropic and sigma_r reaches the paper's ~5-10 km/s.
+# alpha=0 is fully inelastic (the paper's value); radius 0.155 code = 0.0005 primary
+# Rd (the paper's gas radius, which sets the collision cross-section). Gas_Cell_Size
+# is the DSMC collision-cell edge: big enough to hold several in-plane gas neighbours
+# (so in-plane collisions occur) yet small vs the disc/arm scale; the collision RATE
+# is independent of it. 6 code = 0.36 kpc.
+Gas_Restitution 0.0
+Gas_Radius      0.155
+Gas_Cell_Size   3.0
+# Gravitational softening LENGTH for GAS only (code units). Set large (15.5 = 0.93
+# kpc, the paper's softening) so cold gas self-gravity is smoothed and cannot
+# fragment into sub-kpc "balls", while the stars keep the small r_soft (3.873) for
+# sharp arms. This decouples the two: sharp stellar structure + non-fragmenting gas.
+# 0 = gas uses r_soft. Lower it if you want the gas to trace finer structure (at the
+# risk of balls returning); raise it if balls persist.
+Gas_Softening   15.5
 
 Gravity         Octree
 End_Time        20.0
 
 DataLog         0
-# Orbit-decay diagnostic: append the two galaxies' barycentre separation and
-# relative velocity to orbit_diagnostic.csv every N steps (0 = off). Analyse
-# with scripts/analyze_orbit_diagnostic.py to compare against the analytic orbit.
-OrbitDiagnostic 20
 RecordVideo     1
 Display         1920  1080
 accel_sq_color_thresh 2000000.0
 
-# Let each galaxy relax out of its initial particle-noise transients before the
-# interaction starts. The run begins at t = -2.0 with the systems dynamically
-# ISOLATED: gravity acts only within a system, cross-system halo terms are off,
-# and each system's bulk velocity is withheld so it stays at its specified
-# position. At t = 0 the bulk velocities are applied and full coupling resumes,
-# so all the orbital parameters below still refer to t = 0.
+# Let each galaxy relax out of its initial particle-noise transients AND let the
+# dissipative gas cool toward its collisional equilibrium before the interaction
+# starts. The run begins at t = -7.0 with the systems dynamically ISOLATED:
+# gravity acts only within a system, cross-system halo terms are off, gas-gas
+# collisions run (so the gas cools exactly as in the paper's isolation phase), and
+# each system's bulk velocity is withheld so it stays at its specified position.
+# At t = 0 the bulk velocities are applied and full coupling resumes, so all the
+# orbital parameters below still refer to t = 0.
+#
+# 7.0 code units ~= 5.1 primary crossing times (1 crossing = 1.36 units), matching
+# the several-crossing-time isolation the paper uses to reach sigma_gas ~ 5-10 km/s
+# (sect 4; its self-consistent runs relax even longer, but those also settle a LIVE
+# halo, which we do not need with rigid halos). Two trade-offs of the longer warmup:
+#   (1) it is pure pre-t=0 compute -- 7.0 units = 14000 steps at dt=0.0005 (vs 4000
+#       at the old 2.0), so ~3.5x longer before the encounter is visible;
+#   (2) two-body relaxation also slowly HEATS the collisionless stars over this
+#       time, mildly puffing the disc; large N keeps this small but not zero.
+# If the inner gas has not cooled near 5-10 km/s by t=0, raise this; if the stellar
+# disc looks over-heated, lower it. The orbit is unaffected either way (bulk velocity
+# is applied at t=0).
 # Remove this line to start at t = 0 with no warmup.
-InitializationTime  2.0
+InitializationTime  7.0
 
 # ── Systems ────────────────────────────────────────────────────
-#N_SystemBodies  640000  160000
-#N_SystemBodies  256000  64000
-N_SystemBodies  100000  25000
-#N_SystemBodies  64000  16000
-#N_SystemBodies  16000  4000
+# Paper resolution: 250000 = 200000 star + 50000 gas (primary); 75000 = 60000 +
+# 15000 (companion). Gas is specified as a FRACTION (0.20) on the GalaxyDisc lines,
+# so it is resolution-independent: change N below and the gas count scales with it
+# automatically (no need to touch the disc lines). Lower tiers are fine for quick
+# looks; regenerate with scripts/compute_M51.py only if you want the masses re-derived.
+#N_SystemBodies  500000  150000
+N_SystemBodies  250000  75000
+#N_SystemBodies  100000  30000
+#N_SystemBodies  50000  15000
+#N_SystemBodies  20000  6000
 
 # ── Camera ─────────────────────────────────────────────────────
 # Face-on view of M51a disc (normal along +y), distant enough
@@ -174,13 +231,16 @@ Camera          0.0  1600.0  -1.0
 Camera_lookAt_System   0
 
 # ── Initial Conditions ─────────────────────────────────────────
-# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  centralMass  discMass  R  Ri  h_r  Q  haloVc  haloRc  haloRh
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  centralMass  discMass(star)  R  Ri  h_r  Q  haloVc  haloRc  haloRh  sigma_z_ratio  gasMass  gasFraction
 
 # M51a (NGC 5194) at origin, disc in x-z plane (normal +y)
 # h_r is the exponential scale length Re = 100" (see header). No separate bulge
 # (paper sect 2.2): the disc carries all 6.98e10 Msun of baryon and the central
-# body is a token ~1-particle mass. Both masses are in code units.
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   125.1 5005733.0 310.3 5.0 77.6 1.5  179.7 6.2 310.3
+# body is a token ~1-particle mass. The disc baryon is split into a STAR budget
+# (discMass = 5.59e10 Msun) and a GAS budget (gasMass = 1.40e10 Msun = 20%). The
+# last field is the gas FRACTION 0.20: 20% of the system's bodies are dissipative
+# gas (50000 at N=250000), scaling automatically with N. All masses in code units.
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   20.0 4004670.5 310.3 5.0 77.6 1.5  179.7 6.2 310.3  0.70 1001167.6 0.200
 
 # M51b (NGC 5195) at apocenter, ABOVE M51a's disc plane (y = +496.5).
 # Velocity is purely tangential there, directed along +x (in the disc plane),
@@ -192,4 +252,5 @@ GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   125.1 5005733.0 310.3 
 # but counter-circulating, outside the paper's 75-85 deg range.
 # |pos| = 504.2 must equal the apocenter the velocity was solved for.
 # h_r = 25.6 (= Re = 33"); note Rd/Re = 7.27 here, not 4.
-GalaxyDisc  1   0.0 496.5 87.6   192.2 0.0 0.0   0.5373 0.8434 0.0000   195.2 1952089.5 186.2 3.3 25.6 1.5  186.6 31.0 186.2
+# Star disc 2.18e10 Msun + gas 5.45e9 Msun (gas fraction 0.20; 15000 gas at N=75000).
+GalaxyDisc  1   0.0 496.5 87.6   192.2 0.0 0.0   0.5373 0.8434 0.0000   26.0 1561806.9 186.2 3.3 25.6 1.5  186.6 31.0 186.2  0.70 390451.7 0.200

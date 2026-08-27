@@ -98,15 +98,22 @@ mu = du * 1.0e3 / G_pc       # 1 code mass unit in Msun = 60 pc / G = 1.395e4
 distance_Mpc = 9.6                  # Scoville & Young 1983, as adopted by S&L
 arcsec_to_kpc = distance_Mpc * 1.0e3 / 206265.0
 
-# === Particle counts (also set the token central-anchor mass) ===
-# The paper's nominal model is disc + halo with NO separate bulge (sect 2.2), so
-# all baryonic mass is folded into the exponential disc. The code still needs a
-# central body, so it is given a token ~1-particle mass (baryon / N) and the disc
-# carries the rest. GalaxyDisc takes the central and disc masses directly (code
-# units); N below only sets the token-anchor scale, not the run's particle count.
-n_m51a = 40000
-n_m51b = 10000
+# === Particle counts and gas fraction (Salo & Laurikainen 2000) ===
+# The paper uses Nstar = 200000 + 60000 star particles and Ngas = 50000 + 15000
+# gas particles for the primary + companion, so gas is 20% of each disc BY COUNT
+# (50000/250000 = 15000/75000). We give star and gas particles equal mass, so gas
+# is also 20% of the disc BY MASS -- carved OUT of the baryonic disc, not added on
+# top, so the rotation curve is preserved. The paper's nominal model has NO
+# separate bulge (sect 2.2): all baryon is in the disc and the code's mandatory
+# central body is a token ~1-particle anchor. GalaxyDisc takes the central,
+# star-disc and gas masses directly (code units); N sets both the anchor scale and
+# the emitted particle counts.
+n_m51a = 250000              # 200000 star + 50000 gas (primary)
+n_m51b = 75000               # 60000 star + 15000 gas (companion)
 n_total = n_m51a + n_m51b
+gas_frac = 0.20              # Ngas / Ntotal, both galaxies (paper sect 2.1)
+sigma_z_ratio = 0.7          # sigma_z/sigma_r (paper sect 2.2); emitted so the
+                             # positional gas fields can follow it on GalaxyDisc
 
 # === NGC 5194 (M51a) — Grand-design spiral ===
 # Salo & Laurikainen (2000) section 2.2, verbatim:
@@ -140,7 +147,18 @@ m51a_baryon_msun = m51a_baryon_code * mu
 # baryonic mass into the exponential disc. GalaxyDisc still needs a central body,
 # so give it a token ~1-particle mass and put the rest of the baryon in the disc.
 m51a_central_code = m51a_baryon_code / n_m51a       # token central mass (not a bulge)
-m51a_disc_code = m51a_baryon_code - m51a_central_code
+m51a_disc_total_code = m51a_baryon_code - m51a_central_code   # full disc baryon (star+gas)
+
+# Split the disc into a STAR budget and a GAS budget by mass fraction gas_frac,
+# keeping equal per-particle mass (gas is gas_frac of the disc by both mass and
+# count; the paper's Nstar/Ngas = 4:1). GalaxyDisc takes disc_mass (star), gas_mass
+# and a gas FRACTION (0..1); the code derives the gas particle count as
+# round(gas_frac * N) at load, so the count scales with N automatically. The code
+# sums star + gas for the disc's self-gravity, so the rotation curve is unchanged.
+m51a_n_disc = n_m51a - 1                             # disc particles (excl. central)
+m51a_gas_code = gas_frac * m51a_disc_total_code      # gas budget (20% of disc)
+m51a_disc_code = m51a_disc_total_code - m51a_gas_code   # star-disc budget
+m51a_n_gas = round(gas_frac * n_m51a)                # informational (code derives this)
 
 # Halo: cored isothermal V_halo(r) = haloVc * r / sqrt(r^2 + Rc^2)
 # At disc edge, V_halo = haloVc * R / sqrt(R^2 + Rc^2) should equal m51a_Vhalo
@@ -212,9 +230,14 @@ m51b_Vhalo = m51b_haloVc * m51b_R_code / math.sqrt(m51b_R_code**2 + m51b_haloRc_
 m51b_Vtotal_kms = math.sqrt(m51b_Vbaryon**2 + m51b_Vhalo**2)
 
 # No separate bulge for the companion either (see M51a above): fold all baryon
-# into the disc, token central mass.
+# into the disc, token central mass, then split the disc into star + gas at the
+# same 20% gas fraction (equal per-particle mass).
 m51b_central_code = m51b_baryon_code / n_m51b       # token central mass (not a bulge)
-m51b_disc_code = m51b_baryon_code - m51b_central_code
+m51b_disc_total_code = m51b_baryon_code - m51b_central_code   # full disc baryon (star+gas)
+m51b_n_disc = n_m51b - 1
+m51b_gas_code = gas_frac * m51b_disc_total_code     # gas budget (20% of disc)
+m51b_disc_code = m51b_disc_total_code - m51b_gas_code   # star-disc budget
+m51b_n_gas = round(gas_frac * n_m51b)               # informational (code derives this)
 
 # === Interaction geometry (Salo & Laurikainen 2000, Table 2 + Fig. 1 caption) ===
 #
@@ -293,7 +316,9 @@ print(f"  Scale length Re:   {m51a_h_r_code:.1f} code units ({m51a_h_r_kpc:.2f} 
 print(f"  Rd / Re:           {m51a_Rd_arcsec/m51a_Re_arcsec:.2f}")
 print(f"  Inner radius:      {m51a_inner_kpc/du:.1f} code units ({m51a_inner_kpc} kpc)")
 print(f"  Central anchor (M): {m51a_central_code:.1f} code units ({m51a_central_code*mu:.2e} Msun, ~1 particle; no bulge)")
-print(f"  Disc mass:         {m51a_disc_code:.0f} code units ({m51a_disc_code*mu:.2e} Msun)")
+print(f"  Star disc mass:    {m51a_disc_code:.0f} code units ({m51a_disc_code*mu:.2e} Msun)")
+print(f"  Gas disc mass:     {m51a_gas_code:.0f} code units ({m51a_gas_code*mu:.2e} Msun, {100*m51a_n_gas/m51a_n_disc:.0f}% of disc)")
+print(f"  Gas particles:     {m51a_n_gas} of {n_m51a}")
 print(f"  Total baryonic:    {m51a_baryon_code:.0f} code units ({m51a_baryon_msun:.2e} Msun)")
 print(f"  Halo Vc:           {m51a_haloVc:.1f} km/s")
 print(f"  Halo Rc:           {m51a_haloRc_code:.1f} code units ({m51a_haloRc_kpc:.3f} kpc)")
@@ -320,7 +345,9 @@ print(f"  Rd / Re:           {m51b_Rd_arcsec/m51b_Re_arcsec:.2f}  (NOT 4 -- must
 print(f"  Re(comp)/Re(prim): {m51b_Re_arcsec/m51a_Re_arcsec:.3f}  (paper 33/100; was 0.60 when h_r=Rd/4)")
 print(f"  Inner radius:      {m51b_inner_kpc/du:.1f} code units ({m51b_inner_kpc} kpc)")
 print(f"  Central anchor (M): {m51b_central_code:.1f} code units ({m51b_central_code*mu:.2e} Msun, ~1 particle; no bulge)")
-print(f"  Disc mass:         {m51b_disc_code:.0f} code units ({m51b_disc_code*mu:.2e} Msun)")
+print(f"  Star disc mass:    {m51b_disc_code:.0f} code units ({m51b_disc_code*mu:.2e} Msun)")
+print(f"  Gas disc mass:     {m51b_gas_code:.0f} code units ({m51b_gas_code*mu:.2e} Msun, {100*m51b_n_gas/m51b_n_disc:.0f}% of disc)")
+print(f"  Gas particles:     {m51b_n_gas} of {n_m51b}")
 print(f"  Total baryonic:    {m51b_baryon_code:.0f} code units ({m51b_baryon_msun:.2e} Msun)")
 print(f"  Halo Vc:           {m51b_haloVc:.1f} km/s")
 print(f"  Halo Rc:           {m51b_haloRc_code:.1f} code units ({m51b_haloRc_kpc:.3f} kpc)")
@@ -655,11 +682,11 @@ print(f"  Argument of pericenter: 90 deg (apocenter between the disc crossings)"
 
 # === Particle counts === (n_m51a / n_m51b / n_total are defined near the top)
 print(f"\n--- Particle counts ---")
-print(f"  M51a: {n_m51a} ({n_m51a-1} disc + 1 central)")
-print(f"  M51b: {n_m51b} ({n_m51b-1} disc + 1 central)")
+print(f"  M51a: {n_m51a} ({m51a_n_gas} gas + {n_m51a-1-m51a_n_gas} star disc + 1 central)")
+print(f"  M51b: {n_m51b} ({m51b_n_gas} gas + {n_m51b-1-m51b_n_gas} star disc + 1 central)")
 print(f"  Total: {n_total}")
-print(f"  M51a particle mass: ~{m51a_disc_code*mu/(n_m51a-1):.0f} Msun")
-print(f"  M51b particle mass: ~{m51b_disc_code*mu/(n_m51b-1):.0f} Msun")
+print(f"  M51a particle mass: ~{m51a_disc_total_code*mu/m51a_n_disc:.0f} Msun (star = gas, equal mass)")
+print(f"  M51b particle mass: ~{m51b_disc_total_code*mu/m51b_n_disc:.0f} Msun (star = gas, equal mass)")
 
 # === M51b disc orientation ===
 # Salo & Laurikainen section 2.2: adopting PA_disc = 90 deg and i_disc = 30 deg
@@ -691,10 +718,10 @@ print(f"{'='*65}")
 print(f"N_SystemBodies  {n_m51a}  {n_m51b}")
 print(f"")
 print(f"# M51a (NGC 5194) at origin, disc in x-z plane")
-print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {m51a_central_code:.1f} {m51a_disc_code:.1f} {m51a_R_code:.1f} {m51a_Ri_code:.1f} {m51a_h_r_code:.1f} {toomre_Q:.1f}  {m51a_haloVc:.1f} {m51a_haloRc_code:.1f} {m51a_haloRh_code:.1f}")
+print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {m51a_central_code:.1f} {m51a_disc_code:.1f} {m51a_R_code:.1f} {m51a_Ri_code:.1f} {m51a_h_r_code:.1f} {toomre_Q:.1f}  {m51a_haloVc:.1f} {m51a_haloRc_code:.1f} {m51a_haloRh_code:.1f}  {sigma_z_ratio:.2f} {m51a_gas_code:.1f} {gas_frac:.3f}")
 print(f"")
 print(f"# M51b (NGC 5195) at apocenter, near-polar bound orbit (iorb={orbital_inclination_deg:.0f} deg)")
-print(f"GalaxyDisc  1   {pos_x:.1f} {pos_y:.1f} {pos_z:.1f}   {vel_x:.1f} {vel_y:.1f} {vel_z:.1f}   {m51b_normal_x:.4f} {m51b_normal_y:.4f} {m51b_normal_z:.4f}   {m51b_central_code:.1f} {m51b_disc_code:.1f} {m51b_R_code:.1f} {m51b_Ri_code:.1f} {m51b_h_r_code:.1f} {toomre_Q:.1f}  {m51b_haloVc:.1f} {m51b_haloRc_code:.1f} {m51b_haloRh_code:.1f}")
+print(f"GalaxyDisc  1   {pos_x:.1f} {pos_y:.1f} {pos_z:.1f}   {vel_x:.1f} {vel_y:.1f} {vel_z:.1f}   {m51b_normal_x:.4f} {m51b_normal_y:.4f} {m51b_normal_z:.4f}   {m51b_central_code:.1f} {m51b_disc_code:.1f} {m51b_R_code:.1f} {m51b_Ri_code:.1f} {m51b_h_r_code:.1f} {toomre_Q:.1f}  {m51b_haloVc:.1f} {m51b_haloRc_code:.1f} {m51b_haloRh_code:.1f}  {sigma_z_ratio:.2f} {m51b_gas_code:.1f} {gas_frac:.3f}")
 
 # === Orbit integration: verify and report the actual event sequence ===
 # The analytic v_t solution guarantees the pericenter/apocenter radii, but the

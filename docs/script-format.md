@@ -72,10 +72,11 @@ The fixed integration time step. Smaller values increase accuracy but slow the s
 r_soft  <value>
 ```
 
-Softening length added to gravitational force calculations to prevent divergence at close encounters. The pairwise force denominator becomes `(r^2 + r_soft^2)^(3/2)` instead of `r^3`.
+Softening length added to gravitational force calculations to prevent divergence at close encounters. The pairwise force denominator becomes `(r^2 + r_soft^2)^(3/2)` instead of `r^3`. `r_soft` is a physical length in code units (the force kernel squares it internally).
 
 - Large values (e.g., 0.1) smooth forces at short range — appropriate for galaxy simulations where particles represent many stars.
 - Small values (e.g., 1e-6) preserve point-mass behavior — appropriate for solar system simulations.
+- Applies to the collisionless component. Gas can be given its own, larger softening via `Gas_Softening` (see below) so cold gas self-gravity cannot fragment into clumps while stars keep this sharp `r_soft`.
 
 **Default:** 0.1
 
@@ -179,20 +180,6 @@ DataLog  <0 | 1>
 ```
 
 When enabled (`1`), writes binary state data (position magnitudes, velocity magnitudes, acceleration magnitudes) to a log file each time step. Useful for post-processing analysis.
-
-**Default:** 0 (disabled)
-
----
-
-### `OrbitDiagnostic` — Two-Galaxy Orbit Logging
-
-```
-OrbitDiagnostic  <N>
-```
-
-For a run with two or more systems, appends one CSV row every `N` steps to `orbit_diagnostic.csv` (in the simulation's working directory) recording the two galaxies' barycentre and halo-centre positions/velocities, their separation, and the radial/tangential split of the relative velocity. Analyse with `scripts/analyze_orbit_diagnostic.py`, which reconstructs the specific orbital energy and compares the live orbit against the conservative analytic orbit — useful for detecting spurious orbital decay.
-
-`N = 0` (or omitting the command) disables it entirely; there is no output and no per-step cost.
 
 **Default:** 0 (disabled)
 
@@ -350,7 +337,29 @@ Background: a rigid analytic halo has no inertia, so on its own it cannot obey N
 
 **Default:** 1 (enabled; warmup only).
 
-**Default:** 1 (enabled)
+---
+
+### `Gas_Restitution` / `Gas_Radius` / `Gas_Cell_Size` / `Gas_Softening` — Dissipative Gas Collisions
+
+```
+Gas_Restitution  <alpha>
+Gas_Radius       <radius>
+Gas_Cell_Size    <edge>
+Gas_Softening    <length>
+```
+
+Global parameters for the "sticky particle" gas model (Salo & Laurikainen 2000, sect 2.1). Gas particles are declared per disc via the `gas_mass` / `gas_fraction` fields of `GalaxyDisc`; they gravitate exactly like stars (they are in the Octree) but additionally undergo dissipative gas–gas collisions.
+
+Collisions are handled by a **kinetic Monte-Carlo (DSMC-style) step** — conceptually the same method as the paper — rather than by detecting instantaneous geometric overlaps. Each step, after the gravity kick, gas particles are binned into collision cells; within each cell, candidate pairs are selected stochastically at the physical rate `½·N·(N−1)·σ·v_rel·dt/V` (Bird's No-Time-Counter method) and accepted with probability `|v_rel|/v_rel_max`. The line of centres for each accepted impact is **sampled** from the hard-sphere distribution instead of read off positions — this makes the cooling **isotropic**, so the in-plane dispersion `σ_r` relaxes toward equilibrium along with `σ_z`. (A geometric-overlap test, by contrast, is biased toward vertical impacts in a thin disc and cools `σ_z` but not `σ_r`.)
+
+- `Gas_Restitution` sets the restitution coefficient `alpha`: on each impact the sampled line-of-centres component of the relative velocity becomes `-alpha` times its prior value. `alpha = 0` (default, the paper's value) is fully inelastic; `alpha = 1` is elastic. Momentum is conserved.
+- `Gas_Radius` sets each gas particle's collision radius in code units, which fixes the cross-section `σ = π·(2·Gas_Radius)²` and hence the collision rate. Default `0.155` = `0.0005` of the primary Rd, the paper's value.
+- `Gas_Cell_Size` sets the DSMC collision-cell edge in code units. It must be large enough to contain several *in-plane* gas neighbours (so in-plane collisions can occur) yet small compared with the disc/arm scale. Importantly, the collision **rate is independent of this value** (it scales with local density, not cell size); the cell size only sets the spatial locality of collision partners. Default `6.0` (= 0.36 kpc at the primary scale).
+- `Gas_Softening` sets a separate **gravitational** softening *length* (code units) applied to gas particles as force *sinks* — distinct from the collision parameters above. Set it **larger than `r_soft`** so the gas feels a potential smoothed over `Gas_Softening`: its self-gravity then cannot collapse into sub-`Gas_Softening` clumps ("balls"), while the collisionless stars keep the small `r_soft` and stay sharp. This directly targets gravitational fragmentation, which no collision parameter can stop (a bound clump is not un-bound by collisions). Because softening is applied per-sink, gas–gas and star–star forces stay symmetric; only star↔gas cross pairs are mildly asymmetric (a small, bounded momentum non-conservation at close range). `0` (default) = gas uses `r_soft`.
+
+Collisions run during warmup too, so an isolated gas disc relaxes to its cool equilibrium (the paper's σ_gas ≈ 5–10 km/s) before `t = 0`. Star–star and star–gas pairs never collide. The whole mechanism is inactive unless some system declares gas particles.
+
+**Defaults:** `Gas_Restitution 0`, `Gas_Radius 0.155`, `Gas_Cell_Size 6.0`, `Gas_Softening 0`.
 
 ---
 
@@ -576,7 +585,7 @@ Body  0   1.0 0.0 0.0   0.0 0.0 -6.28  3.0e-6      # Earth
 ### `GalaxyDisc` — Procedural Galaxy Disc
 
 ```
-GalaxyDisc  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <normalX> <normalY> <normalZ>  <central_body_mass> <disc_mass> <outer_radius> <inner_radius> <disc_scale_length> <toomre_Q>  <halo_circular_velocity> <halo_core_radius> <halo_truncation_radius>  [<sigma_z_ratio>]
+GalaxyDisc  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <normalX> <normalY> <normalZ>  <central_body_mass> <disc_mass> <outer_radius> <inner_radius> <disc_scale_length> <toomre_Q>  <halo_circular_velocity> <halo_core_radius> <halo_truncation_radius>  [<sigma_z_ratio>] [<gas_mass>] [<gas_fraction>]
 ```
 
 Generates a flattened disc of particles with approximately circular orbits, representing a spiral galaxy. The disc plane is defined by the normal vector; particles orbit counter-clockwise when viewed from the direction the normal points.
@@ -597,6 +606,8 @@ Generates a flattened disc of particles with approximately circular orbits, repr
 | `halo_core_radius` | Core radius of the dark matter halo (cored isothermal sphere). The halo density flattens inside this radius. Irrelevant if `halo_circular_velocity` is 0 |
 | `halo_truncation_radius` | Radius beyond which the halo's enclosed mass is frozen and the force falls off as `1/r^2`. `0` = untruncated. See below |
 | `sigma_z_ratio` | **Optional** (20th field). Ratio of vertical to radial velocity dispersion, `sigma_z/sigma_r`, which sets the disc thickness via a self-gravitating sech² isothermal sheet and the vertical velocity spread. Defaults to `0.7` (Salo & Laurikainen 2000) when omitted, so existing 19-column scripts are unchanged. Solar-neighbourhood discs are nearer `0.5`; `0` gives a razor-thin, vertically cold disc |
+| `gas_mass` | **Optional** (21st field). Total mass of the dissipative "sticky" gas particles, in code units, on top of `central_body_mass` and `disc_mass`. The gas traces the same exponential profile as the stellar disc, so it adds to the disc's gravitating mass. Default `0` (no gas). Positional: to set it you must also give `sigma_z_ratio`. Must be paired with a positive `gas_fraction` |
+| `gas_fraction` | **Optional** (22nd field). Fraction (0–1) of this system's bodies that are gas; the code makes the **last** `round(gas_fraction × N_SystemBodies)` bodies gas (so the central body becomes gas only if this is 1.0), and the rest are collisionless stars. Being a fraction, it is resolution-independent — change `N_SystemBodies` and the gas count scales automatically. Default `0` (gas physics disabled). For equal-mass star and gas particles, set `gas_mass` to the same fraction of the disc mass. See `Gas_Restitution` / `Gas_Radius` for the collision parameters |
 
 #### Radial profile: scale length vs outer radius
 
