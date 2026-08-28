@@ -144,7 +144,8 @@
 G               1.0
 FDE             0.0
 dt              0.0005
-r_soft          3.873
+#r_soft          3.873
+r_soft          1.0
 BH_Opening_Theta  0.5
 
 # Dissipative "sticky particle" gas (Salo & Laurikainen 2000 sect 2.1)
@@ -152,9 +153,11 @@ BH_Opening_Theta  0.5
 # Gas_Radius 0.155 code = 0.0005 primary Rd (the paper's gas radius, which sets the collision cross-section) 
 # Gas_Softening = 15.5 code = 0.93 kpc, the paper's softening
 
-Gas_Restitution 0.0
+#Gas_Restitution 0.0
+Gas_Restitution 0.3
 Gas_Radius      0.155
 Gas_Cell_Size   3.0
+#Gas_Softening   15.5
 Gas_Softening   15.5
 
 Gravity         Octree
