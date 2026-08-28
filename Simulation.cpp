@@ -34,6 +34,10 @@ Simulation::Simulation(const std::string &scriptPath)
 	totalKE = 0.0;
 	totalPE = 0.0;
 	totalE = 0.0;
+	totalP = 0.0;
+	totalL = 0.0;
+	comSpeed = 0.0;
+	virialRatio = -1.0;
 	Remove_Halo_Monopole = true;
 	// Gas defaults: fully inelastic (paper's alpha=0) and a collision radius of
 	// 0.155 code units = 0.0005 primary Rd (Salo & Laurikainen's gas radius).
@@ -1136,15 +1140,81 @@ void Simulation::CalcOutputs() {
 	}
 }
 
-void Simulation::CalcEnergy() {
+void Simulation::CalcSystemQuantities() {
 	totalKE = 0.0;
-	totalPE = 0.0;
+	double selfPE = 0.0;   // particle-particle self-gravity (each pair counted twice)
+	double extPE  = 0.0;   // external halo + FDE potential (counted once per body)
+
+	// First pass: energy, total mass, mass-weighted position (COM), momentum
+	double M = 0.0;
+	double com[3] = {0.0, 0.0, 0.0};   // Sigma m_i * r_i
+	double P[3]   = {0.0, 0.0, 0.0};   // Sigma m_i * v_i (total momentum)
 	for (int i = 0; i < N_Bodies; i++) {
 		totalKE += 0.5 * mass[i] * vel_sq[i];
-		totalPE += body_pot[i];
+		selfPE  += body_pot[i];
+
+		// External potential energy of this body. Halo: matches the force model --
+		// post-warmup a body feels every system's halo, but during warmup systems
+		// are isolated and feel only their OWN halo (cross-halo terms omitted).
+		// FDE: a = FDE*pos => Phi = -0.5*FDE*|pos|^2 about the origin.
+		double phi = 0.0;
+		if (warmupActive) {
+			int s = body_system[i];
+			if (halo_vc[s] != 0.0) {
+				double *hc = &halo_center[s * 3];
+				double d[3] = { pos[i][0]-hc[0], pos[i][1]-hc[1], pos[i][2]-hc[2] };
+				phi += HaloPotential(s, vdot(d, d));
+			}
+		} else {
+			for (int s = 0; s < N_Systems; s++) {
+				if (halo_vc[s] == 0.0) continue;
+				double *hc = &halo_center[s * 3];
+				double d[3] = { pos[i][0]-hc[0], pos[i][1]-hc[1], pos[i][2]-hc[2] };
+				phi += HaloPotential(s, vdot(d, d));
+			}
+		}
+		if (FDE != 0.0)
+			phi += -0.5 * FDE * vdot(pos[i], pos[i]);
+		extPE += mass[i] * phi;
+
+		M += mass[i];
+		com[0] += mass[i] * pos[i][0];
+		com[1] += mass[i] * pos[i][1];
+		com[2] += mass[i] * pos[i][2];
+		P[0] += mass[i] * vel[i][0];
+		P[1] += mass[i] * vel[i][1];
+		P[2] += mass[i] * vel[i][2];
 	}
-	totalPE *= 0.5;
+	selfPE *= 0.5;   // each pair counted twice in the body_pot summation
+	totalPE = selfPE + extPE;
 	totalE = totalKE + totalPE;
+
+	totalP = vmag(P);
+
+	// Center of mass position and velocity
+	double Rcom[3] = {com[0]/M, com[1]/M, com[2]/M};
+	double Vcom[3] = {P[0]/M, P[1]/M, P[2]/M};
+	comSpeed = vmag(Vcom);
+
+	// Second pass: angular momentum about the COM.
+	// L = Sigma m_i * (r_i - Rcom) x v_i  (absolute velocities; the Vcom cross
+	// term vanishes because Sigma m_i (r_i - Rcom) = 0)
+	double L[3] = {0.0, 0.0, 0.0};
+	for (int i = 0; i < N_Bodies; i++) {
+		double r[3], l[3];
+		vsub(pos[i], Rcom, r);
+		vcross(r, vel[i], l);
+		L[0] += mass[i] * l[0];
+		L[1] += mass[i] * l[1];
+		L[2] += mass[i] * l[2];
+	}
+	totalL = vmag(L);
+
+	// Virial ratio 2K/|U| using the FULL potential energy (self-gravity + halo +
+	// FDE). 1 = virialized equilibrium, 2 = marginally bound (E=0), >2 unbound.
+	// Sentinel -1 when |U| is ~0 (no binding yet) so the display can show "---".
+	double absU = fabs(totalPE);
+	virialRatio = (absU > 0.0) ? (2.0 * totalKE / absU) : -1.0;
 }
 
 // Dissipative "sticky particle" gas collisions (Salo & Laurikainen 2000 sect 2.1),
@@ -1677,7 +1747,7 @@ void Simulation::Step()
 	// equilibrium (Salo & Laurikainen: sigma_gas ~ 5-10 km/s) before t = 0.
 	ProcessGasCollisions();
 
-	CalcEnergy();
+	CalcSystemQuantities();
 
 	if (Data_Log)
 	{
@@ -2183,13 +2253,43 @@ void Simulation::DrawInfo(double fps)
 		{0x1F,0x01,0x02,0x04,0x08,0x10,0x1F}, // 'Z' 90
 	};
 
-	const int NUM_LINES = 5;
+	const int NUM_LINES = 9;
+	const char *labels[NUM_LINES] = {"FPS", "T", "KE", "PE", "E", "VIR", "P", "L", "VCOM"};
+	double vals[NUM_LINES] = {
+		(double)(int)(fps + 0.5), t, totalKE, totalPE, totalE,
+		(virialRatio < 0.0 ? 0.0 : virialRatio), totalP, totalL, comSpeed
+	};
+
+	// Numeric portion of each line (sign, if any, is part of these strings)
+	char nums[NUM_LINES][32];
+	snprintf(nums[0], sizeof(nums[0]), "%d",   (int)(fps + 0.5));
+	snprintf(nums[1], sizeof(nums[1]), "%.4F", t);
+	snprintf(nums[2], sizeof(nums[2]), "%.4E", totalKE);
+	snprintf(nums[3], sizeof(nums[3]), "%.4E", totalPE);
+	snprintf(nums[4], sizeof(nums[4]), "%.4E", totalE);
+	if (virialRatio < 0.0)
+		snprintf(nums[5], sizeof(nums[5]), "---");
+	else
+		snprintf(nums[5], sizeof(nums[5]), "%.4F", virialRatio);
+	snprintf(nums[6], sizeof(nums[6]), "%.4E", totalP);
+	snprintf(nums[7], sizeof(nums[7]), "%.4E", totalL);
+	snprintf(nums[8], sizeof(nums[8]), "%.4E", comSpeed);
+
+	// Longest label sets the right-alignment width for all labels
+	int maxLabel = 0;
+	for (int l = 0; l < NUM_LINES; l++) {
+		int len = (int)strlen(labels[l]);
+		if (len > maxLabel) maxLabel = len;
+	}
+
+	// Compose: right-aligned label, space, '=', then a space before the
+	// number (omitted when the number is negative so the '-' takes that slot)
 	char lines[NUM_LINES][32];
-	snprintf(lines[0], sizeof(lines[0]), "FPS:%d", (int)(fps + 0.5));
-	snprintf(lines[1], sizeof(lines[1]), "T=%.4F", t);
-	snprintf(lines[2], sizeof(lines[2]), "KE=%.4E", totalKE);
-	snprintf(lines[3], sizeof(lines[3]), "PE=%.4E", totalPE);
-	snprintf(lines[4], sizeof(lines[4]), "E=%.4E", totalE);
+	for (int l = 0; l < NUM_LINES; l++) {
+		const char *pad = (vals[l] < 0.0) ? "" : " ";
+		snprintf(lines[l], sizeof(lines[l]), "%*s =%s%s",
+		         maxLabel, labels[l], pad, nums[l]);
+	}
 
 	int maxLen = 0;
 	for (int l = 0; l < NUM_LINES; l++) {

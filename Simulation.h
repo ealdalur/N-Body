@@ -109,6 +109,8 @@ class Simulation
 	int numActiveBodies;
 
 	double totalKE, totalPE, totalE;
+	double totalP, totalL, comSpeed;
+	double virialRatio;
 	std::vector<double> body_pot;
 
 	bool Remove_Halo_Monopole;       // cancel net force of the rigid analytic halos
@@ -190,6 +192,27 @@ class Simulation
 		return halo_M_rh[sys] / (rsq * sqrt(rsq));
 	}
 
+	// External halo potential energy per unit mass, Phi(r), consistent with
+	// HaloScale (a_vec = HaloScale * (centre - pos) = -grad Phi). Integrating
+	// dPhi/dr = HaloScale * r:
+	//   inside  (r <= Rh): cored isothermal, matched at Rh to the outer branch
+	//   outside (r  > Rh): Keplerian -M_rh/r, with Phi(infinity) = 0
+	// For an untruncated halo (Rh <= 0) the potential has no zero at infinity
+	// (it diverges logarithmically), so we reference Phi(0) = 0 instead.
+	inline double HaloPotential(int sys, double rsq) const {
+		double rc_sq = halo_rc_sq[sys];
+		double vc2 = halo_vc[sys]*halo_vc[sys];
+		double rh = halo_rh[sys];
+		if (rh > 0.0) {
+			double rh_sq = rh*rh;
+			double M_rh = halo_M_rh[sys];
+			if (rsq > rh_sq)
+				return -M_rh / sqrt(rsq);
+			return 0.5*vc2*log((rsq + rc_sq)/(rh_sq + rc_sq)) - M_rh/rh;
+		}
+		return 0.5*vc2*log((rsq + rc_sq)/rc_sq);
+	}
+
 	// Softening SQUARED (epsilon^2) for the gravitational force ON body i, added to
 	// |dx|^2 by the force kernels. Softening is SINK-based: gas particles feel a
 	// smoother (larger gas_softening) potential so their self-gravity cannot fragment
@@ -225,7 +248,7 @@ class Simulation
 	void CalcLeapFrogVelocitiesAndOutputs();
 	void CalcOutputsRange(int iStart, int iEnd);
 	void CalcOutputs();
-	void CalcEnergy();
+	void CalcSystemQuantities();
 	void ProcessGasCollisions();
 	// Zero one system's net momentum. Called by the procedural generators only,
 	// where random particle phases leave a residual of order v_c/sqrt(N) that is
