@@ -11,7 +11,8 @@
 # MILKY WAY
 #   Disc radius:         26.8 kpc (446.7 code units)
 #   Central body mass:   1.5e10 Msun (bulge, includes Sgr A* at 4e6 Msun)
-#   Disc mass:           4.5e10 Msun (3225688 code units)
+#   Disc mass:           4.5e10 Msun (3225688 code units), stars + gas
+#   Cold-gas fraction:   0.15 of the disc baryon (dissipative; HI+H2 ~6.8e9 Msun)
 #   Rotation curve:      ~220 km/s (flat, set by dark matter halo)
 #   DM halo core radius: 10 kpc (166.7 code units)
 #   Disc orientation:    x-z plane, normal = (0, 1, 0)
@@ -20,7 +21,8 @@
 # ANDROMEDA (M31)
 #   Disc radius:         33.5 kpc (558.3 code units)
 #   Central body mass:   3.0e10 Msun (bulge, includes M31* at 1.4e8 Msun)
-#   Disc mass:           7.0e10 Msun (5017737 code units)
+#   Disc mass:           7.0e10 Msun (5017737 code units), stars + gas
+#   Cold-gas fraction:   0.08 of the disc baryon (gas-poor Sb; HI ~5.6e9 Msun)
 #   Rotation curve:      ~225 km/s (flat, set by dark matter halo)
 #   DM halo core radius: 12 kpc (200 code units)
 #   Disc orientation:    inclined 77 deg to MW-M31 line of sight, PA=35 deg
@@ -42,6 +44,16 @@ FDE             0.0
 dt              0.0005
 r_soft          0.316228
 BH_Opening_Theta  0.5
+
+# Dissipative "sticky particle" gas (see docs/gas-model.md for the method). Gas
+# budgets and fractions are set per galaxy on the GalaxyDisc lines (MW 0.15, M31
+# 0.08); these globals set the collision physics: alpha=0 (fully inelastic),
+# collision radius and search-cell size, and a gas-only gravitational softening
+# (~0.93 kpc) that keeps the cold gas from fragmenting while stars stay sharp.
+Gas_Restitution 0.0
+Gas_Radius      0.223
+Gas_Cell_Size   6.0
+Gas_Softening   15.5
 
 Gravity         Octree
 
@@ -77,10 +89,10 @@ Camera          6500.0  3000.0  0.0
 # as M_halo(r) ~ Vc^2 * r at all radii. That overestimates long-range attraction.
 # No published truncation radius is adopted here, so 0 is kept deliberately
 # rather than inventing one. Set it to a radius in code units to truncate.
-# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  centralMass  discMass  R  Ri  h_r  Q  haloVc  haloRc  haloRh  [sigma_z_ratio]
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  centralMass  discMass(star)  R  Ri  h_r  Q  haloVc  haloRc  haloRh  sigma_z_ratio  gasMass  gasFraction
 
-# Milky Way at origin, disc in x-z plane
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1075229.2 3225687.7 446.7 16.7 43.3 1.2  220.0 166.7 0.0  0.5
+# Milky Way at origin, disc in x-z plane. discMass = star budget (0.85 of disc), gasMass = 0.15.
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1075229.2 2741834.5 446.7 16.7 43.3 1.2  220.0 166.7 0.0  0.5  483853.2 0.15
 
-# Andromeda at 780 kpc along +x, approaching at 110 km/s
-GalaxyDisc  1   13000.0 0.0 0.0   -110.0 17.0 0.0   0.2250 0.7982 0.5589   2150458.5 5017736.5 558.3 25.0 88.3 1.2  225.0 200.0 0.0  0.6
+# Andromeda at 780 kpc along +x, approaching at 110 km/s. discMass = star budget (0.92 of disc), gasMass = 0.08.
+GalaxyDisc  1   13000.0 0.0 0.0   -110.0 17.0 0.0   0.2250 0.7982 0.5589   2150458.5 4616317.6 558.3 25.0 88.3 1.2  225.0 200.0 0.0  0.6  401418.9 0.08

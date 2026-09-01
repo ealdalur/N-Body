@@ -47,6 +47,11 @@ mw_haloRh_kpc = 0.0         # halo truncation radius (0 = untruncated)
 mw_sigmaZ_ratio = 0.5       # sigma_z/sigma_r for the vertical structure;
                             #   ~0.5 for the MW thin disc (solar-neighbourhood
                             #   value, Bland-Hawthorn & Gerhard 2016)
+mw_gas_fraction = 0.15      # dissipative gas as a fraction of the disc baryon.
+                            #   MW cold gas (HI ~8e9 + H2 ~1e9 Msun; Bland-Hawthorn
+                            #   & Gerhard 2016) is ~15% of the 4.5e10 disc. Carved
+                            #   OUT of mw_disc_msun (total unchanged, so the rotation
+                            #   curve is preserved); the rest is the star budget.
 
 # === Andromeda parameters ===
 and_radius_kpc = 33.5        # stellar disc radius (truncation)
@@ -63,6 +68,18 @@ and_haloRh_kpc = 0.0         # halo truncation radius (0 = untruncated)
 and_sigmaZ_ratio = 0.6       # sigma_z/sigma_r for the vertical structure; M31 is
                              #   an earlier-type (Sb) galaxy with a somewhat
                              #   hotter/thicker disc than the MW
+and_gas_fraction = 0.08      # dissipative gas as a fraction of the disc baryon. M31
+                             #   is gas-poorer than the MW (early-type Sb, low SFR):
+                             #   HI ~5e9 Msun is ~8% of its 7e10 disc. Carved out of
+                             #   and_disc_msun as for the MW.
+
+# === Dissipative gas collision globals (shared; see docs/gas-model.md) ===
+gas_restitution = 0.0        # fully inelastic (paper value)
+gas_radius = 0.223           # collision radius, code units (~0.0005 * MW disc R)
+gas_cell_size = 6.0          # DSMC collision-cell edge, code units
+gas_softening = 15.5         # gas-only gravitational softening length, code units
+                             #   (0.93 kpc) -- smooths gas self-gravity so it cannot
+                             #   fragment, while stars keep the small r_soft.
 
 # === Relative geometry ===
 distance_kpc = 780           # current MW-M31 distance
@@ -86,6 +103,8 @@ mw_h_r = mw_h_r_kpc / du
 mw_Ri = mw_inner_kpc / du
 mw_M_central = mw_bulge_msun / mu
 mw_M_disc = mw_disc_msun / mu
+mw_M_gas = mw_M_disc * mw_gas_fraction        # gas budget (code units)
+mw_M_star = mw_M_disc - mw_M_gas              # star budget = discMass field
 mw_haloVc = mw_vc_kms / vu
 mw_haloRc = mw_haloRc_kpc / du
 mw_haloRh = mw_haloRh_kpc / du
@@ -109,6 +128,8 @@ and_h_r = and_h_r_kpc / du
 and_Ri = and_inner_kpc / du
 and_M_central = and_bulge_msun / mu
 and_M_disc = and_disc_msun / mu
+and_M_gas = and_M_disc * and_gas_fraction     # gas budget (code units)
+and_M_star = and_M_disc - and_M_gas           # star budget = discMass field
 and_haloVc = and_vc_kms / vu
 and_haloRc = and_haloRc_kpc / du
 and_haloRh = and_haloRh_kpc / du
@@ -148,11 +169,15 @@ print(f"  Estimated collision time: ~{t_collision_myr:.0f} Gyr = ~{t_collision_c
 print(f"  (Very long! For faster interaction, reduce initial separation)")
 
 print("\n--- Script lines ---")
+print(f"Gas_Restitution {gas_restitution}")
+print(f"Gas_Radius      {gas_radius}")
+print(f"Gas_Cell_Size   {gas_cell_size}")
+print(f"Gas_Softening   {gas_softening}")
 print(f"N_SystemBodies  40000  40000")
-print(f"# Milky Way at origin, disc in x-z plane")
-print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {mw_M_central:.1f} {mw_M_disc:.1f} {mw_R:.1f} {mw_Ri:.1f} {mw_h_r:.1f} 1.2  {mw_haloVc:.1f} {mw_haloRc:.1f} {mw_haloRh:.1f}  {mw_sigmaZ_ratio:.2f}")
+print(f"# Milky Way at origin, disc in x-z plane (discMass = star budget, then gasMass gasFraction)")
+print(f"GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   {mw_M_central:.1f} {mw_M_star:.1f} {mw_R:.1f} {mw_Ri:.1f} {mw_h_r:.1f} 1.2  {mw_haloVc:.1f} {mw_haloRc:.1f} {mw_haloRh:.1f}  {mw_sigmaZ_ratio:.2f}  {mw_M_gas:.1f} {mw_gas_fraction:.2f}")
 print(f"# Andromeda along +x axis")
-print(f"GalaxyDisc  1   {sep:.1f} 0.0 0.0   {v_radial_kms:.1f} {v_transverse_kms:.1f} 0.0   {nx:.4f} {ny:.4f} {nz:.4f}   {and_M_central:.1f} {and_M_disc:.1f} {and_R:.1f} {and_Ri:.1f} {and_h_r:.1f} 1.2  {and_haloVc:.1f} {and_haloRc:.1f} {and_haloRh:.1f}  {and_sigmaZ_ratio:.2f}")
+print(f"GalaxyDisc  1   {sep:.1f} 0.0 0.0   {v_radial_kms:.1f} {v_transverse_kms:.1f} 0.0   {nx:.4f} {ny:.4f} {nz:.4f}   {and_M_central:.1f} {and_M_star:.1f} {and_R:.1f} {and_Ri:.1f} {and_h_r:.1f} 1.2  {and_haloVc:.1f} {and_haloRc:.1f} {and_haloRh:.1f}  {and_sigmaZ_ratio:.2f}  {and_M_gas:.1f} {and_gas_fraction:.2f}")
 
 # Rotation directions:
 print("\n--- Rotation directions ---")

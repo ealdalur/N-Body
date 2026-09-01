@@ -23,6 +23,7 @@ Convert real astrophysical measurements of the Milky Way and Andromeda galaxies 
 | Disc scale length | 2.6 kpc | 5.3 kpc | Bland-Hawthorn & Gerhard 2016; Courteau et al. 2011 |
 | Bulge mass | 1.5e10 Msun | 3.0e10 Msun | McMillan 2011; Tamm et al. 2012 |
 | Disc mass | 4.5e10 Msun | 7.0e10 Msun | Bland-Hawthorn & Gerhard 2016; Tamm et al. 2012 |
+| Cold-gas fraction of disc | 0.15 (HI+H2 ~6.8e9 Msun) | 0.08 (HI ~5.6e9 Msun) | Bland-Hawthorn & Gerhard 2016; Chemin et al. 2009 |
 | SMBH mass | 4.0e6 Msun (Sgr A*) | 1.4e8 Msun (M31*) | GRAVITY Collab. 2019; Bender et al. 2005 |
 | Rotation curve | ~220 km/s (flat) | ~225 km/s (flat) | Eilers et al. 2019; Corbelli et al. 2010 |
 | Halo core radius | 10 kpc | 12 kpc | Typical cored isothermal fits |
@@ -84,15 +85,35 @@ considerably more centrally concentrated than Andromeda's relative to its extent
 
 ### Central and Disc Masses
 
-`GalaxyDisc` takes the central body mass and the total disc mass directly, both in code units (`= Msun / 1.395e4`). The disc mass is split evenly among the `N−1` disc particles at load time, so it is independent of the particle count.
+`GalaxyDisc` takes the central body mass and the disc mass directly, both in code units (`= Msun / 1.395e4`). The disc mass is split evenly among the disc particles at load time, so it is independent of the particle count.
 
 ```
-                central body        disc
+                central body        disc (stars + gas)
 MW:   1.5e10 Msun = 1075229 code    4.5e10 Msun = 3225688 code
 And:  3.0e10 Msun = 2150459 code    7.0e10 Msun = 5017737 code
 ```
 
 The central body mass represents the bulge (which subsumes the SMBH — the SMBH mass is negligible compared to the bulge).
+
+### Dissipative Gas Component
+
+Following the M51 methodology (see `docs/gas-model.md` and `docs/compute_M51.md`), each disc's baryon is split into a collisionless **star** budget and a dissipative **gas** budget. The gas particles gravitate exactly like stars but additionally undergo inelastic "sticky particle" collisions (DSMC scheme), which cool the gas and sharpen tidal features.
+
+The split is a fraction of the *existing* disc mass — gas is carved out of it, not added — so the total gravitating disc mass (and hence the rotation curve) is unchanged:
+
+```
+discMass field = disc_mass * (1 - gas_fraction)   # star budget
+gasMass  field = disc_mass * gas_fraction          # gas budget
+```
+
+| Galaxy | gas_fraction | gas mass | star budget | rationale |
+|---|---|---|---|---|
+| Milky Way | 0.15 | 483853 code (6.8e9 Msun) | 2741835 code | MW cold gas HI ~8e9 + H2 ~1e9 (BHG 2016) ≈ 15% of the 4.5e10 disc |
+| Andromeda | 0.08 | 401419 code (5.6e9 Msun) | 4616318 code | M31 is gas-poor (early-type Sb); HI ~5e9 ≈ 8% of the 7e10 disc |
+
+Andromeda being gas-poorer than the Milky Way is the robust, physically meaningful part; the exact fractions are representative literature values, not a single-paper prescription, and can be adjusted via `mw_gas_fraction` / `and_gas_fraction`.
+
+The collision physics is set by shared global commands emitted alongside the disc lines — `Gas_Restitution` (0 = fully inelastic), `Gas_Radius` (collision cross-section), `Gas_Cell_Size` (DSMC search cell), and `Gas_Softening` (a gas-only ~0.93 kpc gravitational softening that stops the cold gas fragmenting into clumps while the stars keep the small `r_soft`). See `docs/script-format.md` for their definitions. Note these gas parameters are analogous starting values, **not** calibrated to a target `σ_gas` as they were for M51; and at 40k particles/galaxy the gas is sparse, so its cooling is weak until the resolution is raised.
 
 ### Andromeda Disc Normal Vector
 
@@ -174,4 +195,4 @@ The rough timescale calculation uses the relation 1 km/s ~ 1.022 kpc/Gyr (from 1
 
 ### Output
 
-The final output section prints complete GalaxyDisc lines ready for copy-paste into a .sim file: the 19 required parameters (through `halo_truncation_radius`) plus the optional `sigma_z_ratio` (20th field), in the correct order.
+The final output section prints complete GalaxyDisc lines ready for copy-paste into a .sim file: the 19 required parameters (through `halo_truncation_radius`), the `sigma_z_ratio` (20th field), and the `gasMass` (21st) and `gasFraction` (22nd) fields for the dissipative gas component, in the correct order. It also prints the shared `Gas_*` global commands.

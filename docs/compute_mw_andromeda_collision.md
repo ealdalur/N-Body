@@ -33,6 +33,8 @@ Determine the initial separation and approach velocity for a Milky Way - Androme
 | Halo v_c | 220 km/s | 225 km/s |
 | Halo r_c | 166.7 code | 200 code |
 
+The disc masses above are the **total** disc baryon. In the `.sim` files each disc is split into a collisionless star budget and a dissipative gas budget (MW `gas_fraction = 0.15`, Andromeda `0.08`; see `docs/compute_mw_andromeda.md` and `docs/gas-model.md`), carved out of the total so it is unchanged. This script needs no gas awareness: it uses only the total disc mass for the two-body energy/velocity estimate, which the star/gas split leaves untouched. The gas collision globals (`Gas_Restitution`, `Gas_Radius`, `Gas_Cell_Size`, `Gas_Softening`) are the same as in `Milky_Way_Andromeda.sim`.
+
 Scale lengths are measured values: Bland-Hawthorn & Gerhard 2016 for the Milky
 Way (2.6 ± 0.5 kpc thin disc) and Courteau et al. 2011 for Andromeda (5.3 kpc,
 3.6 μm). They are supplied to `GalaxyDisc` independently of the truncation
