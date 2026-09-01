@@ -26,6 +26,7 @@ Simulation::Simulation(const std::string &scriptPath)
 	BH_Opening_Theta = 0.5;
 	DisplayScale = 1.0;
 	accel_sq_color_thresh = 1000000.0;
+	ToneMapExposure = 1.2;
 	Gravity_P2P = false;
 	Gravity_Oct = true;
 	Record_Video = false;
@@ -111,6 +112,13 @@ Simulation::~Simulation()
 		glDeleteTextures(1, &recordColorTex);
 		glDeleteRenderbuffers(1, &recordDepthRBO);
 	}
+	if (hdrFBO) {
+		glDeleteFramebuffers(1, &hdrFBO);
+		glDeleteTextures(1, &hdrColorTex);
+		glDeleteRenderbuffers(1, &hdrDepthRBO);
+	}
+	glDeleteProgram(tonemapShader);
+	glDeleteVertexArrays(1, &tonemapVAO);
 	delete pool;
 	delete[] posBuf;
 	delete[] clrBuf;
@@ -248,6 +256,8 @@ void Simulation::LoadScript(const std::string &path)
 			iss >> DisplayScale;
 		} else if (key == "accel_sq_color_thresh") {
 			iss >> accel_sq_color_thresh;
+		} else if (key == "ToneMapExposure") {
+			iss >> ToneMapExposure;
 		} else if (key == "Gravity") {
 			std::string val;
 			iss >> val;
@@ -1876,6 +1886,9 @@ void Simulation::InitGL()
 	recordFBO = 0;
 	recordColorTex = 0;
 	recordDepthRBO = 0;
+	hdrFBO = 0;
+	hdrColorTex = 0;
+	hdrDepthRBO = 0;
 
 	glDisable(GL_DEPTH_TEST);
 	glDepthMask(GL_FALSE);
@@ -1891,47 +1904,56 @@ void Simulation::InitGL()
 		layout(location = 1) in vec3 aPos;
 		layout(location = 2) in vec4 aColor;
 		out vec4 fColor;
+		out vec2 vLocal;
 		uniform mat4 uVP;
 		uniform vec3 uRight;
 		uniform vec3 uUp;
+		uniform float uSize;
 		void main() {
-			vec3 worldPos = aPos + aOffset.x * uRight + aOffset.y * uUp;
+			// aOffset is a unit quad in [-0.5, 0.5]; uSize scales the billboard to
+			// its world size, while vLocal (kept unit) drives a size-independent
+			// Gaussian in the fragment shader.
+			vec2 off = aOffset * uSize;
+			vec3 worldPos = aPos + off.x * uRight + off.y * uUp;
 			gl_Position = uVP * vec4(worldPos, 1.0);
 			fColor = aColor;
+			vLocal = aOffset;
 		}
 	)";
 
 	const char *particleFrag = R"(
 		#version 330 core
 		in vec4 fColor;
+		in vec2 vLocal;
 		out vec4 FragColor;
 		void main() {
-			FragColor = fColor;
+			// Radial Gaussian falloff turns the flat billboard into a soft round
+			// glow, so lone particles read as faint stars and overlaps blend
+			// smoothly. vLocal is in [-0.5, 0.5]; the steep constant makes the
+			// glow vanish (~0.02) by the quad edge so no straight edges show, which
+			// is why a single quad suffices (the old 8-point star is no longer
+			// needed). Additive blending (SRC_ALPHA, ONE) accumulates the
+			// alpha-weighted colour into the HDR buffer; the tone-map pass
+			// compresses it later.
+			float r2 = dot(vLocal, vLocal);
+			float fall = exp(-16.0 * r2);
+			FragColor = vec4(fColor.rgb, fColor.a * fall);
 		}
 	)";
 
 	particleShader = CompileShader(particleVert, particleFrag);
 
-	// Star shape: 2 quads (rotated 45 deg), each as 2 triangles = 12 vertices
+	// Unit quad (2 triangles = 6 vertices), corners at +/-0.5. The fragment
+	// shader's Gaussian falloff shapes it into a round glow, so a single quad is
+	// enough; uSize (set at draw time) controls its world size.
 	const float d = 0.5f;
-	const float s45 = 0.7071067f;
-	float shapeData[24];
+	float shapeData[12];
 	shapeData[0]=-d; shapeData[1]=-d;
 	shapeData[2]=-d; shapeData[3]= d;
 	shapeData[4]= d; shapeData[5]= d;
 	shapeData[6]=-d; shapeData[7]=-d;
 	shapeData[8]= d; shapeData[9]= d;
 	shapeData[10]=d; shapeData[11]=-d;
-	float c0x=-d*s45-(-d)*s45, c0y=-d*s45+(-d)*s45;
-	float c1x=-d*s45-d*s45,    c1y=-d*s45+d*s45;
-	float c2x=d*s45-d*s45,     c2y=d*s45+d*s45;
-	float c3x=d*s45-(-d)*s45,  c3y=d*s45+(-d)*s45;
-	shapeData[12]=c0x; shapeData[13]=c0y;
-	shapeData[14]=c1x; shapeData[15]=c1y;
-	shapeData[16]=c2x; shapeData[17]=c2y;
-	shapeData[18]=c0x; shapeData[19]=c0y;
-	shapeData[20]=c2x; shapeData[21]=c2y;
-	shapeData[22]=c3x; shapeData[23]=c3y;
 
 	glGenVertexArrays(1, &particleVAO);
 	glGenBuffers(1, &particleShapeVBO);
@@ -2013,6 +2035,35 @@ void Simulation::InitGL()
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
 	glEnableVertexAttribArray(0);
 	glBindVertexArray(0);
+
+	// --- Tone-map post-process shader ---
+	// Fullscreen triangle generated from gl_VertexID (no vertex buffer needed).
+	// Reads the HDR accumulation texture and compresses it into displayable [0,1]
+	// with an exponential curve: bright cores roll off toward white instead of
+	// hard-clipping, while faint lone particles are lifted into visibility.
+	const char *tonemapVert = R"(
+		#version 330 core
+		out vec2 vUV;
+		void main() {
+			vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+			vUV = p;
+			gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+		}
+	)";
+	const char *tonemapFrag = R"(
+		#version 330 core
+		in vec2 vUV;
+		out vec4 FragColor;
+		uniform sampler2D uHDR;
+		uniform float uExposure;
+		void main() {
+			vec3 hdr = texture(uHDR, vUV).rgb;
+			vec3 mapped = 1.0 - exp(-uExposure * hdr);
+			FragColor = vec4(mapped, 1.0);
+		}
+	)";
+	tonemapShader = CompileShader(tonemapVert, tonemapFrag);
+	glGenVertexArrays(1, &tonemapVAO);
 }
 
 void Simulation::CreateRecordFBO(int width, int height)
@@ -2041,12 +2092,46 @@ void Simulation::CreateRecordFBO(int width, int height)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void Simulation::CreateHDRFBO(int width, int height)
+{
+	if (hdrFBO) {
+		glDeleteFramebuffers(1, &hdrFBO);
+		glDeleteTextures(1, &hdrColorTex);
+		glDeleteRenderbuffers(1, &hdrDepthRBO);
+	}
+
+	glGenFramebuffers(1, &hdrFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+
+	// RGBA16F so additive accumulation of overlapping particles can exceed 1.0
+	// without clipping; the tone-map pass compresses this range for display.
+	glGenTextures(1, &hdrColorTex);
+	glBindTexture(GL_TEXTURE_2D, hdrColorTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, hdrColorTex, 0);
+
+	glGenRenderbuffers(1, &hdrDepthRBO);
+	glBindRenderbuffer(GL_RENDERBUFFER, hdrDepthRBO);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, hdrDepthRBO);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void Simulation::ReSizeGL(int width, int height)
 {
 	if (height == 0) height = 1;
 	winWidth = width;
 	winHeight = height;
 	glViewport(0, 0, width, height);
+
+	// The HDR buffer is always needed: particles render into it every frame
+	// regardless of whether we are recording.
+	CreateHDRFBO(width, height);
 
 	if (Record_Video)
 		CreateRecordFBO(width, height);
@@ -2074,9 +2159,10 @@ void Simulation::BuildOctreeVerts(int nodeIdx)
 
 void Simulation::DrawGL()
 {
-	if (Record_Video)
-		glBindFramebuffer(GL_FRAMEBUFFER, recordFBO);
-
+	// Particles are additively accumulated into the HDR buffer first, then a
+	// tone-map pass compresses that into the LDR final target (screen or record
+	// FBO). This keeps on-screen and recorded output identical.
+	glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	double cphi = cos(Cam.phi), sphi = sin(Cam.phi);
@@ -2124,10 +2210,10 @@ void Simulation::DrawGL()
 	float up[3] = { r10, r11, r12 };
 
 	// --- Update particle data ---
-	//const float alpha_base = 100000.0f / N_Bodies;
-	//const float alpha_clamped = (alpha_base > 0.2f) ? 0.2f : ((alpha_base < 0.02f) ? 0.02f : alpha_base);
-	const float alpha_clamped = 0.2f;
-	
+	// The per-particle alpha is an accumulation weight, not a coverage value:
+	// additive blending sums color*alpha into the HDR buffer and ToneMapExposure
+	// controls overall brightness. Only the ratio between classes matters here --
+	// system-centre markers (5.0) accumulate 5x faster than ordinary stars (1.0).
 	std::vector<int> sysIndices(N_Systems);
 	sysIndices[0] = 0;
 	for (int j = 1; j < N_Systems; j++) sysIndices[j] = sysIndices[j-1] + N_System_Bodies[j-1];
@@ -2144,13 +2230,13 @@ void Simulation::DrawGL()
 		}
 
 		if (sysBody) {
-			clrBuf[i*4+0] = 0.0f; clrBuf[i*4+1] = 1.0f; clrBuf[i*4+2] = 0.0f; clrBuf[i*4+3] = 1.0f;
+			clrBuf[i*4+0] = 0.0f; clrBuf[i*4+1] = 1.0f; clrBuf[i*4+2] = 0.0f; clrBuf[i*4+3] = 5.0f;
 		} else {
 			float r = (float)cbrt(acc_sq[i] / accel_sq_color_thresh);
 			float b = 1.0f - r;
 			r = (r < 0.3f) ? 0.3f : r;
 			b = (b < 0.3f) ? 0.3f : b;
-			clrBuf[i*4+0] = r; clrBuf[i*4+1] = 0.3f; clrBuf[i*4+2] = b; clrBuf[i*4+3] = alpha_clamped;
+			clrBuf[i*4+0] = r; clrBuf[i*4+1] = 0.3f; clrBuf[i*4+2] = b; clrBuf[i*4+3] = 1.0f;
 		}
 	}
 
@@ -2158,14 +2244,37 @@ void Simulation::DrawGL()
 	glUniformMatrix4fv(glGetUniformLocation(particleShader, "uVP"), 1, GL_FALSE, vp);
 	glUniform3fv(glGetUniformLocation(particleShader, "uRight"), 1, right);
 	glUniform3fv(glGetUniformLocation(particleShader, "uUp"), 1, up);
+	// World size of a particle billboard. Chosen with the frag-shader Gaussian
+	// (exp(-16 r^2)) so the visible glow roughly matches the old 8-point star while
+	// staying fully contained inside the single quad (no clipped straight edges).
+	glUniform1f(glGetUniformLocation(particleShader, "uSize"), 1.8f);
 
 	glBindVertexArray(particleVAO);
 	glBindBuffer(GL_ARRAY_BUFFER, particlePosVBO);
 	glBufferData(GL_ARRAY_BUFFER, N_Bodies * 3 * sizeof(float), posBuf, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, particleColorVBO);
 	glBufferData(GL_ARRAY_BUFFER, N_Bodies * 4 * sizeof(float), clrBuf, GL_DYNAMIC_DRAW);
-	glDrawArraysInstanced(GL_TRIANGLES, 0, 12, N_Bodies);
+	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, N_Bodies);
 	glBindVertexArray(0);
+
+	// --- Tone-map the HDR scene into the LDR final target ---
+	// Final target is the record FBO when recording, else the default framebuffer.
+	// Overlays (octree wireframe, HUD text) are drawn afterwards in LDR on top of
+	// the tone-mapped image so they are not themselves compressed/dimmed.
+	GLuint finalFBO = Record_Video ? recordFBO : 0;
+	glBindFramebuffer(GL_FRAMEBUFFER, finalFBO);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glDisable(GL_BLEND);   // tone-map fully replaces the target
+	glUseProgram(tonemapShader);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, hdrColorTex);
+	glUniform1i(glGetUniformLocation(tonemapShader, "uHDR"), 0);
+	glUniform1f(glGetUniformLocation(tonemapShader, "uExposure"), (float)ToneMapExposure);
+	glBindVertexArray(tonemapVAO);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	glBindVertexArray(0);
+	glEnable(GL_BLEND);    // restore additive blend for the overlays below
 
 	// --- Draw octree wireframe ---
 	if (DrawOctree) {

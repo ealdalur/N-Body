@@ -115,6 +115,23 @@ Threshold in acceleration-squared units used to determine the red channel color 
 
 ---
 
+### `ToneMapExposure` — HDR Tone-Map Exposure
+
+```
+ToneMapExposure  <value>
+```
+
+Controls the exposure of the HDR tone-mapping post-process. Particles are rendered as soft radial glows and additively accumulated into a floating-point buffer, then compressed for display with `out = 1 - exp(-exposure * L)`, where `L` is the accumulated linear brightness. This decouples on-screen brightness from raw overlap count: dense galaxy cores roll off gracefully toward white instead of hard-clipping, while faint "lone" particles on the outskirts are lifted into visibility.
+
+- Higher values brighten the whole scene — lone particles become more visible, but cores saturate to white sooner
+- Lower values darken the scene and preserve more tonal detail in the cores
+
+Applies identically to on-screen rendering and recorded video.
+
+**Default:** 1.2
+
+---
+
 ### `DisplayScale` — Rendering Scale Factor
 
 ```

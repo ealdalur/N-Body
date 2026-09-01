@@ -167,6 +167,7 @@ DataLog         0
 RecordVideo     1
 Display         1920  1080
 accel_sq_color_thresh 2000000.0
+ToneMapExposure  1.2
 
 # Initialization: 7.0 code units ~= 5.1 primary crossing times (1 crossing = 1.36 units),
 # matching the several-crossing-time isolation the paper uses to reach sigma_gas ~ 5-10 km/s

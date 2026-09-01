@@ -33,6 +33,9 @@ class Simulation
 	double BH_Opening_Theta;
 	double DisplayScale;
 	double accel_sq_color_thresh;
+	// Exposure for the HDR tone-map post pass (out = 1 - exp(-exposure * L)).
+	// Higher lifts faint/lone particles; cores saturate gracefully toward white.
+	double ToneMapExposure;
 
 	bool Gravity_P2P;
 	bool Gravity_Oct;
@@ -173,6 +176,12 @@ class Simulation
 	// Off-screen FBO for recording
 	GLuint recordFBO, recordColorTex, recordDepthRBO;
 
+	// HDR accumulation buffer (RGBA16F): particles are additively blended here so
+	// core densities can exceed 1.0 without clipping, then a tone-map fullscreen
+	// pass compresses it into the LDR final target (screen or record FBO).
+	GLuint hdrFBO, hdrColorTex, hdrDepthRBO;
+	GLuint tonemapShader, tonemapVAO;
+
 	int winWidth, winHeight;
 
 	BHTree Octree;
@@ -235,6 +244,7 @@ class Simulation
 	void LoadScript(const std::string &path);
 	void InitGL();
 	void CreateRecordFBO(int width, int height);
+	void CreateHDRFBO(int width, int height);
 	GLuint CompileShader(const char *vertSrc, const char *fragSrc);
 	void CalcAccelRangeP2P(int iStart, int iEnd);
 	void CalcAccelRangeOct(int iStart, int iEnd);
