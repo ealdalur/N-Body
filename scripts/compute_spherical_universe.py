@@ -78,7 +78,16 @@ import math
 # === System parameters ===
 R = 200.0           # sphere radius (code units) = 12 kpc
 N = 100000          # number of particles
-M_total = 5.0e7     # total mass (code units) = 5e11 Msun
+M_total = 5.0e7     # total matter mass (code units) = 5e11 Msun
+
+# Dissipative gas ("baryons"): a fraction of the matter is gas that undergoes
+# inelastic collisions and so cools into dense knots at the filament nodes, while
+# the rest stays collisionless (dark-matter-like). 0.16 ~= the cosmic baryon
+# fraction Omega_b/Omega_m ~ 0.157 (Planck). Carved OUT of M_total so the total
+# mass -- and hence H_crit and the expansion dynamics -- is unchanged.
+gas_fraction = 0.16
+M_gas = M_total * gas_fraction        # gas budget (gasMass field)
+M_coll = M_total - M_gas              # collisionless budget (M field)
 
 # === Derived quantities ===
 rho = M_total / ((4.0 / 3.0) * math.pi * R**3)
@@ -237,9 +246,13 @@ print(f"  FDE             {FDE_use}")
 print(f"  dt              0.001")
 print(f"  r_soft          0.5")
 print(f"  BH_Opening_Theta  0.7")
+print(f"  Gas_Restitution 0.0")
+print(f"  Gas_Radius      0.5")
+print(f"  Gas_Cell_Size   4.0")
+print(f"  Gas_Softening   2.0")
 print(f"  N_SystemBodies  {N}")
 print(f"  Camera          0.0  960.0  0.0")
-print(f"  SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   {M_total:.1e}  {R:.1f}  {H_use:.2f}  0.0  1.0")
+print(f"  SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   {M_coll:.2e}  {R:.1f}  {H_use:.2f}  0.0  1.0 0.0  {M_gas:.2e} {gas_fraction:.2f}")
 print(f"")
 print(f"  H = {H_use:.2f}: Hubble parameter (each particle gets v = H*r, radial outward)")
 print(f"  H_crit = {H_crit:.2f}, H/H_crit = {H_frac} -> closed universe")

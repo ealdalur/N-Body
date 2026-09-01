@@ -58,6 +58,18 @@ dt              0.001
 r_soft          0.707107
 BH_Opening_Theta  0.7
 
+# Dissipative gas ("baryons"). A fraction of the matter (see the gasFraction field
+# on the SphericalUniverse line) is dissipative gas that undergoes inelastic
+# collisions (see docs/gas-model.md), so it cools and condenses into dense knots at
+# the filament nodes -- a qualitative analog of baryons forming galaxies within the
+# collisionless (dark-matter-like) cosmic web. These values are qualitative/tunable:
+# alpha (restitution), the collision radius/cell, and a gas-only softening that caps
+# how tightly the gas may collapse.
+Gas_Restitution 0.0
+Gas_Radius      0.5
+Gas_Cell_Size   4.0
+Gas_Softening   2.0
+
 Gravity         Octree
 End_Time        7.0
 
@@ -75,12 +87,16 @@ Camera_Orbit    0.001
 # as M_halo(r) ~ Vc^2 * r at all radii. That overestimates long-range attraction.
 # No published truncation radius is adopted here, so 0 is kept deliberately
 # rather than inventing one. Set it to a radius in code units to truncate.
-# SphericalUniverse  system  posX posY posZ  velX velY velZ  M  R  H  haloVc  haloRc  haloRh
+# SphericalUniverse  system  posX posY posZ  velX velY velZ  M  R  H  haloVc  haloRc  haloRh  gasMass  gasFraction
 #
 # H = 2.83: Hubble parameter giving each particle v = H * r (radial outward).
 #   H_crit = sqrt(2*M/R^3) = 3.54 for these parameters.
 #   H/H_crit = 0.80 -> closed universe (bound, KE/|PE| = 0.64)
-# M = 5e7 (~5e11 Msun), R = 200 (12 kpc)
-# No dark matter halo (structure from baryonic gravity + Hubble expansion)
+# M = 4.2e7 collisionless + gasMass 8.0e6 = 5e7 total (~5e11 Msun), R = 200 (12 kpc).
+#   The total (and hence H_crit) is unchanged by the split; M is now the
+#   COLLISIONLESS budget and gasMass the dissipative-gas budget.
+# gasFraction = 0.16: the cosmic baryon fraction Omega_b/Omega_m ~ 0.157 (Planck),
+#   treating the collisionless particles as dark-matter-like and the gas as baryons.
+# No dark matter halo (structure from gravity + Hubble expansion)
 # FDE = 0.10: negligible during structure formation, delays late recollapse
-SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   5.0e7  200.0  2.83  0.0  1.0 0.0
+SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   4.2e7  200.0  2.83  0.0  1.0 0.0  8.0e6 0.16

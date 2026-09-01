@@ -681,7 +681,7 @@ GalaxyDisc  1   0.0 458.4 80.8   200.0 0.0 0.0   0.5373 0.8434 0.0000   780000.0
 ### `SphericalUniverse` — Procedural Spherical Distribution
 
 ```
-SphericalUniverse  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <total_mass> <radius> <H>  <halo_circular_velocity> <halo_core_radius> <halo_truncation_radius>
+SphericalUniverse  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <mass> <radius> <H>  <halo_circular_velocity> <halo_core_radius> <halo_truncation_radius>  [gasMass] [gasFraction]
 ```
 
 Generates a uniform spherical distribution of particles with Hubble flow initial velocities. Each particle receives an outward radial velocity proportional to its distance from the center (v = H * r), mimicking cosmological expansion. Useful for simulating large-scale structure formation, collapsing gas clouds, or cosmological initial conditions.
@@ -691,16 +691,23 @@ Generates a uniform spherical distribution of particles with Hubble flow initial
 | `system` | System index (0-based) |
 | `posX`, `posY`, `posZ` | Position of the sphere center |
 | `velX`, `velY`, `velZ` | Bulk velocity of the entire sphere |
-| `total_mass` | Total mass distributed equally among all particles |
+| `mass` | Mass distributed equally among the collisionless particles. With no gas this is the total mass; with gas it is the collisionless budget and the total is `mass + gasMass` |
 | `radius` | Radius of the spherical distribution. Particles are placed uniformly in volume (r scales as `rand^(1/3)`) with a small Gaussian perturbation (sigma=10 code units) |
 | `H` | Hubble parameter. Each particle receives a radial outward velocity v = H * r, where r is its distance from the sphere center. This establishes Hubble flow (expansion proportional to distance). The critical value H_crit = sqrt(2*G*M/R^3) gives marginal unbinding; H < H_crit produces a bound (closed) system, H > H_crit produces an unbound (open) system. Set to 0 for no initial expansion (static sphere). |
 | `halo_circular_velocity` | Dark matter halo circular velocity (same model as GalaxyDisc). Set to `0.0` for no halo |
 | `halo_core_radius` | Dark matter halo core radius. Irrelevant if `halo_circular_velocity` is 0 |
 | `halo_truncation_radius` | Halo truncation radius; `0` for untruncated. Same meaning as for `GalaxyDisc` |
+| `gasMass` *(optional)* | Mass budget for dissipative gas particles, code units. Default `0` (no gas). When set, the last `round(gasFraction * N)` particles of the system are tagged gas and undergo the sticky-particle collisions governed by the `Gas_*` globals; the rest are collisionless. Gas is drawn from the same uniform-sphere + Hubble-flow distribution, so it is a spatially random subset. Interpreting the collisionless particles as dark-matter-like and the gas as baryons, `gasFraction` is the cosmic baryon fraction (~0.16) |
+| `gasFraction` *(optional)* | Fraction (0–1) of the system's particles that are gas. Default `0`. Positional — to set it, `gasMass` must also be given. `gasMass` and `gasFraction` must both be positive or both zero |
 
 **Example (100k-body expanding sphere with Hubble flow for structure formation):**
 ```
 SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   5.0e7 200.0 2.83  0.0 1.0 0.0
+```
+
+**Example with a 16% dissipative gas ("baryon") component:**
+```
+SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   4.2e7 200.0 2.83  0.0 1.0 0.0  8.0e6 0.16
 ```
 
 ---

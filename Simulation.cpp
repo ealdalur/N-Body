@@ -401,9 +401,31 @@ void Simulation::LoadScript(const std::string &path)
 			if (!(iss >> system >> px >> py >> pz >> vx >> vy >> vz
 			          >> M >> R >> H >> haloVc >> haloRc >> haloRh)) {
 				std::cerr << "Error: malformed SphericalUniverse command." << std::endl;
-				std::cerr << "Expected 13 values: system posX posY posZ velX velY velZ"
-				          << " mass radius H haloVc haloRc haloRh" << std::endl;
+				std::cerr << "Expected >=13 values: system posX posY posZ velX velY velZ"
+				          << " mass radius H haloVc haloRc haloRh [gasMass] [gasFraction]" << std::endl;
 				std::cerr << "  got: " << line << std::endl;
+				exit(1);
+			}
+
+			// Optional 14th/15th fields: dissipative gas mass and gas FRACTION -- the
+			// fraction (0..1) of this system's bodies that are gas (the rest are
+			// collisionless). Both default 0 (no gas), so existing 13-field scripts are
+			// unaffected. When set, M is the COLLISIONLESS mass budget and gasMass the
+			// gas budget (total = M + gasMass); the gas are the LAST round(gasFraction*N)
+			// bodies. Same convention as GalaxyDisc.
+			double gasMass = 0.0;
+			double gasFraction = 0.0;
+			{ double tmp; if (iss >> tmp) gasMass = tmp; }
+			{ double tmp; if (iss >> tmp) gasFraction = tmp; }
+			if (gasFraction < 0.0 || gasFraction > 1.0 || gasMass < 0.0) {
+				std::cerr << "Error: SphericalUniverse gas mass must be >= 0 and gas"
+				          << " fraction in [0,1], got gasMass=" << gasMass
+				          << " gasFraction=" << gasFraction << std::endl;
+				exit(1);
+			}
+			if ((gasFraction > 0.0) != (gasMass > 0.0)) {
+				std::cerr << "Error: SphericalUniverse gas mass and gas fraction must"
+				          << " both be positive or both zero." << std::endl;
 				exit(1);
 			}
 
@@ -411,7 +433,7 @@ void Simulation::LoadScript(const std::string &path)
 
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
-			LoadSphericalUniverseState(system, sysPos, sysVel, M, R, H, haloVc, haloRc, haloRh);
+			LoadSphericalUniverseState(system, sysPos, sysVel, M, R, H, haloVc, haloRc, haloRh, gasMass, gasFraction);
 		} else if (key == "Body") {
 			int system;
 			double px, py, pz, vx, vy, vz, m;
@@ -733,9 +755,9 @@ void Simulation::LoadGalaxyDiscState(int system, double *sysPos, double *sysVel,
 	if (!warmupActive) ApplyBulkVelocity(system);
 }
 
-void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc, double haloRh) {
+void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *sysVel, double M, double R, double H, double haloVc, double haloRc, double haloRh, double gasMass, double gasFraction) {
 
-	double m,r,theta,phi;
+	double r,theta,phi;
 	double p[3],v[3];
 
 	int sysIdx = 0;
@@ -765,7 +787,19 @@ void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *
 	else
 		halo_mass[system] = 0.0;
 
-	m = M/N_System_Bodies[system];
+	// Split into a collisionless budget (M) and a dissipative gas budget (gasMass).
+	// The gas particles are the LAST nGas bodies of this system (same convention as
+	// GalaxyDisc); since every particle is sampled independently from the same
+	// uniform sphere + Hubble flow, that slice is just a spatially random subset.
+	int Nsys = N_System_Bodies[system];
+	int nGas = (int)llround(gasFraction * Nsys);
+	if (nGas < 0) nGas = 0;
+	if (nGas > Nsys) nGas = Nsys;
+	int gasStart = sysIdx + Nsys - nGas;                 // first gas index
+	int nColl = Nsys - nGas;
+	double m_coll = (nColl > 0) ? M / nColl : 0.0;
+	double m_gas  = (nGas > 0) ? gasMass / nGas : 0.0;
+	if (nGas > 0) gasEnabled = true;
 
 	// Bulk velocity is recorded and applied after the momentum correction; see
 	// LoadGalaxyDiscState for the rationale.
@@ -778,7 +812,9 @@ void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *
 
 	for (int i=0; i<N_System_Bodies[system]; i++)
 	{
-		mass[sysIdx+i] = m;
+		bool isGas = (sysIdx + i) >= gasStart && nGas > 0;
+		mass[sysIdx+i] = isGas ? m_gas : m_coll;
+		is_gas[sysIdx+i] = isGas ? 1 : 0;
 		has_gravity[sysIdx+i] = true;
 		body_system[sysIdx+i] = system;
 

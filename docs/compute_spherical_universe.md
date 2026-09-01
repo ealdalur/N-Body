@@ -277,6 +277,39 @@ The parameter selection process was iterative:
 
 4. **N=100,000 chosen** to give scatter/spacing=1.44 (well above 1.0, ensuring strong coherent perturbation seeding) and 108 particles per Jeans volume (smooth filaments).
 
+### 4.4 Dissipative Gas ("Baryons")
+
+A fraction of the matter is optionally made **dissipative gas**, using the same
+sticky-particle mechanism as the galaxy simulations (see `docs/gas-model.md`). The
+gas particles gravitate like the rest but additionally undergo inelastic
+collisions, so they lose random kinetic energy and condense into dense knots at the
+filament nodes — a qualitative analog of **baryons cooling into galaxies** within a
+collisionless (dark-matter-like) cosmic web.
+
+The `SphericalUniverse` command takes two optional trailing fields, `gasMass` and
+`gasFraction`, mirroring `GalaxyDisc`. The split is carved out of the existing total
+so the dynamics are preserved:
+
+```
+mass field  (collisionless budget) = M_total * (1 - gas_fraction)
+gasMass field                      = M_total * gas_fraction
+total (and hence H_crit)           = unchanged
+```
+
+The last `round(gasFraction * N)` particles are tagged gas; because every particle
+is sampled independently from the same uniform sphere + Hubble flow, that slice is a
+spatially random subset. The generator uses `gas_fraction = 0.16`, the **cosmic
+baryon fraction** `Omega_b / Omega_m ~ 0.157` (Planck), interpreting the
+collisionless particles as dark matter and the gas as baryons.
+
+The collision physics is set by the shared `Gas_Restitution` / `Gas_Radius` /
+`Gas_Cell_Size` / `Gas_Softening` globals. These are **qualitative** here, not
+calibrated: real baryonic structure formation involves gas pressure, shocks,
+radiative cooling and feedback that the sticky-particle model does not capture — it
+provides only dissipation. `Gas_Softening` caps how tightly the gas may collapse (it
+still resolves the gas's self-gravity, unlike a coarse cosmological grid), so raise
+it if the gas over-fragments and lower it to let denser knots form.
+
 ---
 
 ## 5. Expected Simulation Behavior
