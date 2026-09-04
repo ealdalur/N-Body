@@ -124,6 +124,7 @@ Simulation::~Simulation()
 	delete[] clrBuf;
 
 	if (Data_Log) fclose(DataLog);
+	if (barLog) fclose(barLog);
 }
 
 void Simulation::Allocate()
@@ -266,6 +267,9 @@ void Simulation::LoadScript(const std::string &path)
 		} else if (key == "DataLog") {
 			int val; iss >> val;
 			Data_Log = (val != 0);
+		} else if (key == "BarDiagnostic") {
+			// TEMPORARY: steps between m=2 bar/arm CSV rows; 0 (or absent) disables.
+			iss >> barLogEvery;
 		} else if (key == "RecordVideo") {
 			int val; iss >> val;
 			Record_Video = (val != 0);
@@ -1391,6 +1395,125 @@ void Simulation::ProcessGasCollisions()
 	}
 }
 
+// TEMPORARY bar/arm diagnostic. For each system, measure the m = 1..6 Fourier
+// amplitudes A_m(R) and phases of the disc's mass distribution vs cylindrical
+// radius. A strong, radially-coherent m=2 in the INNER disc (near-constant phase)
+// is a bar; whichever m dominates the OUTER disc is the arm number (m=2 two-arm,
+// m=3 three-arm, m=4 four-arm, ...), and a phase that winds with radius marks a
+// spiral. The disc plane is found from the system's own mass-weighted angular
+// momentum, so no orientation input is needed. Written to bar_diagnostic.csv. To
+// be removed with the diagnostic cleanup.
+void Simulation::LogBarDiagnostic() {
+	if (barLogEvery <= 0) return;
+	if ((barStepCount++ % barLogEvery) != 0) return;
+
+	const int NR = 20;                 // radial bins per disc
+	const int MMAX = 6;                // Fourier orders m = 1..MMAX logged
+	if (!barLog) {
+		barLog = fopen("bar_diagnostic.csv", "w");
+		if (!barLog) { barLogEvery = 0; return; }
+		fprintf(barLog, "t,system,bin,r_lo,r_hi,n,"
+		        "A1,A2,A3,A4,A5,A6,ph1,ph2,ph3,ph4,ph5,ph6\n");
+	}
+
+	int base = 0;
+	for (int sys = 0; sys < N_Systems; sys++) {
+		int Nsys = N_System_Bodies[sys];
+		if (Nsys < 2) { base += Nsys; continue; }
+
+		// Mass-weighted centre, mean velocity, and angular momentum -> disc normal.
+		double c[3] = {0,0,0}, vc[3] = {0,0,0}, mtot = 0.0;
+		for (int i = 0; i < Nsys; i++) {
+			int gi = base + i; double mi = mass[gi];
+			for (int k = 0; k < 3; k++) { c[k] += mi*pos[gi][k]; vc[k] += mi*vel[gi][k]; }
+			mtot += mi;
+		}
+		if (mtot <= 0.0) { base += Nsys; continue; }
+		for (int k = 0; k < 3; k++) { c[k] /= mtot; vc[k] /= mtot; }
+		double L[3] = {0,0,0};
+		for (int i = 0; i < Nsys; i++) {
+			int gi = base + i; double mi = mass[gi];
+			double dx = pos[gi][0]-c[0], dy = pos[gi][1]-c[1], dz = pos[gi][2]-c[2];
+			double dvx = vel[gi][0]-vc[0], dvy = vel[gi][1]-vc[1], dvz = vel[gi][2]-vc[2];
+			L[0] += mi*(dy*dvz - dz*dvy);
+			L[1] += mi*(dz*dvx - dx*dvz);
+			L[2] += mi*(dx*dvy - dy*dvx);
+		}
+		double Ln = sqrt(L[0]*L[0]+L[1]*L[1]+L[2]*L[2]);
+		double nrm[3] = { 0.0, 1.0, 0.0 };
+		if (Ln > 0.0) { nrm[0]=L[0]/Ln; nrm[1]=L[1]/Ln; nrm[2]=L[2]/Ln; }
+
+		// In-plane basis (u,w) for the azimuth phi = atan2(ip.w, ip.u).
+		double seed[3] = {1.0, 0.0, 0.0};
+		if (fabs(nrm[0]) > 0.9) { seed[0]=0.0; seed[1]=1.0; seed[2]=0.0; }
+		double u[3] = { nrm[1]*seed[2]-nrm[2]*seed[1],
+		                nrm[2]*seed[0]-nrm[0]*seed[2],
+		                nrm[0]*seed[1]-nrm[1]*seed[0] };
+		double un = sqrt(u[0]*u[0]+u[1]*u[1]+u[2]*u[2]); u[0]/=un; u[1]/=un; u[2]/=un;
+		double w[3] = { nrm[1]*u[2]-nrm[2]*u[1],
+		                nrm[2]*u[0]-nrm[0]*u[2],
+		                nrm[0]*u[1]-nrm[1]*u[0] };
+
+		// Cylindrical radius of every particle; bin linearly over [0, Rmax].
+		double Rmax = 0.0;
+		std::vector<double> Rp(Nsys), phip(Nsys);
+		for (int i = 0; i < Nsys; i++) {
+			int gi = base + i;
+			double dp[3] = { pos[gi][0]-c[0], pos[gi][1]-c[1], pos[gi][2]-c[2] };
+			double z = dp[0]*nrm[0]+dp[1]*nrm[1]+dp[2]*nrm[2];
+			double ipx = dp[0]-z*nrm[0], ipy = dp[1]-z*nrm[1], ipz = dp[2]-z*nrm[2];
+			double R = sqrt(ipx*ipx+ipy*ipy+ipz*ipz);
+			Rp[i] = R;
+			phip[i] = atan2(ipx*w[0]+ipy*w[1]+ipz*w[2], ipx*u[0]+ipy*u[1]+ipz*u[2]);
+			if (R > Rmax) Rmax = R;
+		}
+		if (Rmax <= 0.0) { base += Nsys; continue; }
+		double dR = Rmax / NR;
+
+		// Per bin: mass, count, and the m=1..MMAX Fourier sums of the mass
+		// distribution. A_m = |sum m e^{i m phi}| / sum m ; the m that dominates
+		// the OUTER disc is the arm number (m=2 two-arm, m=3 three-arm, ...), while
+		// a strong radially-coherent m=2 in the INNER disc is the bar.
+		std::vector<double> sM(NR,0.0);
+		std::vector<long> cnt(NR,0);
+		std::vector<double> sC(NR*(MMAX+1),0.0), sS(NR*(MMAX+1),0.0);
+		for (int i = 0; i < Nsys; i++) {
+			int b = (int)(Rp[i] / dR); if (b >= NR) b = NR-1; if (b < 0) b = 0;
+			double mi = mass[base + i];
+			sM[b] += mi;
+			cnt[b]++;
+			// cos(m phi)/sin(m phi) built by Chebyshev recurrence from m=1.
+			double cph = cos(phip[i]), sph = sin(phip[i]);
+			double cm = cph, sm = sph;               // m = 1
+			for (int m = 1; m <= MMAX; m++) {
+				sC[b*(MMAX+1)+m] += mi*cm;
+				sS[b*(MMAX+1)+m] += mi*sm;
+				double cn = cm*cph - sm*sph;         // (m+1) angle addition
+				double sn = sm*cph + cm*sph;
+				cm = cn; sm = sn;
+			}
+		}
+		for (int b = 0; b < NR; b++) {
+			if (sM[b] <= 0.0) continue;
+			double A[MMAX+1], ph[MMAX+1];
+			for (int m = 1; m <= MMAX; m++) {
+				double C = sC[b*(MMAX+1)+m], S = sS[b*(MMAX+1)+m];
+				A[m] = sqrt(C*C + S*S) / sM[b];
+				ph[m] = atan2(S, C) / m;             // pattern orientation for order m
+			}
+			fprintf(barLog,
+			        "%.6f,%d,%d,%.3f,%.3f,%ld,"
+			        "%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,"
+			        "%.5f,%.5f,%.5f,%.5f,%.5f,%.5f\n",
+			        t, sys, b, b*dR, (b+1)*dR, cnt[b],
+			        A[1],A[2],A[3],A[4],A[5],A[6],
+			        ph[1],ph[2],ph[3],ph[4],ph[5],ph[6]);
+		}
+		base += Nsys;
+	}
+	fflush(barLog);
+}
+
 void Simulation::ZeroNetMomentum(int system) {
 	// Remove one system's net momentum. The procedural generators sample particle
 	// azimuths randomly and never correct the sum, leaving a residual of order
@@ -1794,6 +1917,8 @@ void Simulation::Step()
 	ProcessGasCollisions();
 
 	CalcSystemQuantities();
+
+	LogBarDiagnostic();
 
 	if (Data_Log)
 	{

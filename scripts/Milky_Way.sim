@@ -10,10 +10,17 @@
 #
 # MILKY WAY
 #   Disc radius:         26.8 kpc (446.7 code units)
-#   Central body mass:   1.5e10 Msun (bulge, includes Sgr A* at 4e6 Msun)
-#   Disc mass:           4.5e10 Msun (3225688 code units), stars + gas
-#   Cold-gas fraction:   0.15 of the disc baryon (dissipative; HI+H2 ~6.8e9 Msun)
-#   Rotation curve:      ~220 km/s (flat, set by dark matter halo)
+#   Disc mass:           6.0e10 Msun (4300917 code units), stars + gas, self-gravitating
+#     Stars 5.0e10 + cold gas 1.0e10. This folds the former separate bulge into the
+#     disc: the MW's "bulge" is largely a boxy/peanut PSEUDObulge -- the bar seen
+#     end-on -- which forms from the disc, so no distinct classical bulge is imposed.
+#     A self-gravitating disc of this mass is bar-unstable (and maximal, V_disc,peak
+#     ~ 0.87 V_tot), so it should form its own bar + boxy bulge.
+#   Central body mass:   4.15e6 Msun (Sgr A* token; dynamically negligible, below the
+#                        softening scale -- not a bulge)
+#   Cold-gas fraction:   0.167 of the disc baryon (dissipative; HI+H2+He ~1.0e10 Msun)
+#   Rotation curve:      ~220 km/s (disc peak ~196 at ~5.7 kpc + cored halo -> ~224
+#                        at the peak, flat ~220 outside)
 #   DM halo core radius: 10 kpc (166.7 code units)
 #   Disc orientation:    x-z plane, normal = (0, 1, 0)
 #   Rotation:            counter-clockwise viewed from +y
@@ -25,7 +32,7 @@ r_soft          0.547723
 BH_Opening_Theta  0.5
 
 # Dissipative "sticky particle" gas (see docs/gas-model.md for the method). The gas
-# budget and 0.15 fraction are set on the GalaxyDisc line; these globals set the
+# budget and 0.167 fraction are set on the GalaxyDisc line; these globals set the
 # collision physics: alpha=0 (fully inelastic), collision radius and search-cell
 # size, and a gas-only gravitational softening (~0.93 kpc) that keeps the cold gas
 # from fragmenting while the stars stay sharp at r_soft.
@@ -38,6 +45,10 @@ Gravity         Octree
 End_Time        20.0
 
 DataLog         0
+# TEMPORARY m=2 bar/arm diagnostic: append A2(R) and phase to bar_diagnostic.csv
+# every N steps (0 = off). Strong, radially-coherent A2 with near-constant phase in
+# the inner disc => bar; A2 with a winding phase => spiral arms.
+BarDiagnostic   200
 RecordVideo     1
 Display         1920  1080
 
@@ -65,7 +76,10 @@ Camera          0.0  300.0  700.0
 # rather than inventing one. Set it to a radius in code units to truncate.
 # GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  centralMass  discMass(star)  R  Ri  h_r  Q  haloVc  haloRc  haloRh  sigma_z_ratio  gasMass  gasFraction
 
-# Milky Way at origin, disc in x-z plane. discMass is the STAR budget (0.85 of the
-# 4.5e10 disc baryon); gasMass is the remaining 0.15 (dissipative gas). Their sum is
-# the full disc baryon, so the rotation curve is unchanged by the split.
-GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   1075229.2 2741834.5 446.7 16.7 43.3 1.2  220.0 166.7 0.0  0.5  483853.2 0.15
+# Milky Way at origin, disc in x-z plane. The former separate bulge is folded in:
+# the central body is now just a Sgr A* token (297.5 code = 4.15e6 Msun), all 6.0e10
+# baryon lives in the self-gravitating disc, and the inner hole is reduced (Ri 16.7
+# -> 5.0 = 0.3 kpc) so the exponential disc fills the centre the bulge used to
+# occupy. discMass is the STAR budget (5.0e10); gasMass is the dissipative gas
+# (1.0e10, fraction 0.167). Q=1.1 mildly favours the bar while staying Toomre-stable.
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   297.5 3582663.8 446.7 5.0 43.3 1.1  220.0 166.7 0.0  0.5  718253.1 0.167

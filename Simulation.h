@@ -188,6 +188,16 @@ class Simulation
 
 	FILE *DataLog;
 
+	// TEMPORARY m=2 bar/arm diagnostic: periodically log the m=2 Fourier amplitude
+	// A2(R) and phase of each disc's surface density, so bar (strong, radially
+	// coherent A2 with near-constant phase) and spiral (A2 with winding phase) can
+	// be measured. Enabled by the BarDiagnostic script command; writes
+	// bar_diagnostic.csv. Slated for removal once the generalized diagnostic system
+	// lands.
+	FILE *barLog = nullptr;
+	int barLogEvery = 0;        // steps between rows; 0 = disabled
+	long barStepCount = 0;
+
 	ThreadPool *pool;
 
 	// Scale factor s such that the halo acceleration on a body is
@@ -260,6 +270,7 @@ class Simulation
 	void CalcOutputs();
 	void CalcSystemQuantities();
 	void ProcessGasCollisions();
+	void LogBarDiagnostic();
 	// Zero one system's net momentum. Called by the procedural generators only,
 	// where random particle phases leave a residual of order v_c/sqrt(N) that is
 	// pure sampling noise. Systems built from explicit `Body` state vectors do not
