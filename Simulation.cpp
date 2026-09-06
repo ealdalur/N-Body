@@ -61,6 +61,9 @@ Simulation::Simulation(const std::string &scriptPath)
 	DisplayHeight = 720;
 
 	LoadScript(scriptPath);
+	// Preserve the script-space camera before camera following translates it to
+	// the followed system's current position.
+	InitialCam = Cam;
 	Allocate();
 	UpdateSofteningSq();   // cache r_soft^2 / gas_softening^2 for the force kernels
 
@@ -2101,6 +2104,16 @@ void Simulation::CamShift(double dx, double dy, double dz)
 	Cam.pos[2] += dz;
 }
 
+void Simulation::ResetCamera()
+{
+	// With no followed system this restores the absolute Camera and
+	// Camera_lookAt values from the script.  When following is enabled,
+	// UpdateCameraFollow translates that same script-defined framing so it is
+	// relative to the followed system at its *current* position.
+	Cam = InitialCam;
+	UpdateCameraFollow();
+}
+
 GLuint Simulation::CompileShader(const char *vertSrc, const char *fragSrc)
 {
 	GLuint vert = glCreateShader(GL_VERTEX_SHADER);
@@ -2464,20 +2477,11 @@ void Simulation::DrawGL()
 		posBuf[i*3+1] = (float)pos[i][1] * ds;
 		posBuf[i*3+2] = (float)pos[i][2] * ds;
 
-		bool sysBody = false;
-		for (int j = 0; j < N_Systems; j++) {
-			if (i == sysIndices[j]) { sysBody = true; break; }
-		}
-
-		if (sysBody) {
-			clrBuf[i*4+0] = 0.0f; clrBuf[i*4+1] = 1.0f; clrBuf[i*4+2] = 0.0f; clrBuf[i*4+3] = 5.0f;
-		} else {
-			float r = (float)cbrt(acc_sq[i] / accel_sq_color_thresh);
-			float b = 1.0f - r;
-			r = (r < 0.3f) ? 0.3f : r;
-			b = (b < 0.3f) ? 0.3f : b;
-			clrBuf[i*4+0] = r; clrBuf[i*4+1] = 0.3f; clrBuf[i*4+2] = b; clrBuf[i*4+3] = 1.0f;
-		}
+		float r = (float)cbrt(acc_sq[i] / accel_sq_color_thresh);
+		float b = 1.0f - r;
+		r = (r < 0.3f) ? 0.3f : r;
+		b = (b < 0.3f) ? 0.3f : b;
+		clrBuf[i*4+0] = r; clrBuf[i*4+1] = 0.3f; clrBuf[i*4+2] = b; clrBuf[i*4+3] = 1.0f;
 	}
 
 	glUseProgram(particleShader);

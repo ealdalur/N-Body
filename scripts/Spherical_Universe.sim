@@ -53,10 +53,10 @@
 #
 
 G               1.0
-FDE             0.10
+FDE             0.085
 dt              0.001
-r_soft          0.707107
-BH_Opening_Theta  0.7
+r_soft          0.5
+BH_Opening_Theta  0.5
 
 # Dissipative gas ("baryons"). A fraction of the matter (see the gasFraction field
 # on the SphericalUniverse line) is dissipative gas that undergoes inelastic
@@ -65,19 +65,19 @@ BH_Opening_Theta  0.7
 # collisionless (dark-matter-like) cosmic web. These values are qualitative/tunable:
 # alpha (restitution), the collision radius/cell, and a gas-only softening that caps
 # how tightly the gas may collapse.
-Gas_Restitution 0.0
+Gas_Restitution 0.3
 Gas_Radius      0.5
 Gas_Cell_Size   4.0
-Gas_Softening   2.0
+Gas_Softening   5.0
 
 Gravity         Octree
-End_Time        7.0
+End_Time        15.0
 
 DataLog         0
 RecordVideo     1
 Display         1920  1080
 
-N_SystemBodies  1000000
+N_SystemBodies  100000
 
 # ── Camera ─────────────────────────────────────────
 Camera          0.0  0.0  960.0

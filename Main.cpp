@@ -133,6 +133,9 @@ bool handleInput(const bool* keys) {
 			SDL_SetWindowTitle(Win.gWindow, "N-Body Simulation");
 		}
 	}
+	if (keyPressed(SDL_SCANCODE_R, keys)) {
+		Sim->ResetCamera();
+	}
 
 	double dt = deltaTime;
 	if (keys[SDL_SCANCODE_W]) {

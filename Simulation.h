@@ -157,6 +157,9 @@ class Simulation
 	std::vector<double> system_bulk_vel;   // 3 per system, withheld during warmup
 
 	Camera Cam;
+	// The camera as specified by the input script.  This stays immutable while
+	// the simulation runs so ResetCamera can restore the original framing.
+	Camera InitialCam;
 
 	// Particle rendering (modern GL, instanced)
 	GLuint particleVAO, particleShapeVBO, particlePosVBO, particleColorVBO;
@@ -304,6 +307,7 @@ public:
 	void Step();
 	void CamMove(double d_phi, double d_theta, double d_r);
 	void CamShift(double dx, double dy, double dz);
+	void ResetCamera();
 	void ReSizeGL(int width, int height);
 	void DrawGL();
 	void DrawInfo(double fps);
