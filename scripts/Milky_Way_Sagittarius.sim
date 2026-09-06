@@ -1,0 +1,92 @@
+# ── Milky Way + Sagittarius perturber ─────────────────
+#
+# Unit system (G=1):
+#   1 distance unit = 60 pc = 0.060 kpc
+#   1 mass unit     = 60 pc / G = 1.395e4 solar masses (fixed by G=1)
+#   1 velocity unit = 1 km/s
+#   1 time unit     = 58.7 Myr
+#
+# PURPOSE: drive the Milky Way disc with a Sagittarius-like satellite passage. An
+# isolated MW disc with these parameters prefers an m=3 spiral (swing amplification;
+# see docs), whereas the MW's 2 dominant STELLAR arms are thought to be externally
+# driven -- largely by the repeated disc-crossing passages of the Sagittarius dwarf
+# (Purcell et al. 2011, "The Sagittarius impact as an architect of spirality").
+# This script reuses the fold-in MW disc from Milky_Way.sim and adds Sgr as a
+# standalone, dark-matter-dominated perturber (a DarkMatterHalo -- no disc, no
+# stars, hence invisible in the render; watch the disc's response and
+# bar_diagnostic.csv).
+#
+# MILKY WAY (system 0): identical to Milky_Way.sim
+#   Disc 6.0e10 Msun (5.0e10 stars + 1.0e10 gas), self-gravitating, maximal;
+#   Sgr A* token central; cored halo Vc=220, Rc=10 kpc; Q=1.1.
+#
+# SAGITTARIUS (system 1): standalone dark-matter halo, ~1e10 Msun. A DELIBERATELY
+#   GENTLER, CLEANER driver than a faithful Sgr polar plunge: an earlier ~3e10,
+#   near-polar, 15 kpc plunge drove a strong m=2 but also badly warped/heated the
+#   disc (visually a mess). Tidal-arm theory (Toomre & Toomre 1972) says the
+#   cleanest 2-arm response comes from a PROGRADE, MODERATELY-INCLINED, GRAZING
+#   passage, so this variant uses:
+#     mass ~1e10 Msun: Vc = 66.2 km/s, Rc = 1.5 kpc (25 code), Rh = 10 kpc (167 code)
+#       -> M(Rh) = Vc^2 Rh^3/(Rh^2+Rc^2) = 7.16e5 code = 1.0e10 Msun.
+#     orbit: apocenter (0, 0, 900) = 54 kpc out along +z (in the disc plane, outside
+#       the 26.8 kpc disc); velocity (124, 71, 0) km/s. Its angular momentum is ~30
+#       deg from the disc normal (+y) and PROGRADE (co-rotating with the disc), and
+#       pericenter is ~25 kpc -- a graze at the disc edge, NOT a plunge through the
+#       centre. This forces a clean m=2 with far less vertical warp/heating.
+#   Velocity is withheld during warmup and applied at t=0 (Sgr waits at apo, then
+#   grazes in). Trade-off: this is tuned for a clean 2-arm, not for Sgr fidelity --
+#   the real Sgr is polar and mostly warps/corrugates the MW (the earlier run).
+#
+# LIMITATIONS: the Sgr halo is rigid -- it will not tidally strip (no Sagittarius
+# stream) and feels no dynamical friction (no orbital decay). Fine for driving the
+# disc over a passage or two; not for the stream or long-term inspiral.
+#
+# Sources: Purcell et al. 2011 (Nature 477, 301); Milky_Way.sim for the disc.
+#
+
+G               1.0
+FDE             0.0
+dt              0.0005
+r_soft          0.5
+BH_Opening_Theta  0.5
+
+# Dissipative gas globals (see docs/gas-model.md). Gas_Restitution raised to 0.3
+# (from the paper's 0) so the gas is less maximally dissipative and forms fewer
+# chaotic filaments after the passage, tracing the stellar arms more smoothly.
+Gas_Restitution 0.3
+Gas_Radius      0.223
+Gas_Cell_Size   6.0
+Gas_Softening   15.5
+
+Gravity         Octree
+End_Time        40.0
+
+DataLog         0
+# m=1..6 bar/arm diagnostic -> bar_diagnostic.csv (analyse with
+# scripts/analyze_bar_diagnostic.py). Watch whether the Sgr passage drives m=2.
+BarDiagnostic   200
+RecordVideo     1
+Display         1920  1080
+
+# Warmup: MW relaxes and Sgr is held at apocenter (systems isolated, cross-system
+# gravity off, velocities withheld) until t=0, then Sgr's orbital velocity is applied
+# and full coupling begins. All orbital values below refer to t=0.
+InitializationTime  2.0
+
+# System 0 = MW disc (200000 bodies); system 1 = Sgr halo (0 bodies, particle-less).
+N_SystemBodies  200000  0
+
+# ── Camera ─────────────────────────────────────────
+# Face-on view of the MW disc (normal +y) so the driven 2-arm spiral is visible
+# (an oblique view mostly shows the warp). Adjust to taste.
+Camera          0.0  300.0  700.0
+Camera_lookAt_System   0
+
+# ── Initial Conditions ─────────────────────────────
+# GalaxyDisc  system  posX posY posZ  velX velY velZ  normalX normalY normalZ  centralMass  discMass(star)  R  Ri  h_r  Q  haloVc  haloRc  haloRh  sigma_z_ratio  gasMass  gasFraction
+GalaxyDisc  0   0.0 0.0 0.0   0.0 0.0 0.0   0.0 1.0 0.0   297.5 3582663.8 446.7 5.0 43.3 1.1  220.0 166.7 0.0  0.5  718253.1 0.167
+
+# DarkMatterHalo  system  posX posY posZ  velX velY velZ  haloVc  haloRc  haloRh
+# Sgr ~1e10 Msun at apocenter (0,0,900)=54 kpc; velocity (124,71,0) km/s gives a
+# prograde ~30-deg-inclined orbit grazing the disc edge at pericenter ~25 kpc.
+DarkMatterHalo  1   0.0 0.0 900.0   124.0 71.0 0.0   66.2 25.0 167.0

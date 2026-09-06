@@ -438,6 +438,44 @@ void Simulation::LoadScript(const std::string &path)
 			double sysPos[3] = {px, py, pz};
 			double sysVel[3] = {vx, vy, vz};
 			LoadSphericalUniverseState(system, sysPos, sysVel, M, R, H, haloVc, haloRc, haloRh, gasMass, gasFraction);
+		} else if (key == "DarkMatterHalo") {
+			// A standalone dark-matter halo: a system with ZERO particles that carries
+			// only the analytic cored-isothermal halo. Its inertial centre orbits under
+			// gravity (feeling other systems' particles via the halo back-reaction and
+			// other halos directly) and tidally forces those systems -- so it acts as an
+			// extended, DM-dominated perturber (e.g. a Sagittarius-like satellite) with
+			// no spurious disc. The system's N_SystemBodies entry must be 0.
+			int system;
+			double px, py, pz, vx, vy, vz, haloVc, haloRc, haloRh;
+			if (!(iss >> system >> px >> py >> pz >> vx >> vy >> vz
+			          >> haloVc >> haloRc >> haloRh)) {
+				std::cerr << "Error: malformed DarkMatterHalo command." << std::endl;
+				std::cerr << "Expected 10 values: system posX posY posZ velX velY velZ"
+				          << " haloVc haloRc haloRh" << std::endl;
+				std::cerr << "  got: " << line << std::endl;
+				exit(1);
+			}
+			if (haloVc <= 0.0 || haloRc <= 0.0 || haloRh <= 0.0) {
+				std::cerr << "Error: DarkMatterHalo requires haloVc>0, haloRc>0 and a"
+				          << " truncation haloRh>0 (a standalone halo needs a finite"
+				          << " truncated mass; there is no disc radius to fall back on)."
+				          << " Got Vc=" << haloVc << " Rc=" << haloRc << " Rh=" << haloRh
+				          << std::endl;
+				exit(1);
+			}
+
+			if (pos_data.empty()) Allocate();
+
+			if (system >= 0 && system < N_Systems && N_System_Bodies[system] != 0) {
+				std::cerr << "Error: DarkMatterHalo system " << system << " must have 0"
+				          << " bodies in N_SystemBodies (it carries no particles), got "
+				          << N_System_Bodies[system] << std::endl;
+				exit(1);
+			}
+
+			double sysPos[3] = {px, py, pz};
+			double sysVel[3] = {vx, vy, vz};
+			LoadDarkMatterHaloState(system, sysPos, sysVel, haloVc, haloRc, haloRh);
 		} else if (key == "Body") {
 			int system;
 			double px, py, pz, vx, vy, vz, m;
@@ -845,6 +883,43 @@ void Simulation::LoadSphericalUniverseState(int system, double *sysPos, double *
 	if (!warmupActive) ApplyBulkVelocity(system);
 }
 
+// Standalone dark-matter halo (no particles). Sets up the analytic cored-isothermal
+// halo for a 0-body system: the inertial centre starts at sysPos, its orbital
+// velocity (sysVel) is delivered like a bulk velocity (into halo_vel, withheld
+// until t=0 under warmup), and its inertial mass is the truncated halo mass. From
+// then on IntegrateHaloCenters orbits it under the other systems' particles+halos,
+// and its own halo field tidally forces them. Requires haloRh > 0 (finite mass).
+void Simulation::LoadDarkMatterHaloState(int system, double *sysPos, double *sysVel,
+                                         double haloVc, double haloRc, double haloRh) {
+	halo_vc[system] = haloVc;
+	halo_rc_sq[system] = haloRc * haloRc;
+	halo_rh[system] = haloRh;
+	halo_M_rh[system] = haloVc*haloVc * haloRh*haloRh*haloRh / (haloRh*haloRh + haloRc*haloRc);
+	halo_mass[system] = halo_M_rh[system];
+
+	int sysIdx = 0;
+	for (int i = 0; i < system; i++) sysIdx += N_System_Bodies[i];
+	halo_central[system] = sysIdx;
+
+	halo_center[system*3+0] = sysPos[0];
+	halo_center[system*3+1] = sysPos[1];
+	halo_center[system*3+2] = sysPos[2];
+	halo_vel[system*3+0] = halo_vel[system*3+1] = halo_vel[system*3+2] = 0.0;
+	halo_acc[system*3+0] = halo_acc[system*3+1] = halo_acc[system*3+2] = 0.0;
+	halo_acc_prev[system*3+0] = halo_acc_prev[system*3+1] = halo_acc_prev[system*3+2] = 0.0;
+
+	// Orbital velocity is delivered like a bulk velocity (ApplyBulkVelocity adds it
+	// to halo_vel), so it is withheld during warmup and applied at t=0.
+	system_bulk_vel[system*3+0] = sysVel[0];
+	system_bulk_vel[system*3+1] = sysVel[1];
+	system_bulk_vel[system*3+2] = sysVel[2];
+	if (!warmupActive) ApplyBulkVelocity(system);
+
+	std::cout << "  System " << system << ": standalone dark-matter halo (Vc="
+	          << haloVc << ", Rc=" << haloRc << ", Rh=" << haloRh << ", M="
+	          << halo_mass[system] << " code units)" << std::endl;
+}
+
 void Simulation::CalcAccelRangeP2P(int iStart, int iEnd) {
 
 	double a[3];
@@ -949,6 +1024,9 @@ void Simulation::ComputeHaloCenters()
 {
 	int sysIdx = 0;
 	for (int sys = 0; sys < N_Systems; sys++) {
+		// Standalone dark-matter halos have no particles; leave their explicitly-set
+		// (and gravity-integrated) centre alone rather than dividing by zero mass.
+		if (N_System_Bodies[sys] == 0) { sysIdx += N_System_Bodies[sys]; continue; }
 		double cx = 0.0, cy = 0.0, cz = 0.0, total_m = 0.0;
 		for (int i = 0; i < N_System_Bodies[sys]; i++) {
 			double mi = mass[sysIdx + i];
@@ -1675,6 +1753,7 @@ void Simulation::CalcAccelIsolated() {
 	int sysStart = 0;
 	for (int sys = 0; sys < N_Systems; sys++) {
 		int n = N_System_Bodies[sys];
+		if (n == 0) continue;   // standalone halo: no particles to self-gravitate
 
 		if (Gravity_Oct) {
 			int first, count;

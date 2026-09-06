@@ -712,6 +712,36 @@ SphericalUniverse  0   0.0 0.0 0.0   0.0 0.0 0.0   4.2e7 200.0 2.83  0.0 1.0 0.0
 
 ---
 
+### `DarkMatterHalo` — Standalone Dark-Matter Halo (particle-less perturber)
+
+```
+DarkMatterHalo  <system>  <posX> <posY> <posZ>  <velX> <velY> <velZ>  <haloVc> <haloRc> <haloRh>
+```
+
+Creates a system with **zero particles** that carries only an analytic cored-isothermal dark-matter halo — the same halo model as `GalaxyDisc`/`SphericalUniverse`, but with no disc or stars. Its center is an **inertial body integrated under gravity**: it feels every other system's particles (through the halo back-reaction) and every other halo directly, so it **orbits self-consistently in the full potential**, and its own halo field **tidally forces the other systems**. This makes it an extended, dark-matter-dominated **perturber** — e.g. a Sagittarius-like satellite driving spiral/bar structure in a disc — without the geometric mismatch of forcing a token disc onto it.
+
+The system's `N_SystemBodies` entry **must be 0**. Because it has no particles it is **invisible** in the render; watch its effect on the other systems (and its `halo_center`, which the camera can follow).
+
+| Parameter | Description |
+|---|---|
+| `system` | System index (0-based); its `N_SystemBodies` count must be 0 |
+| `posX`, `posY`, `posZ` | Initial position of the halo center |
+| `velX`, `velY`, `velZ` | Orbital velocity. Delivered like a bulk velocity — withheld during `InitializationTime` warmup and applied at t=0, so the perturber sits still while the other systems relax, then begins its orbit |
+| `haloVc` | Halo circular velocity (sets the mass scale). Must be > 0 |
+| `haloRc` | Cored-isothermal core radius. Must be > 0 |
+| `haloRh` | Truncation radius. **Must be > 0**: a standalone halo has no disc radius to fall back on, so its inertial mass is the truncated value `M = Vc²·Rh³/(Rh²+Rc²)` and needs a finite `Rh` |
+
+**Limitations:** the halo is **rigid** (like all analytic halos here) — it does not tidally strip (no stream) and feels no dynamical friction (no orbital decay). It's appropriate for driving a disc's response over a passage or two, not for reproducing a satellite's disruption or long-term inspiral.
+
+**Example (a ~3×10¹⁰ M☉ satellite on a near-polar, disc-crossing orbit past a disc at system 0):**
+```
+N_SystemBodies  200000  0
+GalaxyDisc      0  ...                                  # the disc galaxy
+DarkMatterHalo  1  -700 0 0   0 110 0   115.0 25.0 167.0
+```
+
+---
+
 ## Complete Example
 
 ```
