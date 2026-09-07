@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 cmake_policy(SET CMP0091 NEW) # Enforce the modern MSVC runtime policy
-cmake_policy(SET CMP0174 NEW) # Suppress empty-keyword warning in vcpkg FindFFMPEG
+if(POLICY CMP0174)
+  cmake_policy(SET CMP0174 NEW) # Suppress empty-keyword warning in vcpkg FindFFMPEG
+endif()
 
 project(N-Body C CXX)
 
@@ -37,7 +39,27 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED ON)
 
 find_package(SDL3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
-find_package(FFMPEG REQUIRED)
+find_package(FFMPEG CONFIG QUIET)
+
+if(TARGET FFMPEG::FFMPEG OR FFMPEG_FOUND)
+    set(FFMPEG_LIBRARIES FFMPEG::FFMPEG)
+else()
+    # Fallback for Linux / custom builds (e.g., Jetson Orin Nano)
+    find_package(PkgConfig REQUIRED)
+    
+    # Query required FFmpeg libraries
+    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+        libavcodec
+        libavformat
+        libavutil
+        libswscale
+        libavdevice
+        libavfilter
+    )
+    
+    set(FFMPEG_LIBRARIES PkgConfig::FFMPEG)
+endif()
+
 target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PRIVATE
   SDL3::SDL3

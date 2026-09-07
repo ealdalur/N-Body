@@ -3,7 +3,11 @@
 
 #include <stdlib.h>
 #include <math.h>
-#include <xmmintrin.h>
+#if defined(__aarch64__) || defined(_M_ARM64)
+    #include <arm_neon.h>
+#elif defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    #include <xmmintrin.h>
+#endif
 
 inline double drand()
 {
@@ -242,16 +246,44 @@ inline void vmaxf(float *v1, float *v2, float *vr)
 
 inline float fast_rsqrtf(float x)
 {
-	__m128 val = _mm_set_ss(x);
-	__m128 est = _mm_rsqrt_ss(val);
-	__m128 half = _mm_set_ss(0.5f);
-	__m128 three = _mm_set_ss(3.0f);
-	// One Newton-Raphson iteration: est = est * (3 - x * est^2) * 0.5
-	__m128 est2 = _mm_mul_ss(est, est);
-	__m128 xe2 = _mm_mul_ss(val, est2);
-	__m128 diff = _mm_sub_ss(three, xe2);
-	__m128 refined = _mm_mul_ss(_mm_mul_ss(est, diff), half);
-	return _mm_cvtss_f32(refined);
+#if defined(__aarch64__) || defined(_M_ARM64)
+    // -------------------------------------------------------------------------
+    // ARM64 NEON Path (Jetson Orin Nano / Apple Silicon / ARM Servers)
+    // -------------------------------------------------------------------------
+    // 1. Get initial 8-bit reciprocal square root estimate
+    float32x4_t val = vdupq_n_f32(x);
+    float32x4_t est = vrsqrteq_f32(val);
+
+    // 2. Exact Newton-Raphson step via native NEON instruction (vrsqrtsq_f32)
+    //    vrsqrtsq_f32(a, b) computes: (3 - a * b) / 2
+    float32x4_t step = vrsqrtsq_f32(val, vmulq_f32(est, est));
+    float32x4_t refined = vmulq_f32(est, step);
+
+    return vgetq_lane_f32(refined, 0);
+
+#elif defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    // -------------------------------------------------------------------------
+    // x86 / x64 SSE Path (MSVC / GCC / Clang on Intel & AMD)
+    // -------------------------------------------------------------------------
+    __m128 val = _mm_set_ss(x);
+    __m128 est = _mm_rsqrt_ss(val);
+    __m128 half = _mm_set_ss(0.5f);
+    __m128 three = _mm_set_ss(3.0f);
+
+    // One Newton-Raphson iteration: est = est * (3 - x * est^2) * 0.5
+    __m128 est2 = _mm_mul_ss(est, est);
+    __m128 xe2 = _mm_mul_ss(val, est2);
+    __m128 diff = _mm_sub_ss(three, xe2);
+    __m128 refined = _mm_mul_ss(_mm_mul_ss(est, diff), half);
+
+    return _mm_cvtss_f32(refined);
+
+#else
+    // -------------------------------------------------------------------------
+    // Portable Scalar Fallback (Any other architecture)
+    // -------------------------------------------------------------------------
+    return 1.0f / std::sqrt(x);
+#endif
 }
 
 inline float fast_r3_inv(float dsq)
