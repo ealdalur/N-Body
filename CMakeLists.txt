@@ -39,10 +39,14 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED ON)
 
 find_package(SDL3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
-find_package(FFMPEG CONFIG QUIET)
+find_package(FFMPEG QUIET)
 
-if(TARGET FFMPEG::FFMPEG OR FFMPEG_FOUND)
+if(TARGET FFMPEG::FFMPEG)
+    # Some find modules provide an imported target
     set(FFMPEG_LIBRARIES FFMPEG::FFMPEG)
+elseif(FFMPEG_FOUND)
+    # vcpkg's FindFFMPEG populates FFMPEG_LIBRARIES / FFMPEG_INCLUDE_DIRS
+    # directly (no imported target), so keep what it set.
 else()
     # Fallback for Linux / custom builds (e.g., Jetson Orin Nano)
     find_package(PkgConfig REQUIRED)
